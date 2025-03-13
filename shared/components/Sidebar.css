@@ -1,0 +1,79 @@
+/* Contenedor principal */
+.sidebar-container {
+    width: 280px;
+    height: 100vh;
+    background: #f8f9fa;
+    padding: 20px;
+    border-right: 1px solid #e9ecef;
+  }
+  
+  /* Título */
+  .sidebar-title {
+    font-size: 1.5rem;
+    color: #2b2d42;
+    margin-bottom: 30px;
+    padding-left: 10px;
+    font-weight: 600;
+  }
+  
+  /* Sección del menú */
+  .menu-section {
+    margin-bottom: 15px;
+  }
+  
+  /* Encabezado del menú */
+  .menu-header {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    color: #4a4e69;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-radius: 6px;
+  }
+  
+  .menu-header:hover {
+    background: #e9ecef;
+  }
+  
+  /* Íconos */
+  .icon {
+    margin-right: 12px;
+    font-size: 1.1rem;
+    color: #6c757d;
+  }
+  
+  .chevron {
+    margin-left: auto;
+    font-size: 0.9rem;
+    color: #adb5bd;
+    transition: transform 0.3s ease;
+  }
+  
+  .chevron.rotate {
+    transform: rotate(180deg);
+  }
+  
+  /* Submenú */
+  .submenu {
+    margin-left: 34px;
+    border-left: 2px solid #dee2e6;
+    padding-left: 15px;
+  }
+  
+  /* Ítems del submenú */
+  .menu-item {
+    padding: 8px 10px;
+    color: #6c757d;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.2s, color 0.2s;
+  }
+  
+  .menu-item:hover {
+    background: #e9ecef;
+    color: #2b2d42;
+  }
+  

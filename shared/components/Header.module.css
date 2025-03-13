@@ -1,0 +1,65 @@
+/* Header.module.css */
+.header {
+  position: fixed;
+
+  /* Asegura que el header se alinee con el sidebar */
+  width: 100%;
+  background-color: #1a202c;
+  color: white;
+ 
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+ 
+}
+
+.fullWidth {
+  /* Si el sidebar está oculto, el header ocupa toda la pantalla */
+  width: 100%;
+}
+
+.logoutButton {
+  background-color: #d9534f;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.logoutButton:hover {
+  background-color: #c9302c;
+}
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .logo {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #facc15; /* text-yellow-400 */
+  }
+  
+  .nav ul {
+    display: flex;
+    gap: 24px; /* Equivalente a space-x-6 */
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .nav a {
+    text-decoration: none;
+    color: white;
+    font-weight: 500;
+    transition: color 0.3s ease-in-out;
+  }
+  
+  .nav a:hover {
+    color: #facc15; /* hover:text-yellow-400 */
+  }
+  
