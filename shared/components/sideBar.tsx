@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { FiChevronDown, FiFolder, FiPieChart, FiActivity } from "react-icons/fi";
 import Link from "next/link";
-import "./Sidebar.css";
+
 
 const Sidebar = () => {
   const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
