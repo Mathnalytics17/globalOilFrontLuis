@@ -113,18 +113,18 @@ const initialAnalisisAceite = [
 ];
 
 export default function AnalisisAceite() {
-  const [empresaSeleccionada, setEmpresaSeleccionada] = useState<number | "">("");
+  const [empresaSeleccionada, setEmpresaSeleccionada] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [analisisSeleccionado, setAnalisisSeleccionado] = useState<any>(null);
+  const [analisisSeleccionado, setAnalisisSeleccionado] = useState(null);
   const [analisisAceite, setAnalisisAceite] = useState(initialAnalisisAceite);
 
   // Filtrar análisis por empresa seleccionada
   const analisisFiltrados = empresaSeleccionada
-    ? analisisAceite.filter((a) => a.empresaId === empresaSeleccionada)
+    ? analisisAceite.filter((a) => a.empresaId.toString() === empresaSeleccionada)
     : [];
 
   // Abrir modal para editar o crear un análisis
-  const handleOpenModal = (analisis: any = null) => {
+  const handleOpenModal = (analisis = null) => {
     setAnalisisSeleccionado(analisis || {});
     setModalOpen(true);
   };
@@ -136,18 +136,18 @@ export default function AnalisisAceite() {
   };
 
   // Manejar cambios en los campos del formulario
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e) => {
     const { name, value } = e.target;
-    setAnalisisSeleccionado((prev: any) => ({
+    setAnalisisSeleccionado((prev) => ({
       ...prev,
       [name]: value,
     }));
   };
 
   // Manejar cambios en los elementos
-  const handleElementosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleElementosChange = (e) => {
     const { name, value } = e.target;
-    setAnalisisSeleccionado((prev: any) => ({
+    setAnalisisSeleccionado((prev) => ({
       ...prev,
       elementos: {
         ...prev.elementos,
@@ -170,7 +170,7 @@ export default function AnalisisAceite() {
       const newAnalisis = {
         ...analisisSeleccionado,
         id: Date.now(), // Generar un ID único
-        empresaId: empresaSeleccionada,
+        empresaId: parseInt(empresaSeleccionada),
       };
       setAnalisisAceite((prev) => [...prev, newAnalisis]);
     }
@@ -190,10 +190,10 @@ export default function AnalisisAceite() {
           labelId="empresa-label"
           value={empresaSeleccionada}
           label="Seleccionar Empresa"
-          onChange={(e) => setEmpresaSeleccionada(e.target.value as number)}
+          onChange={(e) => setEmpresaSeleccionada(e.target.value)}
         >
           {empresas.map((empresa) => (
-            <MenuItem key={empresa.id} value={empresa.id}>
+            <MenuItem key={empresa.id} value={empresa.id.toString()}>
               {empresa.nombre}
             </MenuItem>
           ))}
@@ -304,7 +304,7 @@ export default function AnalisisAceite() {
               Elementos
             </Typography>
             <Grid container spacing={2}>
-              {Object.entries(analisisSeleccionado?.elementos || {}).map(
+              {analisisSeleccionado?.elementos && Object.entries(analisisSeleccionado.elementos).map(
                 ([key, value]) => (
                   <Grid item xs={12} md={4} key={key}>
                     <TextField
