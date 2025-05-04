@@ -11,7 +11,7 @@ const userExample = {
   avatar: "https://via.placeholder.com/150",
 };
 
-export default function UserDetail({ user = userExample, onBack }: { user?: typeof userExample; onBack: () => void }) {
+export default function UserDetail({ user = userExample, onBack }) {
   return (
     <Card sx={{ maxWidth: 600, margin: "auto", mt: 4, p: 2, boxShadow: 3 }}>
       <CardContent>
