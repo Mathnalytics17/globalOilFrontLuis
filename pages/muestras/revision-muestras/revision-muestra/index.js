@@ -46,7 +46,7 @@ const VistaMuestraIndividual = () => {
   const [docUrl, setDocUrl] = useState('');
 
   const handleOpenDocModal = () => {
-    setDocUrl(`${process.env.NEXT_PUBLIC_API_URL}/documents-list/template-report?muestra=${muestra}`);
+    setDocUrl(`http://82.25.95.14:3000/documents-list/template-report?muestra=${muestra}`);
     setOpenDocModal(true);
   };
   // Cargar todos los resultados
