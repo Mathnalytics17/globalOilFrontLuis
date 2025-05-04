@@ -36,7 +36,7 @@ const LoginForm = () => {
                     console.log("Login failed:", response.data);
                 }
             } catch (error) {
-                toast.error("Error en la solicitud: " + error.message);
+                toast.error("Error en la solicitud: " );
             }
         },
     });
