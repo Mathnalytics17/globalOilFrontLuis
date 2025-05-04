@@ -88,13 +88,13 @@ const ListadoPruebas = () => {
       id: 'view',
       icon: <Visibility fontSize="small" />,
       tooltip: 'Ver detalle',
-      handler: (row) => router.push(`/pruebas/detalle-prueba/${row.id}`)
+      handler: (row) => router.push(`/pruebas/detalle-prueba?id=${row.id}`)
     },
     {
       id: 'edit',
       icon: <Edit fontSize="small" />,
       tooltip: 'Editar',
-      handler: (row) => router.push(`/pruebas/edit-pruebas/${row.id}`)
+      handler: (row) => router.push(`/pruebas/edit-pruebas?id=${row.id}`)
     }
   ];
 
