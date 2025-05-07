@@ -412,7 +412,7 @@ const filteredData = muestras.filter(muestra => {
             <Button
               variant="contained"
               startIcon={<Add />}
-              onClick={() => router.push('/muestras/crear')}
+              onClick={() => router.push('/muestras/cliente-muestra')}
             >
               Nueva Muestra
             </Button>
