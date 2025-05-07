@@ -159,7 +159,7 @@ const DataTable = ({
     : sortedData;
 
   const isSelected = (id) => selected.indexOf(id) !== -1;
-
+console.log(paginatedData)
   return (
     <Paper sx={{ width: '100%', overflow: 'hidden', ...sx }}>
       {searchable && (
@@ -196,6 +196,7 @@ const DataTable = ({
                 </TableCell>
               )}
               {columns.map((column) => (
+             
                 <TableCell
                   key={column.id}
                   align={column.align || 'left'}
@@ -214,7 +215,9 @@ const DataTable = ({
                           size="small"
                           placeholder={`Filtrar ${column.label}`}
                           value={filters[column.id] || ''}
-                          onChange={(e) => handleFilterChange(column.id, e.target.value)}
+                          onChange={(e) => {  
+                            handleFilterChange(column.id, e.target.value)
+                          }}
                           InputProps={{
                             endAdornment: (
                               <InputAdornment position="end">

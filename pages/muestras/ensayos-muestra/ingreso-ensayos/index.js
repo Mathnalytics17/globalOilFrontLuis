@@ -53,7 +53,11 @@ const IngresoEnsayos = () => {
       
       try {
         const response = await api.get(`lubrication/sample-tests/?muestra=${muestra}`);
-        setTests(response.data);
+        console.log(muestra)
+        console.log(response.data)
+        const testMuestra=response.data.filter(muestras => muestras.muestra.id===muestra)
+        console.log(testMuestra)
+        setTests(testMuestra);
       } catch (error) {
         toast.error('Error al cargar pruebas: ' + (error.response?.data?.message || error.message));
       }

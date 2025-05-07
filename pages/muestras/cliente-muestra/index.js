@@ -28,7 +28,7 @@ import {
 import Axios from 'axios';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { useFetch } from '@hooks/useFetch';
-
+import { useRouter } from 'next/router';
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 const ClienteMuestra = () => {
@@ -40,7 +40,7 @@ const ClienteMuestra = () => {
     message: '',
     severity: 'success'
   });
-
+  const router = useRouter();
   const DynamicInputField = ({ fieldConfig, value, onChange, error }) => {
     const [inputMode, setInputMode] = useState(fieldConfig.mode || 'select');
     const [customValue, setCustomValue] = useState('');
@@ -342,7 +342,7 @@ const ClienteMuestra = () => {
           'Authorization': `Bearer ${localStorage.getItem('access_token')}`
         }
       });
-  
+      router.push('/muestras')
       setSnackbar({
         open: true,
         message: 'Muestra guardada correctamente',

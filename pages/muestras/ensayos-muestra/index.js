@@ -48,6 +48,7 @@ const EnsayosMuestra = () => {
   const router = useRouter();
   const muestraId = router?.query?.muestra;
   const [allTests, setAllTests] = useState([]);
+  const [allSampleTests, setAllSampleTests] = useState([]);
   const [sampleTests, setSampleTests] = useState([]);
   const [selectedTests, setSelectedTests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -67,12 +68,23 @@ const EnsayosMuestra = () => {
       try {
         const [testsRes, sampleTestsRes] = await Promise.all([
           api.get('lubrication/tests/'),
-          api.get(`lubrication/sample-tests/?muestra=${muestraId}`)
+          api.get('lubrication/sample-tests/')
         ]);
         
         setAllTests(testsRes.data);
-        setSampleTests(sampleTestsRes.data);
-        setSelectedTests(sampleTestsRes.data.map(st => st.prueba.id));
+        setAllSampleTests(sampleTestsRes.data);
+        
+        // Filtrar solo los tests de la muestra actual
+        const testsForCurrentSample = sampleTestsRes.data.filter(
+          st => st.muestra?.id === muestraId || st.muestra === muestraId
+        );
+        
+        setSampleTests(testsForCurrentSample);
+        setSelectedTests(
+          testsForCurrentSample
+            .filter(test => test.is_used)
+            .map(test => test.prueba?.id || test.prueba)
+        );
 
       } catch (error) {
         toast.error('Error al cargar datos: ' + (error.response?.data?.message || error.message));
@@ -113,21 +125,28 @@ const EnsayosMuestra = () => {
         .filter(test => defaultTestsForSelectedCategories.includes(test.nombre))
         .map(test => test.id);
       
-      // 1. Desactivar todos los tests existentes (is_used: false)
-      await Promise.all(sampleTests.map(test => 
+      // 1. Desactivar todos los tests existentes para esta muestra
+      const existingTestsForSample = allSampleTests.filter(
+        st => st.muestra?.id === muestraId || st.muestra === muestraId
+      );
+      
+      await Promise.all(existingTestsForSample.map(test => 
         api.patch(`lubrication/sample-tests/${test.id}/`, { is_used: false })
       ));
 
       // 2. Eliminar los que no están en la nueva selección
-      const testsToRemove = sampleTests.filter(
-        test => !defaultTestIds.includes(test.prueba.id)
+      const testsToRemove = existingTestsForSample.filter(
+        test => !defaultTestIds.includes(test.prueba?.id || test.prueba)
       );
       await Promise.all(testsToRemove.map(test => 
         api.delete(`lubrication/sample-tests/${test.id}/`)
       ));
 
       // 3. Agregar los nuevos con is_used: true
-      const currentTestIds = sampleTests.map(st => st.prueba.id);
+      const currentTestIds = existingTestsForSample.map(
+        st => st.prueba?.id || st.prueba
+      );
+      
       const testsToAdd = defaultTestIds.filter(id => !currentTestIds.includes(id));
       
       await Promise.all(testsToAdd.map(testId =>
@@ -140,8 +159,14 @@ const EnsayosMuestra = () => {
       ));
 
       // Actualizar estado local
-      const updatedSampleTests = await api.get(`lubrication/sample-tests/?muestra=${muestraId}`);
-      setSampleTests(updatedSampleTests.data);
+      const updatedSampleTestsRes = await api.get('lubrication/sample-tests/');
+      setAllSampleTests(updatedSampleTestsRes.data);
+      
+      const updatedTestsForSample = updatedSampleTestsRes.data.filter(
+        st => st.muestra?.id === muestraId || st.muestra === muestraId
+      );
+      
+      setSampleTests(updatedTestsForSample);
       setSelectedTests(defaultTestIds);
       
       setOpenDefaultModal(false);
@@ -154,24 +179,43 @@ const EnsayosMuestra = () => {
 
   const saveTests = async () => {
     try {
-      const currentTestIds = sampleTests.map(st => st.prueba.id);
+      if (!muestraId) {
+        toast.error('No se ha seleccionado ninguna muestra');
+        return;
+      }
+
+      // Obtener tests existentes para esta muestra
+      const existingTestsForSample = allSampleTests.filter(
+        st => st.muestra?.id === muestraId || st.muestra === muestraId
+      );
+      
+      const currentTestIds = existingTestsForSample.map(
+        st => st.prueba?.id || st.prueba
+      );
       
       // 1. Desactivar los tests que se están eliminando
-      const testsToDeactivate = sampleTests.filter(
-        test => !selectedTests.includes(test.prueba.id)
+      const testsToDeactivate = existingTestsForSample.filter(
+        test => !selectedTests.includes(test.prueba?.id || test.prueba)
       );
+      
       await Promise.all(testsToDeactivate.map(test => 
         api.patch(`lubrication/sample-tests/${test.id}/`, { is_used: false })
       ));
 
-      // 2. Eliminar completamente los tests deseleccionados
-      const testsToRemove = testsToDeactivate.filter(t => !t.completada); // Solo eliminar si no están completados
+      // 2. Eliminar completamente los tests deseleccionados (solo los no completados)
+      const testsToRemove = testsToDeactivate.filter(
+        test => !test.completada
+      );
+      
       await Promise.all(testsToRemove.map(test => 
         api.delete(`lubrication/sample-tests/${test.id}/`)
       ));
 
       // 3. Agregar nuevos tests con is_used: true
-      const testsToAdd = selectedTests.filter(id => !currentTestIds.includes(id));
+      const testsToAdd = selectedTests.filter(id => 
+        !currentTestIds.includes(id)
+      );
+      
       await Promise.all(testsToAdd.map(testId =>
         api.post('lubrication/sample-tests/', {
           muestra: muestraId,
@@ -182,24 +226,31 @@ const EnsayosMuestra = () => {
       ));
 
       // 4. Reactivar los tests que se mantienen seleccionados
-      const testsToReactivate = sampleTests.filter(
-        test => selectedTests.includes(test.prueba.id)
+      const testsToReactivate = existingTestsForSample.filter(
+        test => selectedTests.includes(test.prueba?.id || test.prueba)
       );
+      
       await Promise.all(testsToReactivate.map(test => 
         api.patch(`lubrication/sample-tests/${test.id}/`, { is_used: true })
       ));
 
       // Actualizar estado local
-      const updatedSampleTests = await api.get(`lubrication/sample-tests/?muestra=${muestraId}`);
-      setSampleTests(updatedSampleTests.data);
+      const updatedSampleTestsRes = await api.get('lubrication/sample-tests/');
+      setAllSampleTests(updatedSampleTestsRes.data);
       
-      toast.success('Pruebas actualizadas correctamente');
+      const updatedTestsForSample = updatedSampleTestsRes.data.filter(
+        st => st.muestra?.id === muestraId || st.muestra === muestraId
+      );
+      
+      setSampleTests(updatedTestsForSample);
+      
+      toast.success(`Pruebas actualizadas correctamente para la muestra ${muestraId}`);
       
     } catch (error) {
+      console.error('Error detallado:', error);
       toast.error('Error al guardar: ' + (error.response?.data?.message || error.message));
     }
   };
-
   const startTests = () => {
     router.push(`/muestras/ensayos-muestra/ingreso-ensayos?muestra=${muestraId}`);
   };
@@ -248,7 +299,7 @@ const EnsayosMuestra = () => {
             color="primary" 
             startIcon={<PlayArrowIcon />}
             onClick={startTests}
-            disabled={sampleTests.filter(t => t.is_used).length === 0}
+            disabled={sampleTests?.filter(t => t.is_used).length === 0}
           >
             Iniciar Ensayos
           </Button>
@@ -314,7 +365,7 @@ const EnsayosMuestra = () => {
 
       <Box>
         <Typography variant="h6" gutterBottom>Pruebas asignadas actualmente:</Typography>
-        {sampleTests.length > 0 ? (
+        {sampleTests?.length > 0 ? (
           <List dense>
             {sampleTests.map(test => (
               <ListItem key={test.id}>
