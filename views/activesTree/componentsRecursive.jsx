@@ -6,7 +6,6 @@ import { ChevronRightIcon, FolderIcon, DocumentIcon, TrashIcon, PlusIcon, Pencil
 import ModalCreationFile from '@components/modals/modalCreationFile';
 import ModalMuestra from '@components/modals/modelCreationPtMedida';
 import ModalAddResults from '@components/modals/modalAddResults';
-import ModalEditarMuestra from '@components/modals/modaleditPtMedida';
 import Button from 'react-bootstrap/Button';
 import { useFetch } from '@hooks/useFetch';
 import Axios from 'axios';
