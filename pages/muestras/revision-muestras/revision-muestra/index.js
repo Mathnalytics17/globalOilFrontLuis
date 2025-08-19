@@ -46,7 +46,8 @@ const VistaMuestraIndividual = () => {
   const [docUrl, setDocUrl] = useState('');
 
   const handleOpenDocModal = () => {
-    setDocUrl(`http://82.25.95.14:3000/documents-list/template-report?muestra=${muestra}`);
+    console.log(process.env.NEXT_PUBLIC_FRONTEND_URL)
+    setDocUrl(`${process.env.NEXT_PUBLIC_FRONTEND_URL}documents-list/template-report?muestra=${muestra}`);
     setOpenDocModal(true);
   };
   // Cargar todos los resultados
@@ -164,19 +165,28 @@ const VistaMuestraIndividual = () => {
           resultado: resultValue,
           fecha_medicion: new Date().toISOString(),
           usuario_medicion: user.id,
-          prueba_muestra: {
+          estatus:"Completada",prueba_muestra: {
             ...resultToUpdate.prueba_muestra,
-            completada: true // Marcamos como completada al guardar
+           // Marcamos como completada al guardar
           }
         };
-  
+        console.log(resultToUpdate)
         // Actualizar en el backend
         const updatedResult = await api.patch(
           `lubrication/results/${resultToUpdate.id}/`,
           {
             resultado: resultValue,
             fecha_medicion: updatedData.fecha_medicion,
-            usuario_medicion: user.id
+            usuario_medicion: user.id,
+            estatus:"aprobado",
+          }
+        );
+
+         // Actualizar en el backend
+         const updateSampledResult = await api.patch(
+          `lubrication/sample-tests/${resultToUpdate.prueba_muestra.id}/`,
+          {
+            completada:true
           }
         );
   
@@ -238,8 +248,9 @@ const VistaMuestraIndividual = () => {
   const testsWithResults = getTestsWithResults();
   console.log(testsWithResults)
   const completedTests = testsWithResults.filter(t => t.completada);
+  console.log(completedTests)
   const pendingTests = testsWithResults.filter(t => !t.completada);
-
+  console.log(sample)
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -253,7 +264,7 @@ const VistaMuestraIndividual = () => {
           label={sample.estado} 
           color={
             sample.estado === 'pendiente' ? 'warning' : 
-            sample.estado === 'completado' ? 'success' : 'default'
+            sample.estado === 'aprobado' ? 'success' : 'default'
           } 
           sx={{ ml: 2 }}
         />

@@ -14,7 +14,12 @@ import {
   Select,
   Checkbox,
   FormControlLabel,
-  IconButton
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Grid
 } from '@mui/material';
 import {
   Add,
@@ -24,19 +29,30 @@ import {
   Checklist,
   Edit,
   Search,
-  Clear
+  Clear,
+  DateRange,
+  Download
 } from '@mui/icons-material';
+import * as XLSX from 'xlsx';
 import DataTable from '../../shared/components/dataTableGen';
 
 const MuestrasTable = () => {
   const { api } = useAuth();
   const router = useRouter();
   const [muestras, setMuestras] = useState([]);
+  const [ensayos, setEnsayos] = useState([]);
+  const [resultados, setResultados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [advancedFilterOpen, setAdvancedFilterOpen] = useState(false);
   const [filters, setFilters] = useState({
     estado: 'todos',
-    showInactive: false
+    showInactive: false,
+    fechaDesde: '',
+    fechaHasta: '',
+    idMuestra: '',
+    equipoCodigo: '',
+    lubricanteRef: ''
   });
 
   // Columnas de la tabla
@@ -57,13 +73,13 @@ const MuestrasTable = () => {
       id: 'lubricante', 
       label: 'Lubricante', 
       minWidth: 150,
-      render: (row) => row.lubricante?.nombre || '-'
+      render: (row) => row.lubricante?.referencia || '-'
     },
     { 
-      id: 'equipo_placa', 
-      label: 'Equipo/Placa', 
+      id: 'machines', 
+      label: 'Equipo', 
       minWidth: 120,
-      render: (row) => row.equipo_placa || '-'
+      render: (row) => row.Equipo?.codigo_equipo || '-'
     },
     { 
       id: 'periodo_servicio', 
@@ -162,48 +178,167 @@ const MuestrasTable = () => {
     }
   ];
 
-  // Obtener muestras
-  const fetchMuestras = async () => {
+  // Obtener datos
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await api.get('lubrication/samples/');
-      setMuestras(response.data);
+      const [muestrasRes, ensayosRes, resultadosRes] = await Promise.all([
+        api.get('lubrication/samples/'),
+        api.get('lubrication/tests/'),
+        api.get('lubrication/results/')
+      ]);
+      
+      setMuestras(muestrasRes.data);
+      setEnsayos(ensayosRes.data);
+      setResultados(resultadosRes.data);
     } catch (error) {
-      toast.error('Error al cargar muestras: ' + (error.response?.data?.message || error.message));
+      toast.error('Error al cargar datos: ' + (error.response?.data?.message || error.message));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchMuestras();
+    fetchData();
   }, []);
-  console.log(muestras)
-  // Aplicar filtros
-  const filteredData = muestras.filter(muestra => {
-    // Filtro de búsqueda general
-    const matchesSearch = 
-      !searchTerm ||
-      (muestra.id && muestra.id.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (muestra.lubricante?.nombre && muestra.lubricante.nombre.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (muestra.equipo_placa && muestra.equipo_placa.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    // Filtros adicionales
-    const matchesStatus = 
-      filters.estado === 'todos' || 
-      (filters.estado === 'ingresado' && muestra.is_ingresado) ||
-      (filters.estado === 'pendiente' && !muestra.is_ingresado);
 
-    // Filtro de revisión
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const checkedDate = new Date(muestra.was_checked);
-    console.log(checkedDate,today)
-   
-    console.log(matchesSearch,matchesStatus)
-    return matchesSearch && matchesStatus;
-  });
-  console.log(filteredData)
+ // Aplicar filtros
+const filteredData = muestras.filter(muestra => {
+  // Filtro de búsqueda general
+  const matchesSearch = 
+    !searchTerm ||
+    (muestra.id && muestra.id.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (muestra.lubricante?.nombre_comercial && muestra.lubricante.nombre_comercial.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (muestra.Equipo?.codigo_equipo && muestra.Equipo.codigo_equipo.toLowerCase().includes(searchTerm.toLowerCase()));
+  
+  // Filtros adicionales
+  const matchesStatus = 
+    filters.estado === 'todos' || 
+    (filters.estado === 'ingresado' && muestra.is_ingresado) ||
+    (filters.estado === 'pendiente' && !muestra.is_ingresado);
+
+  // Filtro por ID de muestra
+  const matchesId = !filters.idMuestra || (muestra.id && muestra.id.includes(filters.idMuestra));
+
+  // Filtro por código de equipo
+  const matchesEquipo = !filters.equipoCodigo || 
+    (muestra.Equipo?.codigo_equipo && muestra.Equipo.codigo_equipo.includes(filters.equipoCodigo));
+
+  // Filtro por referencia de lubricante
+  const matchesLubricante = !filters.lubricanteRef || 
+    (muestra.lubricante?.referencia && muestra.lubricante.referencia.includes(filters.lubricanteRef));
+
+  // Filtro por fecha - versión corregida
+  const fechaToma = new Date(muestra.fecha_toma);
+  fechaToma.setHours(0, 0, 0, 0); // Normalizamos la fecha
+  
+  const filterFechaDesde = filters.fechaDesde ? new Date(filters.fechaDesde) : null;
+  const filterFechaHasta = filters.fechaHasta ? new Date(filters.fechaHasta) : null;
+  
+  if (filterFechaDesde) filterFechaDesde.setHours(0, 0, 0, 0);
+  if (filterFechaHasta) filterFechaHasta.setHours(23, 59, 59, 999); // Incluir todo el día
+  
+  const matchesFechaDesde = !filterFechaDesde || fechaToma >= filterFechaDesde;
+  const matchesFechaHasta = !filterFechaHasta || fechaToma <= filterFechaHasta;
+
+  return (
+    matchesSearch && 
+    matchesStatus && 
+    matchesId && 
+    matchesEquipo && 
+    matchesLubricante && 
+    matchesFechaDesde && 
+    matchesFechaHasta
+  );
+});
+
+  // Exportar a Excel
+  const exportToExcel = () => {
+    // Obtener todos los nombres de ensayos únicos
+    const allTestNames = ensayos.map(test => test.nombre);
+    
+    // Crear matriz de datos para el Excel
+    const dataForExport = filteredData.map(muestra => {
+      const rowData = {
+        'ID Muestra': muestra.id,
+        'Fecha Toma': new Date(muestra.fecha_toma).toLocaleDateString(),
+        'Lubricante': muestra.lubricante?.nombre_comercial || '',
+        'Referencia Lubricante': muestra.lubricante?.referencia || '',
+        'Equipo': muestra.Equipo?.nombre_equipo || '',
+        'Código Equipo': muestra.Equipo?.codigo_equipo || '',
+        'Periodo Servicio Aceite': muestra.periodo_servicio_aceite || '',
+        'Unidad Periodo Aceite': muestra.unidad_periodo_aceite || '',
+        'Periodo Servicio Equipo': muestra.periodo_servicio_equipo || '',
+        'Unidad Periodo Equipo': muestra.unidad_periodo_equipo || '',
+        'Estado': muestra.is_ingresado ? 'Ingresado' : 'Pendiente',
+        'Aprobado': muestra.is_aprobado ? 'Sí' : 'No',
+        'Fecha Revisión': new Date(muestra.was_checked).toLocaleDateString()
+      };
+  
+      // Agregar resultados de ensayos
+      allTestNames.forEach(testName => {
+        const resultado = resultados.find(r => 
+          r.prueba_muestra.muestra.id === muestra.id && 
+          r.prueba_muestra.prueba.nombre === testName
+        );
+        rowData[testName] = resultado ? resultado.resultado : '';
+      });
+  
+      return rowData;
+    });
+  
+    // Crear libro de Excel
+    const wb = XLSX.utils.book_new();
+    
+    // Convertir los datos a una hoja de trabajo incluyendo los headers
+    const ws = XLSX.utils.json_to_sheet(dataForExport, {
+      header: [
+        'ID Muestra',
+        'Fecha Toma',
+        'Lubricante',
+        'Referencia Lubricante',
+        'Equipo',
+        'Código Equipo',
+        'Periodo Servicio Aceite',
+        'Unidad Periodo Aceite',
+        'Periodo Servicio Equipo',
+        'Unidad Periodo Equipo',
+        'Estado',
+        'Aprobado',
+        'Fecha Revisión',
+        ...allTestNames
+      ]
+    });
+  
+    // Ajustar anchos de columnas
+    const wscols = [
+      {wch: 15}, {wch: 12}, {wch: 20}, {wch: 20}, 
+      {wch: 20}, {wch: 15}, {wch: 20}, {wch: 20},
+      {wch: 20}, {wch: 20}, {wch: 12}, {wch: 10},
+      {wch: 12}, 
+      ...allTestNames.map(() => ({wch: 15}))
+    ];
+    ws['!cols'] = wscols;
+  
+    // Agregar hoja al libro
+    XLSX.utils.book_append_sheet(wb, ws, 'Muestras');
+  
+    // Generar archivo y descargar
+    const fileName = `muestras_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+  // Resetear filtros avanzados
+  const resetAdvancedFilters = () => {
+    setFilters({
+      ...filters,
+      fechaDesde: '',
+      fechaHasta: '',
+      idMuestra: '',
+      equipoCodigo: '',
+      lubricanteRef: ''
+    });
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>
@@ -231,7 +366,15 @@ const MuestrasTable = () => {
             }}
           />
 
-          <Box display="flex" gap={2}>
+          <Box display="flex" gap={2} alignItems="center">
+            <Button
+              variant="outlined"
+              startIcon={<DateRange />}
+              onClick={() => setAdvancedFilterOpen(true)}
+            >
+              Filtros Avanzados
+            </Button>
+
             <FormControl size="small" sx={{ minWidth: 150 }}>
               <InputLabel>Estado</InputLabel>
               <Select
@@ -257,6 +400,17 @@ const MuestrasTable = () => {
 
             <Button
               variant="contained"
+              color="secondary"
+              startIcon={<Download />}
+              onClick={exportToExcel}
+              disabled={filteredData.length === 0}
+              sx={{ ml: 1 }}
+            >
+              Exportar Excel
+            </Button>
+
+            <Button
+              variant="contained"
               startIcon={<Add />}
               onClick={() => router.push('/muestras/crear')}
             >
@@ -265,6 +419,76 @@ const MuestrasTable = () => {
           </Box>
         </Box>
       </Box>
+
+      {/* Diálogo de filtros avanzados */}
+      <Dialog 
+        open={advancedFilterOpen} 
+        onClose={() => setAdvancedFilterOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Filtros Avanzados</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Grid container spacing={3}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Fecha desde"
+                  type="date"
+                  InputLabelProps={{ shrink: true }}
+                  value={filters.fechaDesde}
+                  onChange={(e) => setFilters({...filters, fechaDesde: e.target.value})}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Fecha hasta"
+                  type="date"
+                  InputLabelProps={{ shrink: true }}
+                  value={filters.fechaHasta}
+                  onChange={(e) => setFilters({...filters, fechaHasta: e.target.value})}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="ID Muestra"
+                  value={filters.idMuestra}
+                  onChange={(e) => setFilters({...filters, idMuestra: e.target.value})}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Código de Equipo"
+                  value={filters.equipoCodigo}
+                  onChange={(e) => setFilters({...filters, equipoCodigo: e.target.value})}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Referencia de Lubricante"
+                  value={filters.lubricanteRef}
+                  onChange={(e) => setFilters({...filters, lubricanteRef: e.target.value})}
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={resetAdvancedFilters}>Limpiar</Button>
+          <Button onClick={() => setAdvancedFilterOpen(false)}>Cancelar</Button>
+          <Button 
+            variant="contained" 
+            onClick={() => setAdvancedFilterOpen(false)}
+          >
+            Aplicar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Tabla de resultados */}
       <DataTable

@@ -92,11 +92,24 @@ const Layout = ({ children }) => {
           roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA']
         },
         {
+          segment: 'machines',
+          title: 'Maquinas',
+          icon: <FolderIcon />,
+          roles: ['GLOBAL', 'ADMIN', 'EMPRESA', 'LABORATORISTA', 'OPERARIO'],
+          
+        },
+        {
           segment: 'muestras',
           title: 'Muestras',
           icon: <FolderIcon />,
           roles: ['GLOBAL', 'ADMIN', 'EMPRESA', 'LABORATORISTA', 'OPERARIO'],
           children: [
+            {
+              segment: '',
+              title: 'lista de muestras',
+              icon: <DescriptionIcon />,
+              roles: ['GLOBAL', 'ADMIN', 'EMPRESA', 'OPERARIO']
+            },
             {
               segment: 'cliente-muestra',
               title: 'Ingresar Muestra',
@@ -137,16 +150,33 @@ const Layout = ({ children }) => {
           roles: ['GLOBAL', 'ADMIN']
         },
         {
-          segment: 'administrationPanel/company-management',
+          segment: 'managment-companies',
           title: 'Gestión de empresas',
           icon: <BusinessIcon />,
           roles: ['GLOBAL']
         },
         {
-          segment: 'administrationPanel/system-settings',
+          segment: 'config',
           title: 'Configuración del sistema',
           icon: <SettingsIcon />,
-          roles: ['GLOBAL']
+          roles: ['GLOBAL'],
+          children: [
+          
+            {
+              segment: 'limits',
+              title: 'Limites',
+              icon: <DescriptionIcon />,
+              roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA']
+            },
+            {
+              segment: '',
+              title: 'Configurar parámetros',
+              icon: <DescriptionIcon />,
+              roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA']
+            },
+            
+           
+          ]
         }
       ];
   

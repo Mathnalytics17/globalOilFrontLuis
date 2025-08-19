@@ -7,13 +7,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 const App = () => {
   return (
     <div>
-      <Card
-        style={{
-          borderRadius: '12px',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-          border: 'none',
-        }}
-      >
+      
         <Card.Header
           style={{
             backgroundColor: '#ffffff',
@@ -37,7 +31,7 @@ const App = () => {
         <Card.Body style={{ padding: '24px' }}>
           <RecursiveFolderDocumentStructure />
         </Card.Body>
-      </Card>
+     
     </div>
   );
 };

@@ -13,7 +13,13 @@ import {
   CircularProgress,
   Tabs,
   Tab,
-  Paper
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow
 } from '@mui/material';
 import { ExpandMore, Edit, Save, Cancel, PictureAsPdf } from '@mui/icons-material';
 import { toast } from 'react-toastify';
@@ -25,59 +31,33 @@ const RevisionMuestra = () => {
   const [editingSample, setEditingSample] = useState(null);
   const [activeTab, setActiveTab] = useState(0);
   const [expanded, setExpanded] = useState(null);
-  const [resultados,setResults]=useState([]);
+  const [results, setResults] = useState([]);
+  const [sampleTests, setSampleTests] = useState([]);
+
   useEffect(() => {
-    const fetchSamples = async () => {
+    const fetchData = async () => {
       try {
-        const response = await api.get('lubrication/samples/');
-        setSamples(response.data);
+        const [samplesRes, resultsRes, sampleTestsRes] = await Promise.all([
+          api.get('lubrication/samples/'),
+          api.get('lubrication/results/'),
+          api.get('lubrication/sample-tests/')
+        ]);
+
+        setSamples(samplesRes.data);
+        setResults(resultsRes.data);
+        setSampleTests(sampleTestsRes.data);
         setLoading(false);
       } catch (error) {
-        toast.error('Error al cargar muestras: ' + (error.response?.data?.message || error.message));
+        toast.error('Error al cargar datos: ' + (error.response?.data?.message || error.message));
         setLoading(false);
       }
     };
 
-    fetchSamples();
-  }, [api]);
-  useEffect(() => {
-    const fetchResults = async () => {
-      try {
-        const response = await api.get('lubrication/results/');
-        setResults(response.data);
-        setLoading(false);
-      } catch (error) {
-        toast.error('Error al cargar resultados: ' + (error.response?.data?.message || error.message));
-        setLoading(false);
-      }
-    };
-
-    fetchResults();
+    fetchData();
   }, [api]);
 
-  console.log(resultados)
-  const fetchSampleTests = async (sampleId) => {
-    try {
-      const response = await api.get(`lubrication/sample-tests/?muestra=${sampleId}`);
-      return response.data;
-    } catch (error) {
-      toast.error('Error al cargar pruebas: ' + (error.response?.data?.message || error.message));
-      return [];
-    }
-  };
-
-  const handleAccordionChange = (panel) => async (event, isExpanded) => {
+  const handleAccordionChange = (panel) => (event, isExpanded) => {
     setExpanded(isExpanded ? panel : null);
-    
-    if (isExpanded) {
-      const sample = samples.find(s => s.id === panel);
-      if (!sample.tests) {
-        const tests = await fetchSampleTests(panel);
-        setSamples(prev => prev.map(s => 
-          s.id === panel ? { ...s, tests } : s
-        ));
-      }
-    }
   };
 
   const handleEdit = (sample) => {
@@ -125,6 +105,19 @@ const RevisionMuestra = () => {
     }
   };
 
+  const getTestsForSample = (sampleId) => {
+    return sampleTests.filter(test => 
+      test.muestra?.id === sampleId || test.muestra === sampleId
+    );
+  };
+
+  const getResultsForSample = (sampleId) => {
+    return results.filter(result => 
+      result.prueba_muestra?.muestra?.id === sampleId || 
+      result.prueba_muestra?.muestra === sampleId
+    );
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -135,202 +128,203 @@ const RevisionMuestra = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Revisión de Muestras
-      </Typography>
+  <Typography variant="h4" gutterBottom>
+    Revisión de Muestras
+  </Typography>
 
-      {samples.length === 0 ? (
-        <Typography variant="body1">No hay muestras disponibles</Typography>
-      ) : (
-        <Box>
-          {samples.map((sample) => (
-            <Accordion
-              key={sample.id}
-              expanded={expanded === sample.id}
-              onChange={handleAccordionChange(sample.id)}
-              sx={{ mb: 2 }}
-            >
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="h6">
-                    {sample.id} - {sample.referencia_equipo?.codigo || 'Sin referencia'}
-                  </Typography>
-                  <Chip 
-                                  label={sample.referencia_equipo?.codigo} 
-                                  size="small" 
-                                  sx={{ mt: 1 }}
-                                  color={sample.referencia_equipo?.codigo === 'aprobado' ? 'success' : 'default'}
-                                />
+  {samples.length === 0 ? (
+    <Typography variant="body1">No hay muestras disponibles</Typography>
+  ) : (
+    <Box>
+      {samples.map((sample) => (
+        <Accordion
+          key={sample.id}
+          expanded={expanded === sample.id}
+          onChange={handleAccordionChange(sample.id)}
+          sx={{ mb: 2 }}
+        >
+          <AccordionSummary expandIcon={<ExpandMore />}>
+            <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="h6">
+                {sample.id} - {sample.referencia_equipo?.codigo || sample.codigo_equipo || 'Sin referencia'}
+              </Typography>
+              <Chip 
+                label={sample.is_aprobado ? 'Aprobado' : 'Pendiente'} 
+                size="small" 
+                color={sample.is_aprobado ? 'success' : 'default'}
+              />
+            </Box>
+          </AccordionSummary>
+          
+          <AccordionDetails>
+            {editingSample?.id === sample.id ? (
+              <Box>
+                <TextField
+                  fullWidth
+                  label="Observaciones"
+                  value={editingSample.observaciones || ''}
+                  onChange={(e) => handleFieldChange('observaciones', e.target.value)}
+                  multiline
+                  rows={3}
+                  sx={{ mb: 2 }}
+                />
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                  <Button 
+                    variant="outlined" 
+                    startIcon={<Cancel />}
+                    onClick={handleCancelEdit}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button 
+                    variant="contained" 
+                    startIcon={<Save />}
+                    onClick={handleSave}
+                  >
+                    Guardar
+                  </Button>
                 </Box>
-              </AccordionSummary>
-              
-              <AccordionDetails>
-                {editingSample?.id === sample.id ? (
-                  <Box>
-                    <TextField
-                      fullWidth
-                      label="Observaciones"
-                      value={editingSample.observaciones || ''}
-                      onChange={(e) => handleFieldChange('observaciones', e.target.value)}
-                      multiline
-                      rows={3}
-                      sx={{ mb: 2 }}
-                    />
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                      <Button 
-                        variant="outlined" 
-                        startIcon={<Cancel />}
-                        onClick={handleCancelEdit}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button 
-                        variant="contained" 
-                        startIcon={<Save />}
-                        onClick={handleSave}
-                      >
-                        Guardar
-                      </Button>
-                    </Box>
-                  </Box>
-                ) : (
-                  <Box>
-                    <Typography variant="body1" paragraph>
-                      <strong>Equipo:</strong> {sample.referencia_equipo?.codigo} - {sample.referencia_equipo?.descripcion}
-                    </Typography>
-                    <Typography variant="body1" paragraph>
-                      <strong>Lubricante:</strong> {sample.lubricante?.nombre_comercial} ({sample.lubricante?.grado_viscosidad})
-                    </Typography>
-                    <Typography variant="body1" paragraph>
-                      <strong>Fecha de toma:</strong> {new Date(sample.fecha_toma).toLocaleDateString()}
-                    </Typography>
-                    <Typography variant="body1" paragraph>
-                      <strong>Observaciones:</strong> {sample.observaciones || 'Ninguna'}
-                    </Typography>
-                    
-                    {sample.tests && (
-                      <Box sx={{ mt: 3 }}>
-                        <Tabs 
-                          value={activeTab} 
-                          onChange={(e, newValue) => setActiveTab(newValue)}
-                          sx={{ mb: 2 }}
-                        >
-                          <Tab label="Pruebas" />
-                          <Tab label="Resultados" />
-                        </Tabs>
-                        
-                        {activeTab === 0 && (
-                          <Box>
-                            <Typography variant="h6" gutterBottom>
-                              Pruebas Asociadas
-                            </Typography>
-                            {sample.tests.length > 0 ? (
-                              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 2 }}>
-                                {sample.tests.map(test => (
-                                  <Paper 
-                                    key={test.id} 
-                                    elevation={2}
-                                    sx={{ 
-                                      p: 2,
-                                      backgroundColor: test.is_used ? 'black' : 'background.paper'
-                                    }}
-                                  >
-                                    <Typography variant="subtitle1">
-                                      {test.prueba.codigo} - {test.prueba.nombre}
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                      Método: {test.prueba.metodo_referencia}
-                                    </Typography>
-                                    <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                                      Estado: {test.completada ? 'Completada' : 'Pendiente'}
-                                    </Typography>
-                                    {test.estatus && (
-                                      <Chip 
-                                        label={test.estatus} 
-                                        size="small" 
-                                        sx={{ mt: 1 }}
-                                        color={test.estatus === 'aprobado' ? 'success' : 'default'}
-                                      />
-                                    )}
-                                  </Paper>
-                                ))}
-                              </Box>
-                            ) : (
-                              <Typography variant="body2">No hay pruebas asociadas</Typography>
-                            )}
-                          </Box>
-                        )}
-                        
-                        {activeTab === 1 && (
-                          <Box>
-                            <Typography variant="h6" gutterBottom>
-                              Resultados
-                            </Typography>
-                            {sample.tests.filter(t => t.completada).length > 0 ? (
-                              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 2 }}>
-                                {resultados.filter(t => t.completada).map(test => (
-                                  <Paper 
-                                    key={test.id} 
-                                    elevation={2}
-                                    sx={{ p: 2 }}
-                                  >
-                                    <Typography variant="subtitle1">
-                                      {test.prueba.codigo} - {test.prueba.nombre}
-                                    </Typography>
-                                    <Typography variant="body1" sx={{ mt: 1 }}>
-                                      <strong>Resultado:</strong> {test.resultado} {test.prueba.unidad_medida || ''}
-                                    </Typography>
-                                    <Typography variant="body2" sx={{ mt: 1 }}>
-                                      <strong>Fecha medición:</strong> {new Date(test.fecha_medicion).toLocaleDateString()}
-                                    </Typography>
-                                    {test.observaciones && (
-                                      <Typography variant="body2" sx={{ mt: 1 }}>
-                                        <strong>Observaciones:</strong> {test.observaciones}
-                                      </Typography>
-                                    )}
+              </Box>
+            ) : (
+              <Box>
+                <Typography variant="body1" paragraph>
+                  <strong>Equipo:</strong> {sample.referencia_equipo?.nombre || sample.codigo_equipo} - {sample.referencia_equipo?.descripcion || sample.componente}
+                </Typography>
+                <Typography variant="body1" paragraph>
+                  <strong>Lubricante:</strong> {sample.lubricante?.nombre_comercial} ({sample.lubricante?.grado_viscosidad})
+                </Typography>
+                <Typography variant="body1" paragraph>
+                  <strong>Fecha de toma:</strong> {new Date(sample.fecha_toma).toLocaleDateString()}
+                </Typography>
+                <Typography variant="body1" paragraph>
+                  <strong>Observaciones:</strong> {sample.observaciones || 'Ninguna'}
+                </Typography>
+                
+                <Box sx={{ mt: 3 }}>
+                  <Tabs 
+                    value={activeTab} 
+                    onChange={(e, newValue) => setActiveTab(newValue)}
+                    sx={{ mb: 2 }}
+                  >
+                    <Tab label="Pruebas Asociadas" />
+                    <Tab label="Resultados" />
+                  </Tabs>
+                  
+                  {activeTab === 0 && (
+                    <Box>
+                      <Typography variant="h6" gutterBottom>
+                        Pruebas Asociadas
+                      </Typography>
+                      {getTestsForSample(sample.id).length > 0 ? (
+                        <TableContainer component={Paper}>
+                          <Table>
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Código</TableCell>
+                                <TableCell>Nombre</TableCell>
+                                <TableCell>Estado</TableCell>
+                                <TableCell>Completada</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {getTestsForSample(sample.id).map(test => (
+                                <TableRow key={test.id}>
+                                  <TableCell>{test.prueba?.codigo}</TableCell>
+                                  <TableCell>{test.prueba?.nombre}</TableCell>
+                                  <TableCell>
                                     <Chip 
-                                      label={test.estatus} 
+                                      label={test.is_used ? 'Activa' : 'Inactiva'} 
                                       size="small" 
-                                      sx={{ mt: 1 }}
-                                      color={test.estatus === 'aprobado' ? 'success' : 'default'}
+                                      color={test.is_used ? 'success' : 'default'}
                                     />
-                                  </Paper>
-                                ))}
-                              </Box>
-                            ) : (
-                              <Typography variant="body2">No hay resultados disponibles</Typography>
-                            )}
-                          </Box>
-                        )}
-                      </Box>
-                    )}
-                    
-                    <Divider sx={{ my: 3 }} />
-                    
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                      <Button 
-                        variant="outlined" 
-                        startIcon={<PictureAsPdf />}
-                        onClick={() => generateReport(sample.id)}
-                      >
-                        Generar PDF
-                      </Button>
-                      <Button 
-                        variant="contained" 
-                        startIcon={<Edit />}
-                        onClick={() => handleEdit(sample)}
-                      >
-                        Editar
-                      </Button>
+                                  </TableCell>
+                                  <TableCell>{test.completada ? 'Sí' : 'No'}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      ) : (
+                        <Typography variant="body2">No hay pruebas asociadas</Typography>
+                      )}
                     </Box>
-                  </Box>
-                )}
-              </AccordionDetails>
-            </Accordion>
-          ))}
-        </Box>
-      )}
+                  )}
+                  
+                  {activeTab === 1 && (
+                    <Box>
+                      <Typography variant="h6" gutterBottom>
+                        Resultados
+                      </Typography>
+                      {getResultsForSample(sample.id).length > 0 ? (
+                        <TableContainer component={Paper}>
+                          <Table>
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Prueba</TableCell>
+                                <TableCell>Resultado</TableCell>
+                                <TableCell>Fecha</TableCell>
+                                <TableCell>Estado</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {getResultsForSample(sample.id).map(result => (
+                                <TableRow key={result.id}>
+                                  <TableCell>
+                                    {result.prueba_muestra?.prueba?.codigo} - {result.prueba_muestra?.prueba?.nombre}
+                                  </TableCell>
+                                  <TableCell>
+                                    {result.resultado} {result.prueba_muestra?.prueba?.unidad_medida || ''}
+                                  </TableCell>
+                                  <TableCell>
+                                    {new Date(result.fecha_medicion).toLocaleDateString()}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Chip 
+                                      label={result.estado || 'Sin estado'} 
+                                      size="small" 
+                                      color={result.estado === 'aprobado' ? 'success' : 'default'}
+                                    />
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      ) : (
+                        <Typography variant="body2">No hay resultados disponibles</Typography>
+                      )}
+                    </Box>
+                  )}
+                </Box>
+                
+                <Divider sx={{ my: 3 }} />
+                
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                  <Button 
+                    variant="outlined" 
+                    startIcon={<PictureAsPdf />}
+                    onClick={() => generateReport(sample.id)}
+                    disabled={getResultsForSample(sample.id).length === 0}
+                  >
+                    Generar PDF
+                  </Button>
+                  <Button 
+                    variant="contained" 
+                    startIcon={<Edit />}
+                    onClick={() => handleEdit(sample)}
+                  >
+                    Editar
+                  </Button>
+                </Box>
+              </Box>
+            )}
+          </AccordionDetails>
+        </Accordion>
+      ))}
     </Box>
+  )}
+</Box>
+
   );
 };
 
