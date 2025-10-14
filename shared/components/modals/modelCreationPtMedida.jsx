@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from "react";
-import Modal from "react-bootstrap/Modal";
-import Button from "react-bootstrap/Button";
-import Form from "react-bootstrap/Form";
-import { v4 as uuidv4 } from 'uuid';
+import React, { useState, useEffect } from 'react';
+import Modal from 'react-bootstrap/Modal';
+import Button from 'react-bootstrap/Button';
+import Form from 'react-bootstrap/Form';
+import { Plus, X, Settings, Save, Loader } from 'lucide-react';
+import { toast } from 'react-toastify';
+import Axios from 'axios';
+import { useAuth } from '../../../shared/context/AuthContext';
 
-const UNIDADES_PERIODO = [
-  {value: 'horas', label: 'Horas'},
-  {value: 'dias', label: 'Días'},
-  {value: 'semanas', label: 'Semanas'},
-  {value: 'meses', label: 'Meses'},
-];
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 const ModalMuestra = ({
   show,
@@ -19,16 +17,12 @@ const ModalMuestra = ({
   lubricants,
   equipmentReferences,
   users,
-  currentUser
+  currentUser,
+  folder
 }) => {
-  console.log(users, currentUser);
-  
-  // Estado inicial con valores por defecto
   const [formData, setFormData] = useState({
-    id: uuidv4(),
-    fecha_toma: new Date().toISOString().slice(0, 16),
+    fecha_toma: '',
     lubricante: '',
-    equipo: machines.length > 0 ? machines[0].id : '',
     contacto_cliente: '',
     equipo_placa: '',
     referencia_equipo: '',
@@ -36,388 +30,751 @@ const ModalMuestra = ({
     unidad_periodo_aceite: '',
     periodo_servicio_equipo: '',
     unidad_periodo_equipo: '',
-  
-    campos_adicionales: {},
-    usuario_registro: currentUser.id,
-    is_ingresado: false,
-    is_aprobado: false,
-    was_checked: new Date().toISOString().slice(0, 10)
+    observaciones: '',
+    tipo_equipo: '',
+    cliente: ''
   });
 
+  const user = useAuth();
+  const [camposAdicionales, setCamposAdicionales] = useState([]);
+  const [mostrarAgregarCampo, setMostrarAgregarCampo] = useState(false);
+  const [nuevoCampo, setNuevoCampo] = useState({
+    nombre: '',
+    tipo: 'text',
+    requerido: false
+  });
+  const [loading, setLoading] = useState(false);
+  const [lubricantes, setLubricantes] = useState([]);
+  const [tipoEquipo, setTipoEquipo] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [folders, setFolders] = useState([]);
 
-    // Estado para los campos adicionales
-    const [additionalFields, setAdditionalFields] = useState([]);
-    const [newFieldName, setNewFieldName] = useState('');
-    const [newFieldValue, setNewFieldValue] = useState('');
+  // Obtener datos del folder actual
+  const empresaActual = folder?.compania_id?.id || folder?.compania_id;
+  const equipoActual = folder?.machine?.id || folder?.machines?.id;
+  const telefonoEmpresa = folder?.compania_info?.telefono || '';
 
+  // Cargar datos iniciales
+  useEffect(() => {
+    cargarDatosIniciales();
+  }, []);
 
-  // Manejar cambios en los inputs
-  const handleChange = (e) => {
-    const { name, value, type } = e.target;
-    
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? e.target.checked : value
-    }));
-  };
-
-
-     // Manejar cambios en campos adicionales
-  const handleAdditionalFieldChange = (fieldName, value) => {
-    setFormData(prev => ({
-      ...prev,
-      campos_adicionales: {
-        ...prev.campos_adicionales,
-        [fieldName]: value
-      }
-    }));
-  };
-
-  // Agregar nuevo campo
-  const addNewField = () => {
-    if (newFieldName.trim() === '') return;
-    
-    const fieldName = newFieldName.trim();
-    const fieldValue = newFieldValue;
-    
-    setAdditionalFields(prev => [...prev, { name: fieldName, value: fieldValue }]);
-    handleAdditionalFieldChange(fieldName, fieldValue);
-    
-    // Resetear los inputs
-    setNewFieldName('');
-    setNewFieldValue('');
-  };
-
-  // Eliminar campo adicional
-  const removeField = (fieldName) => {
-    setAdditionalFields(prev => prev.filter(field => field.name !== fieldName));
-    
-    // Eliminar del objeto campos_adicionales
-    setFormData(prev => {
-      const newAdditionalFields = { ...prev.campos_adicionales };
-      delete newAdditionalFields[fieldName];
-      return {
-        ...prev,
-        campos_adicionales: newAdditionalFields
-      };
-    });
-  };
-
- 
-  // Validar y enviar el formulario
-  const handleSubmit = () => {
-    // Validaciones básicas
-    if (!formData.fecha_toma || !formData.lubricante || !formData.equipo) {
-      alert("Los campos 'Fecha de toma', 'Lubricante' y 'Equipo' son obligatorios.");
-      return;
-    }
-
-    // Crear objeto con los datos formateados
-    const sampleData = {
-      ...formData,
-      periodo_servicio_aceite: formData.periodo_servicio_aceite ? parseFloat(formData.periodo_servicio_aceite) : null,
-      periodo_servicio_equipo: formData.periodo_servicio_equipo ? parseFloat(formData.periodo_servicio_equipo) : null
-    };
-
-    onCreate(sampleData);
-    onHide();
-  };
-
-  // Resetear el formulario al mostrarse
+  // Resetear formulario cuando se muestra el modal
   useEffect(() => {
     if (show) {
       setFormData({
-        id: uuidv4(),
         fecha_toma: new Date().toISOString().slice(0, 16),
         lubricante: '',
-        equipo: machines.length > 0 ? machines[0].id : '',
-        contacto_cliente: '',
+        contacto_cliente: telefonoEmpresa,
         equipo_placa: '',
-        referencia_equipo: '',
+        referencia_equipo: equipoActual || '',
         periodo_servicio_aceite: '',
         unidad_periodo_aceite: '',
         periodo_servicio_equipo: '',
         unidad_periodo_equipo: '',
-        
-        campos_adicionales: {},
-        usuario_registro: currentUser.id,
-        is_ingresado: false,
-        is_aprobado: false,
-        was_checked: new Date().toISOString().slice(0, 10)
+        observaciones: '',
+        tipo_equipo: '',
+        cliente: empresaActual || ''
       });
+      setCamposAdicionales([]);
     }
-  }, [show]);
+  }, [show, equipoActual, empresaActual, telefonoEmpresa]);
+
+  const cargarDatosIniciales = async () => {
+    try {
+      const [lubricantesRes, typeEquiposRes, clientesRes, foldersRes] = await Promise.all([
+        Axios.get(`${API_URL}/lubrication/lubricants/`),
+        Axios.get(`${API_URL}/lubrication/equipment-types/`),
+        Axios.get(`${API_URL}/companies/`),
+        Axios.get(`${API_URL}/folders/`)
+      ]);
+
+      setLubricantes(lubricantesRes.data);
+      setTipoEquipo(typeEquiposRes.data);
+      setClientes(clientesRes.data);
+      setFolders(foldersRes.data);
+
+    } catch (error) {
+      console.error('Error cargando datos:', error);
+      toast.error('Error al cargar datos iniciales');
+    }
+  };
+
+  // Función para encontrar la carpeta de una máquina
+  const encontrarCarpetaMaquina = (maquinaId) => {
+    const carpetaMaquina = folders.find(folder => 
+      folder.machine === maquinaId || folder.machines === maquinaId
+    );
+    
+    if (!carpetaMaquina) {
+      console.warn(`No se encontró carpeta para la máquina ID: ${maquinaId}`);
+      return null;
+    }
+    
+    return carpetaMaquina.id;
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prevState => ({
+      ...prevState,
+      [name]: value
+    }));
+  };
+
+  const handleContactoChange = (e) => {
+    const { value } = e.target;
+    setFormData(prevState => ({
+      ...prevState,
+      contacto_cliente: value
+    }));
+  };
+
+  const handleCampoAdicionalChange = (index, value) => {
+    const updatedCampos = [...camposAdicionales];
+    updatedCampos[index].valor = value;
+    setCamposAdicionales(updatedCampos);
+  };
+
+  const agregarCampo = () => {
+    if (nuevoCampo.nombre.trim() === '') {
+      toast.error('El nombre del campo es requerido');
+      return;
+    }
+
+    const campo = {
+      id: Date.now(),
+      nombre: nuevoCampo.nombre.trim(),
+      tipo: nuevoCampo.tipo,
+      requerido: nuevoCampo.requerido,
+      valor: ''
+    };
+
+    setCamposAdicionales([...camposAdicionales, campo]);
+    setNuevoCampo({ nombre: '', tipo: 'text', requerido: false });
+    setMostrarAgregarCampo(false);
+    toast.success('Campo adicional agregado');
+  };
+
+  const eliminarCampo = (id) => {
+    setCamposAdicionales(camposAdicionales.filter(campo => campo.id !== id));
+    toast.info('Campo eliminado');
+  };
+
+  const tiposCampo = [
+    { value: 'text', label: 'Texto' },
+    { value: 'number', label: 'Número' },
+    { value: 'date', label: 'Fecha' },
+    { value: 'textarea', label: 'Texto largo' }
+  ];
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // Validaciones
+      if (!formData.lubricante) {
+        toast.error('Por favor seleccione un lubricante');
+        setLoading(false);
+        return;
+      }
+
+      if (!formData.referencia_equipo) {
+        toast.error('Por favor seleccione una referencia de equipo');
+        setLoading(false);
+        return;
+      }
+
+      console.log(formData.referencia_equipo)
+
+      // ✅ 1. Encontrar la carpeta de la máquina seleccionada
+      const parentFolderId = encontrarCarpetaMaquina(parseInt(formData.referencia_equipo));
+      console.log(parentFolderId)
+      
+      if (!parentFolderId) {
+        toast.error('No se pudo encontrar la carpeta de la máquina seleccionada');
+        setLoading(false);
+        return;
+      }
+
+      // ✅ 2. Preparar datos principales de la muestra
+      const muestraData = {
+        ...formData,
+        periodo_servicio_aceite: formData.periodo_servicio_aceite ? parseFloat(formData.periodo_servicio_aceite) : null,
+        periodo_servicio_equipo: formData.periodo_servicio_equipo ? parseFloat(formData.periodo_servicio_equipo) : null,
+        usuario_registro: user.user.id,
+        campos_adicionales: camposAdicionales.reduce((acc, campo) => {
+          if (campo.valor) {
+            acc[campo.nombre] = campo.valor;
+          }
+          return acc;
+        }, {})
+      };
+
+      console.log('Enviando datos de muestra:', muestraData);
+
+      // ✅ 3. Crear la muestra principal
+      const response = await Axios.post(`${API_URL}/lubrication/samples/`, muestraData);
+      const muestraCreada = response.data;
+
+      // ✅ 4. Preparar datos para la carpeta de muestra
+      const folderData = {
+        nombre: muestraCreada.id.toString(),
+        typeFolder: 'muestra',
+        parentId: parentFolderId,
+        id_parent_node: parentFolderId,
+        compania: parseInt(formData.cliente),
+        isMachine: false,
+        is_pt_medida: true,
+        muestra: muestraCreada.id,
+        machine: parseInt(formData.referencia_equipo)
+      };
+
+      console.log('Enviando datos de carpeta:', folderData);
+
+      // ✅ 5. Crear la carpeta de muestra
+      await Axios.post(`${API_URL}/folders/`, folderData);
+
+      // ✅ 6. Crear campos extras si existen
+      if (camposAdicionales.length > 0) {
+        const camposExtrasData = camposAdicionales.map(campo => ({
+          tabla_relacionada: 'muestra',
+          objeto_id: muestraCreada.id,
+          nombre_campo: campo.nombre,
+          tipo_campo: campo.tipo,
+          etiqueta: campo.nombre,
+          valor_texto: campo.tipo === 'text' || campo.tipo === 'textarea' ? campo.valor : null,
+          valor_numero: campo.tipo === 'number' ? parseFloat(campo.valor) || null : null,
+          valor_fecha: campo.tipo === 'date' ? campo.valor : null,
+          requerido: campo.requerido,
+          estado: 'activo',
+          usuario_creacion: user.user.id,
+          orden: camposAdicionales.indexOf(campo)
+        }));
+
+        const camposConValor = camposExtrasData.filter(campo => 
+          campo.valor_texto || campo.valor_numero || campo.valor_fecha
+        );
+
+        if (camposConValor.length > 0) {
+          await Axios.post(`${API_URL}/api/extra-fields/bulk-create/`, {
+            campos: camposConValor
+          });
+        }
+      }
+
+      toast.success('Muestra y carpeta registradas exitosamente');
+      
+      // Llamar al callback onCreate
+      if (onCreate) {
+        onCreate(muestraCreada);
+      }
+      
+      // Cerrar modal
+      onHide();
+
+    } catch (error) {
+      console.error('Error completo:', error);
+      const errorMessage = error.response?.data || error.message;
+      toast.error(`Error al registrar muestra: ${JSON.stringify(errorMessage)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Estilos personalizados para el tema oscuro
+  const darkStyles = `
+    .modal-dark .modal-content {
+      background-color: #1a1a1a;
+      border: 1px solid #333;
+      color: #fff;
+    }
+    .modal-dark .modal-header {
+      background-color: #dc3545;
+      border-bottom: 1px solid #333;
+    }
+    .modal-dark .modal-footer {
+      border-top: 1px solid #333;
+    }
+    .modal-dark .form-control, 
+    .modal-dark .form-select {
+      background-color: #292929;
+      border: 1px solid #444;
+      color: #fff;
+    }
+    .modal-dark .form-control:focus, 
+    .modal-dark .form-select:focus {
+      background-color: #292929;
+      border-color: #dc3545;
+      box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+      color: #fff;
+    }
+    .modal-dark .form-label {
+      color: #fff;
+    }
+    .modal-dark .alert-info {
+      background-color: #1b3a4b;
+      border-color: #2c5364;
+      color: #a6d9f3;
+    }
+    .modal-dark fieldset {
+      border-color: #444 !important;
+    }
+    .modal-dark legend {
+      color: #d9d9d9;
+    }
+    .modal-dark .text-muted {
+      color: #8b8b8b !important;
+    }
+  `;
 
   return (
-    <Modal
-      show={show}
-      onHide={onHide}
-      centered
-      backdrop="static"
-      keyboard={false}
-      size="lg"
-      scrollable={true}
-    >
-      <Modal.Header closeButton className="bg-primary text-white">
-        <Modal.Title>Registrar Nueva Muestra</Modal.Title>
-      </Modal.Header>
-      
-      <Modal.Body style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-        <Form>
-          {/* Sección 1: Información Básica */}
-          <fieldset className="mb-4 p-3 border rounded">
-            <legend className="w-auto px-2">Información Básica</legend>
-            
-            <Form.Group className="mb-3">
-              <Form.Label>ID Muestra</Form.Label>
-              <Form.Control
-                type="text"
-                name="id"
-                value={formData.id}
-                onChange={handleChange}
-                readOnly
-              />
-            </Form.Group>
+    <>
+      <style>{darkStyles}</style>
+      <Modal
+        show={show}
+        onHide={onHide}
+        centered
+        backdrop="static"
+        keyboard={false}
+        size="lg"
+        scrollable={true}
+        dialogClassName="modal-dark"
+      >
+        <Modal.Header closeButton className="text-white">
+          <Modal.Title>Registrar Nueva Muestra</Modal.Title>
+        </Modal.Header>
+        
+        <Modal.Body style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+          {/* Información predefinida */}
+          <div className="alert alert-info mb-4">
+            <strong>Empresa:</strong> {folder?.compania_info?.nombre || 'Empresa actual'}<br />
+            <strong>Equipo:</strong> {folder?.name || 'Equipo actual'}<br />
+            <strong>Contacto:</strong> {telefonoEmpresa || 'No disponible'}
+          </div>
 
-            <Form.Group className="mb-3">
-              <Form.Label>Fecha de Toma *</Form.Label>
-              <Form.Control
-                type="datetime-local"
-                name="fecha_toma"
-                value={formData.fecha_toma}
-                onChange={handleChange}
-                required
-              />
-            </Form.Group>
+          {/* Botón para agregar campo */}
+          <div className="d-flex justify-content-end mb-4">
+            <button
+              type="button"
+              onClick={() => setMostrarAgregarCampo(!mostrarAgregarCampo)}
+              disabled={loading}
+              className="btn btn-outline-danger d-flex align-items-center gap-2"
+            >
+              <Plus size={16} />
+              Agregar Campo
+            </button>
+          </div>
 
-            <Form.Group className="mb-3">
-              <Form.Label>Lubricante *</Form.Label>
-              <Form.Select
-                name="lubricante"
-                value={formData.lubricante}
-                onChange={handleChange}
-                required
-              >
-                <option value="">Seleccione un lubricante</option>
-                {lubricants.map(lub => (
-                  <option key={lub.id} value={lub.id}>{lub.referencia}</option>
-                ))}
-              </Form.Select>
-            </Form.Group>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Equipo *</Form.Label>
-              <Form.Select
-                name="equipo"
-                value={formData.equipo}
-                onChange={handleChange}
-                required
-              >
-                {machines.map(machine => (
-                  <option key={machine.id} value={machine.id}>{machine.nombre}</option>
-                ))}
-              </Form.Select>
-            </Form.Group>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Contacto del Cliente</Form.Label>
-              <Form.Control
-                type="text"
-                name="contacto_cliente"
-                value={formData.contacto_cliente}
-                onChange={handleChange}
-              />
-            </Form.Group>
-          </fieldset>
-
-          {/* Sección 2: Información del Equipo */}
-          <fieldset className="mb-4 p-3 border rounded">
-            <legend className="w-auto px-2">Detalles del Equipo</legend>
-            
-            <Form.Group className="mb-3">
-              <Form.Label>Placa del Equipo</Form.Label>
-              <Form.Control
-                type="text"
-                name="equipo_placa"
-                value={formData.equipo_placa}
-                onChange={handleChange}
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Referencia del Equipo</Form.Label>
-              <Form.Select
-                name="referencia_equipo"
-                value={formData.referencia_equipo}
-                onChange={handleChange}
-              >
-                <option value="">Seleccione una referencia</option>
-                {equipmentReferences.map(ref => (
-                  <option key={ref.id} value={ref.id}>{ref.codigo}</option>
-                ))}
-              </Form.Select>
-            </Form.Group>
-          </fieldset>
-
-          {/* Sección 3: Periodos de Servicio */}
-          <fieldset className="mb-4 p-3 border rounded">
-            <legend className="w-auto px-2">Periodos de Servicio</legend>
-            
-            <div className="row">
-              <div className="col-md-6">
-                <Form.Group className="mb-3">
-                  <Form.Label>Periodo Servicio Aceite</Form.Label>
-                  <div className="d-flex gap-2">
-                    <Form.Control
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      name="periodo_servicio_aceite"
-                      value={formData.periodo_servicio_aceite}
-                      onChange={handleChange}
-                    />
-                    <Form.Select
-                      name="unidad_periodo_aceite"
-                      value={formData.unidad_periodo_aceite}
-                      onChange={handleChange}
-                    >
-                      <option value="">Unidad</option>
-                      {UNIDADES_PERIODO.map(unit => (
-                        <option key={unit.value} value={unit.value}>{unit.label}</option>
-                      ))}
-                    </Form.Select>
+          {/* Modal interno para agregar campo */}
+          {mostrarAgregarCampo && (
+            <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
+              <div className="modal-dialog modal-sm">
+                <div className="modal-content" style={{ backgroundColor: '#1a1a1a', border: '1px solid #333' }}>
+                  <div className="modal-header border-bottom border-secondary">
+                    <h6 className="modal-title text-white">Agregar Campo Personalizado</h6>
+                    <button
+                      type="button"
+                      className="btn-close btn-close-white"
+                      onClick={() => setMostrarAgregarCampo(false)}
+                      disabled={loading}
+                    ></button>
                   </div>
-                </Form.Group>
+                  <div className="modal-body">
+                    <Form.Group className="mb-3">
+                      <Form.Label className="text-white">Nombre del Campo *</Form.Label>
+                      <Form.Control
+                        type="text"
+                        value={nuevoCampo.nombre}
+                        onChange={(e) => setNuevoCampo({ ...nuevoCampo, nombre: e.target.value })}
+                        placeholder="Ej: Temperatura"
+                        disabled={loading}
+                        style={{ backgroundColor: '#292929', border: '1px solid #444', color: '#fff' }}
+                      />
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                      <Form.Label className="text-white">Tipo de Campo</Form.Label>
+                      <Form.Select
+                        value={nuevoCampo.tipo}
+                        onChange={(e) => setNuevoCampo({ ...nuevoCampo, tipo: e.target.value })}
+                        disabled={loading}
+                        style={{ backgroundColor: '#292929', border: '1px solid #444', color: '#fff' }}
+                      >
+                        {tiposCampo.map(tipo => (
+                          <option key={tipo.value} value={tipo.value}>
+                            {tipo.label}
+                          </option>
+                        ))}
+                      </Form.Select>
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                      <Form.Check
+                        type="checkbox"
+                        label="Campo requerido"
+                        checked={nuevoCampo.requerido}
+                        onChange={(e) => setNuevoCampo({ ...nuevoCampo, requerido: e.target.checked })}
+                        disabled={loading}
+                        className="text-white"
+                      />
+                    </Form.Group>
+                  </div>
+                  <div className="modal-footer border-top border-secondary">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setMostrarAgregarCampo(false)}
+                      disabled={loading}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger d-flex align-items-center gap-1"
+                      onClick={agregarCampo}
+                      disabled={loading}
+                    >
+                      <Plus size={14} />
+                      Agregar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Form onSubmit={handleSubmit}>
+            {/* Información de la Muestra */}
+            <div className="row mb-4">
+              <div className="col-12">
+                <h6 className="text-white border-bottom border-secondary pb-2 mb-3">
+                  Información de la Muestra
+                </h6>
               </div>
               
               <div className="col-md-6">
                 <Form.Group className="mb-3">
-                  <Form.Label>Periodo Servicio Equipo</Form.Label>
-                  <div className="d-flex gap-2">
-                    <Form.Control
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      name="periodo_servicio_equipo"
-                      value={formData.periodo_servicio_equipo}
-                      onChange={handleChange}
-                    />
-                    <Form.Select
-                      name="unidad_periodo_equipo"
-                      value={formData.unidad_periodo_equipo}
-                      onChange={handleChange}
-                    >
-                      <option value="">Unidad</option>
-                      {UNIDADES_PERIODO.map(unit => (
-                        <option key={unit.value} value={unit.value}>{unit.label}</option>
-                      ))}
-                    </Form.Select>
-                  </div>
+                  <Form.Label className="text-white">
+                    Fecha Toma de Muestra <span className="text-danger">*</span>
+                  </Form.Label>
+                  <Form.Control
+                    type="datetime-local"
+                    name="fecha_toma"
+                    value={formData.fecha_toma}
+                    onChange={handleInputChange}
+                    required
+                    disabled={loading}
+                  />
+                </Form.Group>
+              </div>
+
+              <div className="col-md-6">
+                <Form.Group className="mb-3">
+                  <Form.Label className="text-white">
+                    Lubricante <span className="text-danger">*</span>
+                  </Form.Label>
+                  <Form.Select
+                    name="lubricante"
+                    value={formData.lubricante}
+                    onChange={handleInputChange}
+                    required
+                    disabled={loading}
+                  >
+                    <option value="" className="text-muted">Seleccione un lubricante</option>
+                    {lubricantes.map(lub => (
+                      <option key={lub.id} value={lub.id}>
+                        {lub.referencia} - {lub.grado_viscosidad}
+                      </option>
+                    ))}
+                  </Form.Select>
                 </Form.Group>
               </div>
             </div>
-          </fieldset>
 
-          {/* Sección 4: Información Adicional */}
-          <fieldset className="mb-4 p-3 border rounded">
-            <legend className="w-auto px-2">Información Adicional</legend>
-     
-
-            <Form.Group className="mb-3">
-              <Form.Label>Fecha de Revisión</Form.Label>
-              <Form.Control
-                type="date"
-                name="was_checked"
-                value={formData.was_checked}
-                onChange={handleChange}
-              />
-            </Form.Group>
-
-          
-
-            <Form.Group className="mb-3">
-              <Form.Label>Usuario Registro</Form.Label>
-              <Form.Select
-                name="usuario_registro"
-                value={formData.usuario_registro}
-                onChange={handleChange}
-              >
-                {users.map(user => (
-                  <option key={user.id} value={user.id}>{user.email}</option>
-                ))}
-              </Form.Select>
-            </Form.Group>
-          </fieldset>
-
-          <fieldset className="mb-4 p-3 border rounded">
-            <legend className="w-auto px-2">Campos Adicionales</legend>
-            
-            {/* Lista de campos adicionales existentes */}
-            {additionalFields.map((field, index) => (
-              <Form.Group key={index} className="mb-3">
-                <div className="d-flex align-items-center gap-2">
-                  <Form.Control
-                    type="text"
-                    value={field.name}
-                    readOnly
-                    className="flex-grow-1"
-                  />
-                  <Form.Control
-                    type="text"
-                    value={formData.campos_adicionales[field.name] || ''}
-                    onChange={(e) => handleAdditionalFieldChange(field.name, e.target.value)}
-                    placeholder="Valor"
-                  />
-                  <Button
-                    variant="danger"
-                    onClick={() => removeField(field.name)}
-                    size="sm"
-                  >
-                    ×
-                  </Button>
-                </div>
-              </Form.Group>
-            ))}
-
-            {/* Formulario para agregar nuevo campo */}
-            <Form.Group className="mb-3">
-              <div className="d-flex align-items-center gap-2">
-                <Form.Control
-                  type="text"
-                  value={newFieldName}
-                  onChange={(e) => setNewFieldName(e.target.value)}
-                  placeholder="Nombre del campo"
-                  className="flex-grow-1"
-                />
-                <Form.Control
-                  type="text"
-                  value={newFieldValue}
-                  onChange={(e) => setNewFieldValue(e.target.value)}
-                  placeholder="Valor"
-                />
-                <Button
-                  variant="success"
-                  onClick={addNewField}
-                  disabled={!newFieldName.trim()}
-                  size="sm"
-                >
-                  +
-                </Button>
+            {/* Información del Cliente */}
+            <div className="row mb-4">
+              <div className="col-12">
+                <h6 className="text-white border-bottom border-secondary pb-2 mb-3">
+                  Información del Cliente
+                </h6>
               </div>
-            </Form.Group>
-          </fieldset>
-        </Form>
-      </Modal.Body>
-      
-      <Modal.Footer>
-        <Button variant="secondary" onClick={onHide}>
-          Cancelar
-        </Button>
-        <Button variant="primary" onClick={handleSubmit}>
-          Registrar Muestra
-        </Button>
-      </Modal.Footer>
-    </Modal>
+
+              <div className="col-md-6">
+                <Form.Group className="mb-3">
+                  <Form.Label className="text-white">
+                    Contacto del Cliente <span className="text-danger">*</span>
+                  </Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="contacto_cliente"
+                    value={formData.contacto_cliente}
+                    onChange={handleContactoChange}
+                    placeholder="Persona de contacto"
+                    required
+                    disabled={loading}
+                  />
+                  <Form.Text className="text-muted">
+                    Se autocompleta con el teléfono de la empresa, pero puedes editarlo
+                  </Form.Text>
+                </Form.Group>
+              </div>
+
+              <div className="col-md-6">
+                <Form.Group className="mb-3">
+                  <Form.Label className="text-white">Placa del Equipo</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="equipo_placa"
+                    value={formData.equipo_placa}
+                    onChange={handleInputChange}
+                    placeholder="Ej: EQ-001"
+                    disabled={loading}
+                  />
+                </Form.Group>
+              </div>
+            </div>
+
+            {/* Periodos de Servicio */}
+            <div className="row mb-4">
+              <div className="col-md-6">
+                <div className="border border-secondary rounded p-3">
+                  <h6 className="text-white mb-3">Periodo Servicio Aceite</h6>
+                  <div className="row">
+                    <div className="col-7">
+                      <Form.Control
+                        type="number"
+                        name="periodo_servicio_aceite"
+                        value={formData.periodo_servicio_aceite}
+                        onChange={handleInputChange}
+                        placeholder="Ej: 250"
+                        step="0.01"
+                        min="0"
+                        disabled={loading}
+                      />
+                    </div>
+                    <div className="col-5">
+                      <Form.Select
+                        name="unidad_periodo_aceite"
+                        value={formData.unidad_periodo_aceite}
+                        onChange={handleInputChange}
+                        disabled={loading}
+                      >
+                        <option value="" className="text-muted">Unidad</option>
+                        <option value="horas">Horas</option>
+                        <option value="dias">Días</option>
+                        <option value="km">Kilómetros</option>
+                        <option value="millas">Millas</option>
+                      </Form.Select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-md-6">
+                <div className="border border-secondary rounded p-3">
+                  <h6 className="text-white mb-3">Periodo Servicio Equipo</h6>
+                  <div className="row">
+                    <div className="col-7">
+                      <Form.Control
+                        type="number"
+                        name="periodo_servicio_equipo"
+                        value={formData.periodo_servicio_equipo}
+                        onChange={handleInputChange}
+                        placeholder="Ej: 500"
+                        step="0.01"
+                        min="0"
+                        disabled={loading}
+                      />
+                    </div>
+                    <div className="col-5">
+                      <Form.Select
+                        name="unidad_periodo_equipo"
+                        value={formData.unidad_periodo_equipo}
+                        onChange={handleInputChange}
+                        disabled={loading}
+                      >
+                        <option value="" className="text-muted">Unidad</option>
+                        <option value="horas">Horas</option>
+                        <option value="dias">Días</option>
+                        <option value="km">Kilómetros</option>
+                        <option value="millas">Millas</option>
+                      </Form.Select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Información Adicional */}
+            <div className="row mb-4">
+              <div className="col-12">
+                <h6 className="text-white border-bottom border-secondary pb-2 mb-3">
+                  Información Adicional
+                </h6>
+              </div>
+
+              <div className="col-md-6">
+                <Form.Group className="mb-3">
+                  <Form.Label className="text-white">Tipo de Equipo/Uso</Form.Label>
+                  <Form.Select
+                    name="tipo_equipo"
+                    value={formData.tipo_equipo}
+                    onChange={handleInputChange}
+                    disabled={loading}
+                  >
+                    <option value="" className="text-muted">Seleccione tipo de equipo</option>
+                    {tipoEquipo.map(tipo => (
+                      <option key={tipo.id} value={tipo.id}>
+                        {tipo.nombre}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              </div>
+
+              <div className="col-12">
+                <Form.Group className="mb-3">
+                  <Form.Label className="text-white">Observaciones</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={3}
+                    name="observaciones"
+                    value={formData.observaciones}
+                    onChange={handleInputChange}
+                    placeholder="Observaciones adicionales..."
+                    disabled={loading}
+                  />
+                </Form.Group>
+              </div>
+            </div>
+
+            {/* Campos Adicionales Dinámicos */}
+            {camposAdicionales.length > 0 && (
+              <div className="border-top border-secondary pt-4">
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <Settings size={18} className="text-white" />
+                  <h6 className="text-white mb-0">Campos Adicionales</h6>
+                  <span className="badge bg-secondary ms-2">
+                    {camposAdicionales.length}
+                  </span>
+                </div>
+
+                <div className="row">
+                  {camposAdicionales.map((campo, index) => (
+                    <div key={campo.id} className="col-md-6 mb-3">
+                      <Form.Group>
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <Form.Label className="text-white mb-0 small">
+                            {campo.nombre}
+                            {campo.requerido && <span className="text-danger ms-1">*</span>}
+                          </Form.Label>
+                          <button
+                            type="button"
+                            onClick={() => eliminarCampo(campo.id)}
+                            className="btn btn-outline-danger btn-sm"
+                            disabled={loading}
+                            style={{ padding: '0.1rem 0.3rem' }}
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                        
+                        {campo.tipo === 'text' && (
+                          <Form.Control
+                            type="text"
+                            value={campo.valor}
+                            onChange={(e) => handleCampoAdicionalChange(index, e.target.value)}
+                            required={campo.requerido}
+                            disabled={loading}
+                            size="sm"
+                          />
+                        )}
+                        
+                        {campo.tipo === 'number' && (
+                          <Form.Control
+                            type="number"
+                            value={campo.valor}
+                            onChange={(e) => handleCampoAdicionalChange(index, e.target.value)}
+                            required={campo.requerido}
+                            disabled={loading}
+                            size="sm"
+                          />
+                        )}
+                        
+                        {campo.tipo === 'date' && (
+                          <Form.Control
+                            type="date"
+                            value={campo.valor}
+                            onChange={(e) => handleCampoAdicionalChange(index, e.target.value)}
+                            required={campo.requerido}
+                            disabled={loading}
+                            size="sm"
+                          />
+                        )}
+                        
+                        {campo.tipo === 'textarea' && (
+                          <Form.Control
+                            as="textarea"
+                            rows={2}
+                            value={campo.valor}
+                            onChange={(e) => handleCampoAdicionalChange(index, e.target.value)}
+                            required={campo.requerido}
+                            disabled={loading}
+                            size="sm"
+                          />
+                        )}
+                      </Form.Group>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Form>
+        </Modal.Body>
+        
+        <Modal.Footer>
+          <div className="w-100 d-flex justify-content-between align-items-center">
+            <div className="text-muted small">
+              {camposAdicionales.length > 0 && (
+                <span>{camposAdicionales.length} campo(s) personalizado(s)</span>
+              )}
+            </div>
+            <div className="d-flex gap-2">
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={onHide} 
+                disabled={loading}
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-danger d-flex align-items-center gap-2"
+                onClick={handleSubmit}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <div className="spinner-border spinner-border-sm" role="status">
+                      <span className="visually-hidden">Cargando...</span>
+                    </div>
+                    Registrando...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} />
+                    Registrar Muestra
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </Modal.Footer>
+      </Modal>
+    </>
   );
 };
 

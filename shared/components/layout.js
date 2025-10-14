@@ -1,443 +1,455 @@
-import { useRouter } from "next/router";
-import { Box, CssBaseline } from "@mui/material";
-import * as React from 'react';
-import MenuList from '@mui/material/MenuList';
-import MenuItem from '@mui/material/MenuItem';
-import PropTypes from 'prop-types';
-import Button from '@mui/material/Button';
-import Stack from '@mui/material/Stack';
-import Chip from '@mui/material/Chip';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import TextField from '@mui/material/TextField';
-import Tooltip from '@mui/material/Tooltip'
-import FolderIcon from '@mui/icons-material/Folder';
-import { ThemeSwitcher } from '@toolpad/core/DashboardLayout';
-import SearchIcon from '@mui/icons-material/Search';
-import CloudCircleIcon from '@mui/icons-material/CloudCircle';
-import PersonIcon from '@mui/icons-material/Person';
-import DescriptionIcon from '@mui/icons-material/Description';
-import TimelineIcon from '@mui/icons-material/Timeline';
-import ScienceIcon from '@mui/icons-material/Science';
-import BusinessIcon from '@mui/icons-material/Business';
-import SettingsIcon from '@mui/icons-material/Settings';
-import { DashboardLayout } from '@toolpad/core/DashboardLayout';
-import { AppProvider } from '@toolpad/core/AppProvider';
-import Avatar from '@mui/material/Avatar';
-import Divider from '@mui/material/Divider';
-import ListItemText from '@mui/material/ListItemText';
-import ListItemIcon from '@mui/material/ListItemIcon';
+import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../context/AuthContext';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
 import {
-  Account,
-  AccountPreview,
-  AccountPopoverFooter,
-  SignOutButton,
-} from '@toolpad/core/Account';
-import { useAuth } from '../context/AuthContext'
+  Menu,
+  Dashboard,
+  Science,
+  Folder,
+  Description,
+  Timeline,
+  Person,
+  Business,
+  Settings,
+  ChevronLeft,
+  ExpandMore,
+  Close,
+  AccountCircle,
+  Settings as SettingsIcon,
+  ExitToApp,
+  Notifications
+} from '@mui/icons-material';
 
+// Estructura de navegación
+const ALL_NAV_ITEMS = [
+  {
+    kind: 'header',
+    title: 'Panel de administración',
+    roles: ['GLOBAL', 'ADMIN', 'EMPRESA']
+  },
+  {
+    segment: 'activesTree',
+    title: 'Árbol de activos',
+    icon: <Dashboard />,
+    roles: ['GLOBAL', 'ADMIN', 'EMPRESA', 'OPERARIO']
+  },
+  {
+    segment: 'pruebas',
+    title: 'Pruebas',
+    icon: <Science />,
+    roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA']
+  },
+  {
+    segment: 'machines',
+    title: 'Maquinas',
+    icon: <Folder />,
+    roles: ['GLOBAL', 'ADMIN', 'EMPRESA', 'LABORATORISTA', 'OPERARIO'],
+  },
+  {
+    segment: '/muestras',
+    title: 'Muestras',
+    icon: <Folder />,
+    roles: ['GLOBAL', 'ADMIN', 'EMPRESA', 'LABORATORISTA', 'OPERARIO'],
+    children: [
+      {
+        segment: '/muestras',
+        title: 'lista de muestras',
+        icon: <Description />,
+        roles: ['GLOBAL', 'ADMIN', 'EMPRESA', 'OPERARIO']
+      },
+  
+      {
+        segment: '/muestras/ingresar-muestra-lab',
+        title: 'Ingreso al laboratorio',
+        icon: <Description />,
+        roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA']
+      },
+      {
+        segment: '/muestras/revision-muestras',
+        title: 'Revisar Muestras',
+        icon: <Description />,
+        roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA']
+      },
+    ]
+  },
+  {
+    segment: 'dashboard',
+    title: 'Dashboard',
+    icon: <Timeline />,
+    roles: ['GLOBAL', 'ADMIN', 'EMPRESA']
+  },
+  {
+    segment: 'documents-list',
+    title: 'Reportes',
+    icon: <Folder />,
+    roles: ['GLOBAL', 'ADMIN', 'EMPRESA']
+  },
+  {
+    segment: 'administrationPanel/users-management',
+    title: 'Gestión de usuarios',
+    icon: <Person />,
+    roles: ['GLOBAL', 'ADMIN']
+  },
+  {
+    segment: 'managment-companies',
+    title: 'Gestión de empresas',
+    icon: <Business />,
+    roles: ['GLOBAL','ADMIN']
+  },
+  {
+    segment: 'config',
+    title: 'Configuración del sistema',
+    icon: <Settings />,
+    roles: ['GLOBAL'],
+    children: [
+      {
+        segment: 'limits',
+        title: 'Limites',
+        icon: <Description />,
+        roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA'],
+        children: [
+      {
+        segment: 'limits/limits-list',
+        title: 'Ver limites',
+        icon: <Description />,
+        roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA']
+      },
+      
+    ]
+      },
+      {
+        segment: '',
+        title: 'Configurar parámetros',
+        icon: <Description />,
+        roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA']
+      },
+    ]
+  }
+];
 
+const NavItem = ({ item, userRole, isExpanded, onMobileClose }) => {
+  const router = useRouter();
+  const [isOpen, setIsOpen] = useState(false);
 
+  // Filtrar por roles
+  if (!item.roles.includes(userRole)) {
+    return null;
+  }
 
+  if (item.kind === 'header') {
+    return isExpanded ? (
+      <li className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-600">
+        {item.title}
+      </li>
+    ) : null;
+  }
+
+  const hasChildren = item.children && item.children.length > 0;
+  const isActive = router.pathname.includes(item.segment);
+
+  const handleClick = () => {
+    if (onMobileClose) {
+      onMobileClose(); // Cerrar sidebar en móvil al hacer clic
+    }
+  };
+
+  return (
+    <li className="relative">
+      {hasChildren ? (
+        <div>
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className={`w-full p-3 hover:bg-gray-700 cursor-pointer transition duration-200 flex items-center justify-between ${
+              isActive ? 'bg-gray-700' : ''
+            }`}
+            title={isExpanded ? '' : item.title}
+          >
+            <div className="flex items-center">
+              <span className="text-white">{item.icon}</span>
+              {isExpanded && (
+                <span className="ml-3 text-sm flex-1 text-left">{item.title}</span>
+              )}
+            </div>
+            {isExpanded && (
+              <ExpandMore className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+            )}
+          </button>
+          
+          {isExpanded && isOpen && (
+            <ul className="ml-4 mt-1 space-y-1">
+              {item.children.map((child, index) => (
+                <NavItem 
+                  key={index} 
+                  item={child} 
+                  userRole={userRole} 
+                  isExpanded={isExpanded}
+                  onMobileClose={onMobileClose}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : (
+        <Link 
+          href={`/${item.segment}`}
+          className={`block p-3 hover:bg-gray-700 cursor-pointer transition duration-200 flex items-center no-underline ${
+            isActive ? 'bg-gray-700' : ''
+          }`}
+          title={isExpanded ? '' : item.title}
+          onClick={handleClick}
+        >
+          <span className="text-white">{item.icon}</span>
+          {isExpanded && (
+            <span className="ml-3 text-sm flex-1 text-white">{item.title}</span>
+          )}
+        </Link>
+      )}
+    </li>
+  );
+};
+
+const SideBar = ({ userRole = 'ADMIN', isExpanded, onToggle, isMobileOpen, onMobileClose }) => {
+  return (
+    <>
+      {/* Overlay para móvil */}
+      {isMobileOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={onMobileClose}
+        />
+      )}
+      
+      {/* Sidebar */}
+      <div 
+        className={`fixed top-0 left-0 h-screen flex flex-col bg-[#292929] text-white shadow-lg z-50 transition-all duration-300
+          ${isExpanded ? 'w-64' : 'w-16'}
+          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          lg:mt-16`}
+      >
+        {/* Botón cerrar en móvil */}
+        {isMobileOpen && (
+          <div className="flex justify-end p-4 lg:hidden">
+            <button
+              onClick={onMobileClose}
+              className="text-white hover:bg-gray-700 rounded p-2"
+            >
+              <Close />
+            </button>
+          </div>
+        )}
+        
+        {/* Lista de navegación */}
+        <nav className="flex-1 overflow-y-auto">
+          <ul className="space-y-1 p-2">
+            {ALL_NAV_ITEMS.map((item, index) => (
+              <NavItem 
+                key={index} 
+                item={item} 
+                userRole={userRole} 
+                isExpanded={isExpanded}
+                onMobileClose={onMobileClose}
+              />
+            ))}
+          </ul>
+        </nav>
+      </div>
+    </>
+  );
+};
+
+const ProfileDropdown = ({ user }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const router = useRouter();
+
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleLogout = () => {
+    // Aquí iría tu lógica de logout
+    console.log('Cerrando sesión...');
+    router.push('/users/login');
+  };
+
+  const menuItems = [
+    { icon: <AccountCircle className="text-lg" />, label: 'Mi Perfil', action: () => console.log('Ir a perfil') },
+    { icon: <SettingsIcon className="text-lg" />, label: 'Configuración', action: () => console.log('Ir a configuración') },
+    { icon: <Notifications className="text-lg" />, label: 'Notificaciones', action: () => console.log('Ir a notificaciones') },
+    { type: 'divider' },
+    { icon: <ExitToApp className="text-lg" />, label: 'Cerrar Sesión', action: handleLogout, isDanger: true }
+  ];
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      {/* Botón del perfil */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center space-x-2 p-2 hover:bg-gray-700 rounded transition duration-200 text-white"
+        title="Menú de usuario"
+      >
+        <AccountCircle className="text-2xl" />
+        <span className="hidden sm:inline">Mi Cuenta</span>
+        <ExpandMore className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Menú desplegable */}
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-48 bg-[#292929] border border-gray-600 rounded-lg shadow-lg z-40">
+          <div className="py-1">
+            {/* Información del usuario - ahora con datos reales */}
+            <div className="px-4 py-2 border-b border-gray-600">
+              <p className="text-sm font-medium text-white">
+                {user?.name || 'Usuario'}
+              </p>
+              <p className="text-xs text-gray-400">
+                {user?.email || 'email@ejemplo.com'}
+              </p>
+              <p className="text-xs text-blue-400">
+                {user?.role || user?.userRole || 'ADMIN'}
+              </p>
+            </div>
+            
+            {/* Opciones del menú */}
+            {menuItems.map((item, index) => (
+              item.type === 'divider' ? (
+                <div key={index} className="border-t border-gray-600 my-1" />
+              ) : (
+                <button
+                  key={index}
+                  onClick={() => {
+                    item.action();
+                    setIsOpen(false);
+                  }}
+                  className={`w-full flex items-center space-x-3 px-4 py-2 text-sm text-left transition duration-200 hover:bg-gray-700 ${
+                    item.isDanger ? 'text-red-400 hover:text-red-300' : 'text-white'
+                  }`}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </button>
+              )
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Actualiza el Navbar para recibir el usuario
+const Navbar = ({ onToggleSidebar, isSidebarExpanded, onToggleMobile, user }) => {
+  return (
+    <nav className="fixed top-0 left-0 w-full h-16 bg-[#292929] text-white z-30 flex items-center justify-between px-4">
+      {/* Logo y botón hamburguesa */}
+      <div className="flex items-center space-x-4">
+        {/* Botón hamburguesa para móvil */}
+        <button
+          onClick={onToggleMobile}
+          className="p-2 hover:bg-gray-700 rounded transition duration-200 text-white lg:hidden"
+          title="Abrir menú"
+        >
+          <Menu />
+        </button>
+        
+        {/* Botón expandir/contraer para desktop */}
+        <button
+          onClick={onToggleSidebar}
+          className="p-2 hover:bg-gray-700 rounded transition duration-200 text-white hidden lg:block"
+          title={isSidebarExpanded ? 'Contraer menú' : 'Expandir menú'}
+        >
+          {isSidebarExpanded ? <ChevronLeft /> : <Menu />}
+        </button>
+        
+        <img 
+          src='/logo-global-oil.png' 
+          alt="Global Oil"
+          className="h-8 w-auto"
+        />
+      </div>
+
+      {/* Menú de usuario con dropdown */}
+      <div className="flex items-center space-x-2">
+        <ProfileDropdown user={user} />
+      </div>
+    </nav>
+  );
+};
 
 const Layout = ({ children }) => {
-  const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user } = useAuth(); // Obtener el usuario del contexto
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  
+  // Obtener el rol del usuario o usar 'ADMIN' como fallback
+  const userRole = user?.role || user?.userRole || 'ADMIN';
+  
+  console.log('Usuario en Layout:', user);
+  console.log('Rol detectado:', userRole);
 
-    // Configuración de autenticación
-    const authentication = React.useMemo(() => {
-      return {
-        signIn: () => {
-          // No necesitamos implementación aquí ya que el login se maneja en AuthContext
-        },
-        signOut: () => {
-          logout();
-        },
-      };
-    }, [logout]);
-
-  const isFullWidthPage = [
-    "/operations/manage",
-    "/operations/manage2",
-    "/customers",
-    "/customers/account",
-    "/brokers",
-    "/administration/deposit-emitter",
-    "/administration/deposit-investor",
-    "/administration/refund",
-    "/riskProfile",
-    "/administration/new-receipt",
-  ].includes(router.pathname);
-
-
-    // Navegación dinámica basada en roles
-    const getDynamicNavigation = () => {
-      const ALL_NAV_ITEMS = [
-        {
-          kind: 'header',
-          title: 'Panel de administración',
-          roles: ['GLOBAL', 'ADMIN', 'EMPRESA']
-        },
-        {
-          segment: 'activesTree',
-          title: 'Árbol de activos',
-          icon: <DashboardIcon />,
-          roles: ['GLOBAL', 'ADMIN', 'EMPRESA', 'OPERARIO']
-        },
-        {
-          segment: 'pruebas',
-          title: 'Pruebas',
-          icon: <ScienceIcon />,
-          roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA']
-        },
-        {
-          segment: 'machines',
-          title: 'Maquinas',
-          icon: <FolderIcon />,
-          roles: ['GLOBAL', 'ADMIN', 'EMPRESA', 'LABORATORISTA', 'OPERARIO'],
-          
-        },
-        {
-          segment: 'muestras',
-          title: 'Muestras',
-          icon: <FolderIcon />,
-          roles: ['GLOBAL', 'ADMIN', 'EMPRESA', 'LABORATORISTA', 'OPERARIO'],
-          children: [
-            {
-              segment: '',
-              title: 'lista de muestras',
-              icon: <DescriptionIcon />,
-              roles: ['GLOBAL', 'ADMIN', 'EMPRESA', 'OPERARIO']
-            },
-            {
-              segment: 'cliente-muestra',
-              title: 'Ingresar Muestra',
-              icon: <DescriptionIcon />,
-              roles: ['GLOBAL', 'ADMIN', 'EMPRESA', 'OPERARIO']
-            },
-            {
-              segment: 'ingresar-muestra-lab',
-              title: 'Ingreso al laboratorio',
-              icon: <DescriptionIcon />,
-              roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA']
-            },
-            {
-              segment: 'revision-muestras',
-              title: 'Revisar Muestras',
-              icon: <DescriptionIcon />,
-              roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA']
-            },
-           
-          ]
-        },
-        {
-          segment: 'dashboard',
-          title: 'Dashboard',
-          icon: <TimelineIcon />,
-          roles: ['GLOBAL', 'ADMIN', 'EMPRESA']
-        },
-        {
-          segment: 'documents-list',
-          title: 'Documentos',
-          icon: <FolderIcon />,
-          roles: ['GLOBAL', 'ADMIN', 'EMPRESA']
-        },
-        {
-          segment: 'administrationPanel/users-management',
-          title: 'Gestión de usuarios',
-          icon: <PersonIcon />,
-          roles: ['GLOBAL', 'ADMIN']
-        },
-        {
-          segment: 'managment-companies',
-          title: 'Gestión de empresas',
-          icon: <BusinessIcon />,
-          roles: ['GLOBAL']
-        },
-        {
-          segment: 'config',
-          title: 'Configuración del sistema',
-          icon: <SettingsIcon />,
-          roles: ['GLOBAL'],
-          children: [
-          
-            {
-              segment: 'limits',
-              title: 'Limites',
-              icon: <DescriptionIcon />,
-              roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA']
-            },
-            {
-              segment: '',
-              title: 'Configurar parámetros',
-              icon: <DescriptionIcon />,
-              roles: ['GLOBAL', 'ADMIN', 'LABORATORISTA']
-            },
-            
-           
-          ]
-        }
-      ];
-  
-      // Filtrar items basados en el rol del usuario
-      return ALL_NAV_ITEMS.filter(item => {
-        if (item.kind === 'header') return true;
-        
-        const hasPermission = item.roles.includes(user?.role);
-        
-        if (item.children) {
-          const hasVisibleChildren = item.children.some(child => 
-            child.roles.includes(user?.role)
-          );
-          return hasPermission && hasVisibleChildren;
-        }
-        
-        return hasPermission;
-      }).filter((item, index, array) => {
-        if (item.kind === 'header') {
-          const nextItem = array[index + 1];
-          return nextItem && nextItem.kind !== 'header';
-        }
-        return true;
-      });
-    };
-  
-    const NAVIGATION = getDynamicNavigation();
-  
-  function AccountSidebarPreview(props) {
-    const { handleClick, open, mini } = props;
-    return (
-      <Stack direction="column" p={0}>
-        <Divider />
-        <AccountPreview
-          variant={mini ? 'condensed' : 'expanded'}
-          handleClick={handleClick}
-          open={open}
-        />
-      </Stack>
-    );
-  }
-  
-  AccountSidebarPreview.propTypes = {
-    /**
-     * The handler used when the preview is expanded
-     */
-    handleClick: PropTypes.func,
-    mini: PropTypes.bool.isRequired,
-    /**
-     * The state of the Account popover
-     * @default false
-     */
-    open: PropTypes.bool,
-  };
-  function ToolbarActionsSearch() {
-    return (
-      <Stack direction="row">
-        <Tooltip title="Search" enterDelay={1000}>
-          <div>
-            <IconButton
-              type="button"
-              aria-label="search"
-              sx={{
-                display: { xs: 'inline', md: 'none' },
-              }}
-            >
-              <SearchIcon />
-            </IconButton>
-          </div>
-        </Tooltip>
-        <TextField
-          label="Search"
-          variant="outlined"
-          size="small"
-          slotProps={{
-            input: {
-              endAdornment: (
-                <IconButton type="button" aria-label="search" size="small">
-                  <SearchIcon />
-                </IconButton>
-              ),
-              sx: { pr: 0.5 },
-            },
-          }}
-          sx={{ display: { xs: 'none', md: 'inline-block' }, mr: 1 }}
-        />
-        <ThemeSwitcher />
-      </Stack>
-    );
-  }
-
-  function SidebarFooterAccountPopover() {
-    return (
-      <Stack direction="column">
-        <Typography variant="body2" mx={2} mt={1}>
-          Cuenta
-        </Typography>
-        <MenuList>
-          <MenuItem
-            component="button"
-            sx={{
-              justifyContent: 'flex-start',
-              width: '100%',
-              columnGap: 2,
-            }}
-          >
-            <ListItemIcon>
-              <Avatar
-                sx={{
-                  width: 32,
-                  height: 32,
-                  fontSize: '0.95rem',
-                }}
-                src={session?.user?.image ?? ''}
-                alt={session?.user?.name ?? ''}
-              >
-                {session?.user?.name?.[0]}
-              </Avatar>
-            </ListItemIcon>
-            <ListItemText
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-start',
-                width: '100%',
-              }}
-              primary={session?.user?.name || user?.email}
-              secondary={user?.role}
-              primaryTypographyProps={{ variant: 'body2' }}
-              secondaryTypographyProps={{ variant: 'caption' }}
-            />
-          </MenuItem>
-        </MenuList>
-        <Divider />
-        <AccountPopoverFooter>
-          <SignOutButton onClick={logout} />
-        </AccountPopoverFooter>
-      </Stack>
-    );
-  }
-  
-  const createPreviewComponent = (mini) => {
-    function PreviewComponent(props) {
-      return <AccountSidebarPreview {...props} mini={mini} />;
-    }
-    return PreviewComponent;
-  };
-  
-  function SidebarFooterAccount({ mini }) {
-    const PreviewComponent = React.useMemo(() => createPreviewComponent(mini), [mini]);
-    return (
-      <Account
-        slots={{
-          preview: PreviewComponent,
-          popoverContent: SidebarFooterAccountPopover,
-        }}
-        slotProps={{
-          popover: {
-            transformOrigin: { horizontal: 'left', vertical: 'bottom' },
-            anchorOrigin: { horizontal: 'right', vertical: 'bottom' },
-            disableAutoFocus: true,
-            slotProps: {
-              paper: {
-                elevation: 0,
-                sx: {
-                  overflow: 'visible',
-                  filter: (theme) =>
-                    `drop-shadow(0px 2px 8px ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.32)'})`,
-                  mt: 1,
-                  '&::before': {
-                    content: '""',
-                    display: 'block',
-                    position: 'absolute',
-                    bottom: 10,
-                    left: 0,
-                    width: 10,
-                    height: 10,
-                    bgcolor: 'background.paper',
-                    transform: 'translate(-50%, -50%) rotate(45deg)',
-                    zIndex: 0,
-                  },
-                },
-              },
-            },
-          },
-        }}
-      />
-    );
-  }
-  
-  SidebarFooterAccount.propTypes = {
-    mini: PropTypes.bool.isRequired,
-  };
-  function SidebarFooter({ mini }) {
-    return (
-      <Typography
-        variant="caption"
-        sx={{ m: 1, whiteSpace: 'nowrap', overflow: 'hidden' }}
-      >
-        {mini ? '© MUI' : `© ${new Date().getFullYear()} Made with love by MUI`}
-      </Typography>
-    );
-  }
-  
-  SidebarFooter.propTypes = {
-    mini: PropTypes.bool.isRequired,
-  };
-  
-  function CustomAppTitle() {
-    return (
-      <Stack direction="row" alignItems="center" spacing={2}>
-        <CloudCircleIcon fontSize="large" color="primary" />
-        <Typography variant="h6">My App</Typography>
-        <Chip size="small" label="BETA" color="info" />
-        <Tooltip title="Connected to production">
-          <CheckCircleIcon color="success" fontSize="small" />
-        </Tooltip>
-      </Stack>
-    );
-  }
-  // Configuración de sesión
-  const [session, setSession] = React.useState({
-    user: {
-      name: user?.first_name || user?.email,
-      email: user?.email,
-      image: 'https://avatars.githubusercontent.com/u/19550456',
-    }
-  });
-
-  // Actualizar sesión cuando el usuario cambia
-  React.useEffect(() => {
-    setSession({
-      user: {
-        name: user?.first_name || user?.email,
-        email: user?.email,
-        image: 'https://avatars.githubusercontent.com/u/19550456',
+  // Cerrar sidebar móvil al cambiar tamaño de pantalla
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setIsMobileOpen(false);
       }
-    });
-  }, [user]);
-  return (
-    <AppProvider
-     navigation={NAVIGATION}
-     authentication={authentication}
-     session={session}
-   
-    >
-    <DashboardLayout  defaultSidebarCollapsed
-      slots={{
-        appTitle: CustomAppTitle,
-        toolbarActions: ToolbarActionsSearch,
-        sidebarFooter: SidebarFooter,
-        toolbarAccount: () => null, sidebarFooter: SidebarFooterAccount
-      }}>
-      <Box component="section" sx={{ p: 2, border: '1px dashed grey' }}>
-          
-          {children}
-        </Box>
+    };
 
-    </DashboardLayout>
-    </AppProvider>
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handleToggleSidebar = () => {
+    setIsSidebarExpanded(!isSidebarExpanded);
+  };
+
+  const handleToggleMobile = () => {
+    setIsMobileOpen(!isMobileOpen);
+  };
+
+  const handleCloseMobile = () => {
+    setIsMobileOpen(false);
+  };
+
+  return (
+    <div className="flex flex-col min-h-screen">
+      <Navbar 
+        onToggleSidebar={handleToggleSidebar}
+        onToggleMobile={handleToggleMobile}
+        isSidebarExpanded={isSidebarExpanded}
+        user={user} // Pasar el usuario al Navbar si es necesario
+      />
       
+      <div className="flex flex-1">
+        <SideBar 
+          userRole={userRole} // Pasar el rol real del usuario
+          isExpanded={isSidebarExpanded}
+          isMobileOpen={isMobileOpen}
+          onToggle={handleToggleSidebar}
+          onMobileClose={handleCloseMobile}
+          user={user} // Pasar el usuario si el SideBar lo necesita
+        />
+        
+        {/* Contenido principal con márgenes responsive */}
+        <main className={`flex-1 min-h-screen transition-all duration-300 mt-16 w-full
+          ${isSidebarExpanded ? 'lg:ml-64' : 'lg:ml-16'}
+          ${isMobileOpen ? 'overflow-hidden' : ''}`}
+        >
+          <div className="p-0 sm:p-0">
+            {children}
+          </div>
+        </main>
+      </div>
+    </div>
   );
 };
 

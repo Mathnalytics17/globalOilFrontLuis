@@ -4,16 +4,12 @@ import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import { v4 as uuidv4 } from 'uuid';
 
-const ModalCreationFile = ({ show, onHide, onCreate, parentId }) => {
+const ModalCreationFile = ({ show, onHide, onCreate, parentId, compania_id }) => {
   const [type, setType] = useState("folder");
   const [name, setName] = useState("");
-  const [componente, setComponente] = useState("");
-  const [tipoAceite, setTipoAceite] = useState("");
-  const [frecuenciaCambio, setFrecuenciaCambio] = useState("");
-  const [frecuenciaAnalisis, setFrecuenciaAnalisis] = useState("");
-  const [numeroSerie, setNumeroSerie] = useState("");
-  const [codigoEquipo, setCodigoEquipo] = useState("");
-  console.log(type)
+  const [descripcion, setDescripcion] = useState("");
+
+
   const handleCreate = () => {
     if (!name.trim()) {
       alert("El nombre no puede estar vacío.");
@@ -21,7 +17,7 @@ const ModalCreationFile = ({ show, onHide, onCreate, parentId }) => {
     }
 
     if (type === "machine") {
-      if (!componente || !tipoAceite || !frecuenciaCambio || !frecuenciaAnalisis) {
+      if (!name || !descripcion) {
         alert("Por favor complete todos los campos requeridos para la máquina.");
         return;
       }
@@ -29,45 +25,48 @@ const ModalCreationFile = ({ show, onHide, onCreate, parentId }) => {
 
     const machineData = type === "machine" ? {
       nombre: name,
-      componente:componente,
-      tipoAceite:tipoAceite,
-      frecuenciaCambio: Number(frecuenciaCambio),
-      frecuenciaAnalisis: Number(frecuenciaAnalisis),
-      numero_serie: numeroSerie || "N/A",
-      codigo_equipo: codigoEquipo || uuidv4()
+      descripcion: descripcion,
+      isMachine:true,
     } : null;
 
-    onCreate( machineData, name,type, parentId);
+    // Pasar compania_id al crear
+    onCreate(machineData, name, type, parentId, compania_id);
     resetForm();
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleCreate();
+    }
   };
 
   const resetForm = () => {
     setName("");
-    setComponente("");
-    setTipoAceite("");
-    setFrecuenciaCambio("");
-    setFrecuenciaAnalisis("");
-    setNumeroSerie("");
-    setCodigoEquipo("");
+    setDescripcion("");
     setType("folder");
-    
     onHide();
   };
 
   return (
     <Modal show={show} onHide={resetForm} centered backdrop="static" keyboard={false}>
-      <Modal.Header closeButton style={{ backgroundColor: "#1976d2", color: "white" }}>
+      <Modal.Header closeButton style={{ backgroundColor: "#292929", color: "#ffffff", borderBottom: "1px solid #444" }}>
         <Modal.Title>Crear {type === "machine" ? "Máquina" : "Carpeta"}</Modal.Title>
       </Modal.Header>
       
-      <Modal.Body style={{ backgroundColor: "#f5f5f5" }}>
-        <Form>
+      <Modal.Body style={{ backgroundColor: "#1a1a1a", color: "#ffffff" }}>
+        <Form onKeyPress={handleKeyPress}>
           <Form.Group className="mb-3">
-            <Form.Label>Tipo</Form.Label>
+            <Form.Label style={{ color: "#e0e0e0" }}>Tipo</Form.Label>
             <Form.Select
               value={type}
               onChange={(e) => setType(e.target.value)}
               className="form-control"
+              style={{ 
+                backgroundColor: "#333", 
+                color: "#fff", 
+                border: "1px solid #555" 
+              }}
             >
               <option value="folder">Carpeta</option>
               <option value="machine">Máquina</option>
@@ -75,81 +74,36 @@ const ModalCreationFile = ({ show, onHide, onCreate, parentId }) => {
           </Form.Group>
 
           <Form.Group className="mb-3">
-            <Form.Label>Nombre</Form.Label>
+            <Form.Label style={{ color: "#e0e0e0" }}>Nombre</Form.Label>
             <Form.Control
               type="text"
               placeholder={`Ingrese el nombre de ${type === "machine" ? "la máquina" : "la carpeta"}`}
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
+              style={{ 
+                backgroundColor: "#333", 
+                color: "#fff", 
+                border: "1px solid #555"
+              }}
             />
           </Form.Group>
 
           {type === "machine" && (
             <>
               <Form.Group className="mb-3">
-                <Form.Label>Componente</Form.Label>
+                <Form.Label style={{ color: "#e0e0e0" }}>Descripción</Form.Label>
                 <Form.Control
                   type="text"
-                  placeholder="Ingrese el componente"
-                  value={componente}
-                  onChange={(e) => setComponente(e.target.value)}
+                  placeholder="Ingrese la descripción"
+                  value={descripcion}
+                  onChange={(e) => setDescripcion(e.target.value)}
                   required
-                />
-              </Form.Group>
-              
-              <Form.Group className="mb-3">
-                <Form.Label>Tipo de aceite</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="Ingrese el tipo de aceite"
-                  value={tipoAceite}
-                  onChange={(e) => setTipoAceite(e.target.value)}
-                  required
-                />
-              </Form.Group>
-              
-              <Form.Group className="mb-3">
-                <Form.Label>Frecuencia de cambio (horas)</Form.Label>
-                <Form.Control
-                  type="number"
-                  min="1"
-                  placeholder="Ej: 100"
-                  value={frecuenciaCambio}
-                  onChange={(e) => setFrecuenciaCambio(e.target.value)}
-                  required
-                />
-              </Form.Group>
-              
-              <Form.Group className="mb-3">
-                <Form.Label>Frecuencia de análisis (horas)</Form.Label>
-                <Form.Control
-                  type="number"
-                  min="1"
-                  placeholder="Ej: 200"
-                  value={frecuenciaAnalisis}
-                  onChange={(e) => setFrecuenciaAnalisis(e.target.value)}
-                  required
-                />
-              </Form.Group>
-              
-              <Form.Group className="mb-3">
-                <Form.Label>Número de serie (opcional)</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="Ingrese el número de serie"
-                  value={numeroSerie}
-                  onChange={(e) => setNumeroSerie(e.target.value)}
-                />
-              </Form.Group>
-              
-              <Form.Group className="mb-3">
-                <Form.Label>Código de equipo (opcional)</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="Se generará automáticamente si está vacío"
-                  value={codigoEquipo}
-                  onChange={(e) => setCodigoEquipo(e.target.value)}
+                  style={{ 
+                    backgroundColor: "#333", 
+                    color: "#fff", 
+                    border: "1px solid #555" 
+                  }}
                 />
               </Form.Group>
             </>
@@ -157,11 +111,27 @@ const ModalCreationFile = ({ show, onHide, onCreate, parentId }) => {
         </Form>
       </Modal.Body>
 
-      <Modal.Footer style={{ backgroundColor: "#f5f5f5" }}>
-        <Button variant="secondary" onClick={resetForm}>
+      <Modal.Footer style={{ backgroundColor: "#1a1a1a", borderTop: "1px solid #444" }}>
+        <Button 
+          variant="secondary" 
+          onClick={resetForm}
+          style={{ 
+            backgroundColor: "#555", 
+            border: "1px solid #666",
+            color: "#fff"
+          }}
+        >
           Cancelar
         </Button>
-        <Button variant="primary" onClick={handleCreate}>
+        <Button 
+          variant="primary" 
+          onClick={handleCreate}
+          style={{ 
+            backgroundColor: "#dc2626", 
+            border: "1px solid #dc2626",
+            color: "#fff"
+          }}
+        >
           Crear
         </Button>
       </Modal.Footer>

@@ -1,390 +1,194 @@
-import { useState,useEffect } from "react";
-import { login } from "../../../services/auth";
-import { useRouter } from "next/navigation"; // Importa `next/navigation` en lugar de `next/router`
-import * as React from 'react';
-import CssBaseline from '@mui/material/CssBaseline';
-import Stack from '@mui/material/Stack';
-import Box from '@mui/material/Box';
-import TextField from '@mui/material/TextField';
-import Button from '@mui/material/Button';
-import Typography from '@mui/material/Typography';
-import Container from '@mui/material/Container';
-import { ST } from "next/dist/shared/lib/utils";
-import AutoFixHighRoundedIcon from '@mui/icons-material/AutoFixHighRounded';
-import ConstructionRoundedIcon from '@mui/icons-material/ConstructionRounded';
-import SettingsSuggestRoundedIcon from '@mui/icons-material/SettingsSuggestRounded';
-import ThumbUpAltRoundedIcon from '@mui/icons-material/ThumbUpAltRounded';
-import MuiCard from '@mui/material/Card';
-import { styled } from '@mui/material/styles';
-import FormLabel from '@mui/material/FormLabel';
-import FormControl from '@mui/material/FormControl';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Checkbox from '@mui/material/Checkbox';
-import Link from '@mui/material/Link';
-import Divider from '@mui/material/Divider';
-import { useAuth } from '../../../shared/context/AuthContext';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@context/AuthContext';
+import { useRouter } from 'next/router';
 
-
-
-const Card = styled(MuiCard)(({ theme }) => ({
-    display: 'flex',
-    flexDirection: 'column',
-    alignSelf: 'center',
-    width: '100%',
-    padding: theme.spacing(4),
-    gap: theme.spacing(2),
-    boxShadow:
-      'hsla(220, 30%, 5%, 0.05) 0px 5px 15px 0px, hsla(220, 25%, 10%, 0.05) 0px 15px 35px -5px',
-    [theme.breakpoints.up('sm')]: {
-      width: '450px',
-    },
-    ...theme.applyStyles('dark', {
-      boxShadow:
-        'hsla(220, 30%, 5%, 0.5) 0px 5px 15px 0px, hsla(220, 25%, 10%, 0.08) 0px 15px 35px -5px',
-    }),
-  }));
-
-
-export default function LoginPage() {
-
-    const [emailError, setEmailError] = React.useState(false);
-    const [emailErrorMessage, setEmailErrorMessage] = React.useState('');
-    const [passwordError, setPasswordError] = React.useState(false);
-    const [passwordErrorMessage, setPasswordErrorMessage] = React.useState('');
-    const [open, setOpen] = React.useState(false);
-    const [username, setUsername] = useState("");
-    const [password, setPassword] = useState("");
-    const [error, setError] = useState(null);
-    const router = useRouter();
-   
-    const { login } = useAuth();
-    
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [formData, setFormData] = useState({
-      email: '',
-      password: '',
-    });
-    const [fieldErrors, setFieldErrors] = useState({
-      email: '',
-      password: '',
-    });
+export default function Login() {
+  const [formData, setFormData] = useState({
+    email: '',
+    password: ''
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({});
   
-    const handleChange = (e) => {
-      const { name, value } = e.target;
-      setFormData(prev => ({ ...prev, [name]: value }));
+  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const router = useRouter();
+
+  // Redirigir si ya está autenticado - CON TIMEOUT DE SEGURIDAD
+  useEffect(() => {
+    const checkAuth = async () => {
+      // Pequeño delay para evitar loops
+      await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Validación en tiempo real
-      if (name === 'email') {
-        setFieldErrors(prev => ({ 
-          ...prev, 
-          email: !value.includes('@') ? 'Email debe contener @' : '' 
-        }));
-      }
-      if (name === 'password') {
-        setFieldErrors(prev => ({ 
-          ...prev, 
-          password: value.length < 6 ? 'Mínimo 6 caracteres' : '' 
-        }));
+      if (isAuthenticated()) {
+        router.push('/dashboard');
       }
     };
-  
-    const validateForm = () => {
-      const errors = {};
-      let isValid = true;
-  
-      if (!formData.email.includes('@')) {
-        errors.email = 'Email inválido';
-        isValid = false;
-      }
-  
-      if (formData.password.length < 6) {
-        errors.password = 'La contraseña debe tener al menos 6 caracteres';
-        isValid = false;
-      }
-  
-      setFieldErrors(errors);
-      return isValid;
-    };
-  
-    const handleSubmit = async (e) => {
-      e.preventDefault();
-      
-      if (!validateForm()) return;
-  
-      setIsSubmitting(true);
-      setError('');
-      
-      const result = await login(formData.email, formData.password);
-      
-      if (result.success) {
-        console.log('siuh')
-      } else {
-        setError(result.error || 'Error al iniciar sesión');
-      }
-      
-      setIsSubmitting(false);
-    };
-  console.log(error)
+    
+    checkAuth();
+  }, [isAuthenticated, router]);
 
-    useEffect(() => {
-        const token = localStorage.getItem("access_token");
-        console.log("Token:", token);
-        if (token) {
-            router.replace("/dashboard"); // Si ya está autenticado, redirigir al dashboard
-        }
-    }, []);
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
     
-    const items = [
-        {
-          icon: <SettingsSuggestRoundedIcon sx={{ color: 'text.secondary' }} />,
-          title: 'Adaptable performance',
-          description:
-            'Our product effortlessly adjusts to your needs, boosting efficiency and simplifying your tasks.',
-        },
-        {
-          icon: <ConstructionRoundedIcon sx={{ color: 'text.secondary' }} />,
-          title: 'Built to last',
-          description:
-            'Experience unmatched durability that goes above and beyond with lasting investment.',
-        },
-        {
-          icon: <ThumbUpAltRoundedIcon sx={{ color: 'text.secondary' }} />,
-          title: 'Great user experience',
-          description:
-            'Integrate our product into your routine with an intuitive and easy-to-use interface.',
-        },
-        {
-          icon: <AutoFixHighRoundedIcon sx={{ color: 'text.secondary' }} />,
-          title: 'Innovative functionality',
-          description:
-            'Stay ahead with features that set new standards, addressing your evolving needs better than the rest.',
-        },
-      ];
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
 
+const validateForm = () => {
+  const newErrors = {};
+  
+  if (!formData.email.trim()) {
+    newErrors.email = 'El email es requerido';
+  } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+    newErrors.email = 'Por favor ingrese un email válido';
+  }
+  
+  if (!formData.password) {
+    newErrors.password = 'La contraseña es requerida';
+  } else if (formData.password.length < 6) {
+    newErrors.password = 'La contraseña debe tener al menos 6 caracteres';
+  }
+  
+  setErrors(newErrors);
+  return Object.keys(newErrors).length === 0;
+};
 
-      const handleClickOpen = () => {
-        setOpen(true);
-      };
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  if (!validateForm()) return;
+  
+  setIsLoading(true);
+  setErrors({}); // Limpiar errores anteriores
+  
+  try {
+    const result = await login(formData.email, formData.password);
     
-      const handleClose = () => {
-        setOpen(false);
-      };
-    
-      const validateInputs = () => {
-        const email = document.getElementById('email');
-        const password = document.getElementById('password');
-    
-        let isValid = true;
-    
-        if (!email.value || !/\S+@\S+\.\S+/.test(email.value)) {
-          setEmailError(true);
-          setEmailErrorMessage('Please enter a valid email address.');
-          isValid = false;
-        } else {
-          setEmailError(false);
-          setEmailErrorMessage('');
-        }
-    
-        if (!password.value || password.value.length < 6) {
-          setPasswordError(true);
-          setPasswordErrorMessage('Password must be at least 6 characters long.');
-          isValid = false;
-        } else {
-          setPasswordError(false);
-          setPasswordErrorMessage('');
-        }
-    
-        return isValid;
-      };
-    
+    if (!result.success) {
+      setErrors({ general: result.error });
+    }
+  } catch (error) {
+    // Este catch solo debería ejecutarse para errores inesperados
+    console.error('Error inesperado:', error);
+    setErrors({ general: 'Ocurrió un error inesperado. Por favor intente nuevamente.' });
+  } finally {
+    setIsLoading(false);
+  }
+};
 
-
-    
+  // Spinner de carga mejorado
+  if (authLoading) {
     return (
-        <Stack    
-        direction="column"
-        component="main"
-        sx={[
-          {
-            justifyContent: 'center',
-            height: 'calc((1 - var(--template-frame-height, 0)) * 100%)',
-            marginTop: 'max(40px - var(--template-frame-height, 0px), 0px)',
-            minHeight: '100%',
-          },
-          (theme) => ({
-            '&::before': {
-              content: '""',
-              display: 'block',
-              position: 'absolute',
-              zIndex: -1,
-              inset: 0,
-              backgroundImage:
-                'radial-gradient(ellipse at 50% 50%, hsl(210, 100%, 97%), hsl(0, 0%, 100%))',
-              backgroundRepeat: 'no-repeat',
-              ...theme.applyStyles('dark', {
-                backgroundImage:
-                  'radial-gradient(at 50% 50%, hsla(210, 100%, 16%, 0.5), hsl(220, 30%, 5%))',
-              }),
-            },
-          }),
-        ]}>
-
-            <Stack   
-                direction={{ xs: 'column-reverse', md: 'row' }}
-                sx={{
-                    justifyContent: 'center',
-                    gap: { xs: 6, sm: 12 },
-                    p: 2,
-                    mx: 'auto',
-                }}>
-
-                <Stack  direction={{ xs: 'column-reverse', md: 'row' }}
-                    sx={{
-                    justifyContent: 'center',
-                    gap: { xs: 6, sm: 12 },
-                    p: { xs: 2, sm: 4 },
-                    m: 'auto',
-                    }}>
-
-<Stack
-      sx={{ flexDirection: 'column', alignSelf: 'center', gap: 4, maxWidth: 450 }}
-    >
-      <Box sx={{ display: { xs: 'none', md: 'flex' } }}>
-       
-      </Box>
-      {items.map((item, index) => (
-        <Stack key={index} direction="row" sx={{ gap: 2 }}>
-          {item.icon}
-          <div>
-            <Typography gutterBottom sx={{ fontWeight: 'medium' }}>
-              {item.title}
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              {item.description}
-            </Typography>
-          </div>
-        </Stack>
-      ))}
-    </Stack>
-    <Card variant="outlined">
-      <Box sx={{ display: { xs: 'flex', md: 'none' } }}>
-        
-      </Box>
-      <Typography
-        component="h1"
-        variant="h4"
-        sx={{ width: '100%', fontSize: 'clamp(2rem, 10vw, 2.15rem)' }}
-      >
-        Sign in
-      </Typography>
-      <Box
-        component="form"
-        onSubmit={handleSubmit}
-        noValidate
-        sx={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 2 }}
-      >
-        <FormControl>
-          <FormLabel htmlFor="email">Email</FormLabel>
-          <TextField
-            error={emailError}
-            helperText={emailErrorMessage}
-            id="email"
-            type="email"
-            name="email"
-            onChange={handleChange}
-            value={formData.email}
-            placeholder="your@email.com"
-            autoComplete="email"
-            autoFocus
-            required
-            fullWidth
-            variant="outlined"
-            color={emailError ? 'error' : 'primary'}
-          />
-        </FormControl>
-        <FormControl>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-            <FormLabel htmlFor="password">Password</FormLabel>
-            <Link
-              component="button"
-              type="button"
-              onClick={handleClickOpen}
-              variant="body2"
-              sx={{ alignSelf: 'baseline' }}
-            >
-              Forgot your password?
-            </Link>
-          </Box>
-          <TextField
-            error={passwordError}
-            helperText={passwordErrorMessage}
-            name="password"
-            placeholder="••••••"
-            type="password"
-            id="password"
-            onChange={handleChange}
-            value={formData.password}
-            autoComplete="current-password"
-            autoFocus
-            required
-            fullWidth
-            variant="outlined"
-            color={passwordError ? 'error' : 'primary'}
-          />
-        </FormControl>
-        <FormControlLabel
-          control={<Checkbox value="remember" color="primary" />}
-          label="Remember me"
-        />
-       
-       <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            sx={{ mt: 3, mb: 2 }}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'Iniciando sesión...' : 'Iniciar Sesión'}
-          </Button>
-        <Typography sx={{ textAlign: 'center' }}>
-          Don&apos;t have an account?{' '}
-          <span>
-            <Link
-              href="/users/create-user"
-              variant="body2"
-              sx={{ alignSelf: 'center' }}
-            >
-              Sign up
-            </Link>
-          </span>
-        </Typography>
-      </Box>
-      <Divider>or</Divider>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Button
-          fullWidth
-          variant="outlined"
-          onClick={() => alert('Sign in with Google')}
-     
-        >
-          Sign in with Google
-        </Button>
-        <Button
-          fullWidth
-          variant="outlined"
-          onClick={() => alert('Sign in with Facebook')}
-          
-        >
-          Sign in with Facebook
-        </Button>
-      </Box>
-    </Card>
-
-                    </Stack>
-                  
-            </Stack>
-                        
-        </Stack>
-        
+      <div className="flex min-h-screen bg-[#777777] items-center justify-center">
+        <div className="flex flex-col items-center">
+          {/* Spinner circular */}
+          <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
+          <div className="text-white text-lg">Verificando autenticación...</div>
+        </div>
+      </div>
     );
+  }
+
+  return (
+    <div className="flex min-h-screen bg-[#777777] flex-col">
+      <header className="p-4 flex justify-center md:justify-start">
+        <img 
+          src="/logo-global-oil.png" 
+          alt="Logo Global Oil" 
+          className="w-40 md:w-32"
+        />
+      </header>
+
+      <main className="flex flex-1 items-center justify-between px-8">
+        <div className="hidden md:flex flex-1 items-center justify-center">
+          <img
+            src="/logo-global-oil.png"
+            alt="Global Oil"
+            className="max-w-md w-full"
+          />
+        </div>
+
+        <div className="flex-1 flex items-center justify-center">
+          <form 
+            onSubmit={handleSubmit}
+            className="bg-[#9D9D9D] p-12 rounded-lg shadow-lg flex flex-col gap-4 w-full max-w-sm border-2 border-white min-h-[500px] h-auto"
+          >
+            <h1 className="text-2xl font-bold text-center text-white mb-4">
+              Ingreso de usuarios
+            </h1>
+
+            {errors.general && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded text-sm">
+                {errors.general}
+              </div>
+            )}
+
+            <div className="flex flex-col">
+              <input
+                type="email"
+                name="email"
+                placeholder="Email"
+                value={formData.email}
+                onChange={handleChange}
+                className={`border p-3 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                  errors.email ? 'border-red-500' : ''
+                }`}
+              />
+              {errors.email && (
+                <span className="text-red-500 text-sm mt-1">{errors.email}</span>
+              )}
+            </div>
+
+            <div className="flex flex-col">
+              <input
+                type="password"
+                name="password"
+                placeholder="Contraseña"
+                value={formData.password}
+                onChange={handleChange}
+                className={`border p-3 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                  errors.password ? 'border-red-500' : ''
+                }`}
+              />
+              {errors.password && (
+                <span className="text-red-700 text-sm mt-1">{errors.password}</span>
+              )}
+            </div>
+
+            <button 
+              type="submit"
+              disabled={isLoading}
+              className="bg-[#D9D9D9] text-gray-800 py-3 px-8 rounded hover:bg-blue-300 transition duration-200 mx-auto w-40 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-gray-800 border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Ingresando...
+                </>
+              ) : (
+                'Ingresar'
+              )}
+            </button>
+
+            <div className="mt-auto pt-8">
+              <a href='/users/forgotPassword' className="text-white block mb-2 hover:underline cursor-pointer">
+                ¿Olvidaste tu contraseña?
+              </a>
+              <a href='/users/signUp' className="text-white block hover:underline cursor-pointer">
+                ¿No tienes cuenta? Crea tu usuario.
+              </a>
+            </div>
+          </form>
+        </div>
+      </main>
+    </div>
+  );
 }

@@ -45,18 +45,18 @@ const ModalEditarMuestra = ({
   const [additionalFields, setAdditionalFields] = useState([]);
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
-  console.log(muestraData)
+
   // Cargar datos iniciales cuando cambia muestraData o show
   useEffect(() => {
     if (show && muestraData) {
       setFormData({
         ...muestraData,
         // Asegurar que los valores nulos o undefined sean strings vacíos
-        periodo_servicio_aceite: muestraData.periodo_servicio_aceite ?? '',
-        unidad_periodo_aceite: muestraData.unidad_periodo_aceite ?? '',
-        periodo_servicio_equipo: muestraData.periodo_servicio_equipo ?? '',
-        unidad_periodo_equipo: muestraData.unidad_periodo_equipo ?? '',
-        lubricante:muestraData.lubricante.referencia ?? ''       ,
+        periodo_servicio_aceite: muestraData?.periodo_servicio_aceite ?? '',
+        unidad_periodo_aceite: muestraData?.unidad_periodo_aceite ?? '',
+        periodo_servicio_equipo: muestraData?.periodo_servicio_equipo ?? '',
+        unidad_periodo_equipo: muestraData?.unidad_periodo_equipo ?? '',
+        lubricante:muestraData.lubricante?.referencia ?? ''       ,
         // Formatear fecha si es necesario
         fecha_toma: muestraData.fecha_toma ? muestraData.fecha_toma.slice(0, 16) : new Date().toISOString().slice(0, 16),
         was_checked: muestraData.was_checked ? muestraData.was_checked.slice(0, 10) : new Date().toISOString().slice(0, 10)

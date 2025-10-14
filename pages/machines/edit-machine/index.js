@@ -2,43 +2,106 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { toast } from 'react-toastify';
-import {
-  Box,
-  Button,
-  TextField,
-  Typography,
-  Paper,
-  Grid,
-  CircularProgress,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem
-} from '@mui/material';
-import {
-  Save,
-  Cancel
-} from '@mui/icons-material';
+import Axios from 'axios';
+import { ArrowLeft, Save, Cpu, Trash2, Building, Folder, MapPin } from 'lucide-react';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 const EditMachine = () => {
-  const { api } = useAuth();
   const router = useRouter();
-  console.log(router)
   const { id } = router.query;
-  const [loading, setLoading] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  
+  // Estados para datos adicionales
+  const [companies, setCompanies] = useState([]);
+  const [folders, setFolders] = useState([]);
+  const [filteredFolders, setFilteredFolders] = useState([]);
+  const [currentMachineFolder, setCurrentMachineFolder] = useState(null);
+  const [currentParentFolder, setCurrentParentFolder] = useState(null);
   
   // Estado del formulario
   const [formData, setFormData] = useState({
     nombre: '',
-    componente: '',
-    tipoAceite: '',
-    frecuenciaCambio: '',
-    frecuenciaAnalisis: '',
+    descripcion: '',
     numero_serie: '',
     codigo_equipo: '',
-    estado: 'activo'
+    estado: 'activo',
+    empresa: '',
+    carpeta: ''
   });
+
+  // Cargar empresas
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const response = await Axios.get(`${API_URL}/companies/`);
+        setCompanies(response.data);
+      } catch (error) {
+        console.error('Error cargando empresas:', error);
+        toast.error('Error al cargar empresas');
+      }
+    };
+    fetchCompanies();
+  }, []);
+
+  // Cargar todas las carpetas y encontrar la ubicación actual
+  useEffect(() => {
+    const fetchFolders = async () => {
+      try {
+        const response = await Axios.get(`${API_URL}/folders/`);
+        const allFolders = response.data;
+        setFolders(allFolders);
+        
+        // Buscar la carpeta de la máquina
+        if (id) {
+          const machineFolder = allFolders.find(folder => 
+            folder.machine === parseInt(id) || folder.machine_info?.id === parseInt(id)
+          );
+          setCurrentMachineFolder(machineFolder);
+          
+          if (machineFolder) {
+            console.log('📂 Carpeta de la máquina:', machineFolder);
+            
+            // Buscar la carpeta padre usando parentId o id_parent_node
+            const parentId = machineFolder.parentId || machineFolder.id_parent_node;
+            if (parentId) {
+              const parentFolder = allFolders.find(folder => 
+                folder.id.toString() === parentId.toString() || 
+                folder.id_node === parentId.toString()
+              );
+              setCurrentParentFolder(parentFolder);
+              console.log('📁 Carpeta padre encontrada:', parentFolder);
+              
+              // Establecer la carpeta actual en el formulario
+              setFormData(prev => ({
+                ...prev,
+                carpeta: parentId
+              }));
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error cargando carpetas:', error);
+      }
+    };
+    fetchFolders();
+  }, [id]);
+
+  // Filtrar carpetas cuando se selecciona una empresa
+  useEffect(() => {
+    if (formData.empresa) {
+      const companyFolders = folders.filter(folder => 
+        folder.compania_id === parseInt(formData.empresa) || 
+        folder.compania_info?.id === parseInt(formData.empresa) ||
+        folder.compania === parseInt(formData.empresa)
+      );
+      setFilteredFolders(companyFolders);
+    } else {
+      setFilteredFolders([]);
+    }
+  }, [formData.empresa, folders]);
 
   // Cargar datos de la máquina
   useEffect(() => {
@@ -46,29 +109,117 @@ const EditMachine = () => {
 
     const fetchMachine = async () => {
       try {
-        const response = await api.get(`machines/${id}/`);
+        setLoading(true);
+        setError(null);
+
+        const response = await Axios.get(`${API_URL}/machines/${id}/`);
         const machineData = response.data;
         
-        setFormData({
+        setFormData(prev => ({
+          ...prev,
           nombre: machineData.nombre || '',
-          componente: machineData.componente || '',
-          tipoAceite: machineData.tipoAceite || '',
-          frecuenciaCambio: machineData.frecuenciaCambio || '',
-          frecuenciaAnalisis: machineData.frecuenciaAnalisis || '',
+          descripcion: machineData.descripcion || '',
           numero_serie: machineData.numero_serie || '',
           codigo_equipo: machineData.codigo_equipo || '',
-          estado: machineData.activo ? 'activo' : 'inactivo'
-        });
+          estado: machineData.estado || 'activo',
+          empresa: machineData.empresa || ''
+          // La carpeta se establece en el efecto de folders
+        }));
+
       } catch (error) {
-        toast.error('Error al cargar máquina: ' + (error.response?.data?.message || error.message));
-        router.push('/maquinas');
+        console.error('Error cargando máquina:', error);
+        setError('No se pudo cargar la información de la máquina');
+        toast.error('Error al cargar los datos de la máquina');
       } finally {
-        setInitialLoad(false);
+        setLoading(false);
       }
     };
 
     fetchMachine();
   }, [id]);
+
+  // Función recursiva para mostrar la jerarquía de carpetas
+  const renderFolderOptions = (foldersList, level = 0, parentId = null) => {
+    let options = [];
+    
+    // Encontrar carpetas que pertenecen al parent actual
+    const currentFolders = foldersList.filter(folder => {
+      if (level === 0) {
+        // En el nivel 0, mostrar root y carpetas sin parent
+        return folder.typeFolder === 'root' || 
+               (folder.typeFolder === 'folder' && (!folder.id_parent_node || folder.id_parent_node === "-1"));
+      } else {
+        // En niveles superiores, mostrar carpetas con el parent correspondiente
+        return folder.id_parent_node === parentId?.toString();
+      }
+    });
+
+    currentFolders.forEach(folder => {
+      const indent = '─ '.repeat(level);
+      const folderName = folder.name || folder.nombre || 'Sin nombre';
+      
+      // Determinar el valor único del folder
+      const folderValue = folder.id_node || folder.id;
+      
+      // Verificar si esta carpeta es la carpeta padre actual
+      const isCurrentParent = currentParentFolder && 
+        (currentParentFolder.id.toString() === folderValue.toString() || 
+         currentParentFolder.id_node === folderValue.toString());
+      
+      if (folder.typeFolder === 'root') {
+        options.push(
+          <option key={`root-${folderValue}`} value={folderValue}>
+            {indent}🏢 {folderName} (Raíz) {isCurrentParent && '📍'}
+          </option>
+        );
+      } else if (folder.typeFolder === 'machine') {
+        // No mostrar carpetas de máquina como opciones de destino
+        return;
+      } else {
+        options.push(
+          <option key={folderValue} value={folderValue}>
+            {indent}📁 {folderName} {isCurrentParent && '📍'}
+          </option>
+        );
+      }
+      
+      // Buscar subcarpetas recursivamente (excluyendo carpetas de máquina)
+      const subFolders = foldersList.filter(f => 
+        f.id_parent_node === folderValue.toString() && 
+        f.typeFolder !== 'machine'
+      );
+      if (subFolders.length > 0) {
+        options.push(...renderFolderOptions(foldersList, level + 1, folderValue));
+      }
+    });
+
+    return options;
+  };
+
+  // Obtener la ruta completa de la ubicación actual
+  const getCurrentLocationPath = () => {
+    if (!currentParentFolder) return 'No asignada';
+    
+    const path = [];
+    let currentFolder = currentParentFolder;
+    
+    while (currentFolder) {
+      path.unshift(currentFolder.nombre || currentFolder.name);
+      
+      const parentId = currentFolder.parentId || currentFolder.id_parent_node;
+      if (!parentId || parentId === "-1") break;
+      
+      currentFolder = folders.find(f => 
+        f.id.toString() === parentId.toString() || 
+        f.id_node === parentId.toString()
+      );
+      
+      // Prevenir loops infinitos
+      if (path.length > 10) break;
+    }
+    
+    return path.join(' / ');
+  };
 
   // Manejar cambios en los inputs
   const handleChange = (e) => {
@@ -77,198 +228,454 @@ const EditMachine = () => {
       ...prev,
       [name]: value
     }));
+
+    // Si cambia la empresa, resetear la carpeta seleccionada
+    if (name === 'empresa') {
+      setFormData(prev => ({
+        ...prev,
+        empresa: value,
+        carpeta: ''
+      }));
+    }
+  };
+
+  // Función para actualizar la ubicación de la máquina en folders
+  const updateMachineLocation = async (newParentFolderId) => {
+    if (!currentMachineFolder) {
+      console.log('❌ No hay carpeta de máquina existente');
+      return null;
+    }
+
+    try {
+      const folderUpdateData = {
+        nombre: formData.nombre,
+        parentId: newParentFolderId,
+        id_parent_node: newParentFolderId,
+        compania: parseInt(formData.empresa),
+        typeFolder: 'machine',
+        isMachine: true,
+        machine: parseInt(id)
+      };
+
+      console.log('🔄 Actualizando ubicación de carpeta:', folderUpdateData);
+
+      const response = await Axios.put(
+        `${API_URL}/folders/${currentMachineFolder.id}/`, 
+        folderUpdateData
+      );
+
+      console.log('✅ Ubicación actualizada:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error actualizando ubicación:', error);
+      throw error;
+    }
+  };
+
+  // Función para crear una nueva carpeta de máquina si no existe
+  const createMachineFolder = async (parentFolderId) => {
+    try {
+      const folderData = {
+        nombre: formData.nombre,
+        typeFolder: 'machine',
+        parentId: parentFolderId,
+        id_parent_node: parentFolderId,
+        compania: parseInt(formData.empresa),
+        isMachine: true,
+        machine: parseInt(id)
+      };
+
+      console.log('🆕 Creando nueva carpeta de máquina:', folderData);
+
+      const response = await Axios.post(`${API_URL}/folders/`, folderData);
+      console.log('✅ Carpeta creada:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error creando carpeta:', error);
+      throw error;
+    }
   };
 
   // Manejar envío del formulario
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setSaving(true);
 
     try {
       // Validaciones
       if (!formData.nombre.trim()) {
         throw new Error('El nombre es requerido');
       }
-      if (!formData.componente.trim()) {
-        throw new Error('El componente es requerido');
+      if (!formData.codigo_equipo.trim()) {
+        throw new Error('El código de equipo es requerido');
       }
-      if (!formData.tipoAceite.trim()) {
-        throw new Error('El tipo de aceite es requerido');
-      }
-      if (!formData.frecuenciaCambio || isNaN(formData.frecuenciaCambio)) {
-        throw new Error('Frecuencia de cambio debe ser un número válido');
-      }
-      if (!formData.frecuenciaAnalisis || isNaN(formData.frecuenciaAnalisis)) {
-        throw new Error('Frecuencia de análisis debe ser un número válido');
+      if (!formData.empresa) {
+        throw new Error('La empresa es requerida');
       }
 
-      // Preparar datos para enviar
-      const payload = {
+      // Preparar datos para enviar a machines
+      const machinePayload = {
         ...formData,
-        frecuenciaCambio: Number(formData.frecuenciaCambio),
-        frecuenciaAnalisis: Number(formData.frecuenciaAnalisis),
-        activo: formData.estado === 'activo'
+        empresa: parseInt(formData.empresa)
       };
 
-      // Enviar a la API
-      const response = await api.put(`machines/${id}/`, payload);
-      
-      toast.success('Máquina actualizada correctamente');
-      router.push('/maquinas');
+      console.log('📤 Enviando datos a machines:', machinePayload);
+
+      // 1. Actualizar la máquina
+      const machineResponse = await Axios.put(`${API_URL}/machines/${id}/`, machinePayload);
+      console.log('✅ Máquina actualizada:', machineResponse.data);
+
+      // 2. Actualizar o crear la carpeta de la máquina si se seleccionó una carpeta
+      if (formData.carpeta) {
+        if (currentMachineFolder) {
+          // Actualizar carpeta existente
+          await updateMachineLocation(formData.carpeta);
+          toast.success('Máquina y ubicación actualizadas correctamente');
+        } else {
+          // Crear nueva carpeta de máquina
+          await createMachineFolder(formData.carpeta);
+          toast.success('Máquina creada y ubicación asignada correctamente');
+        }
+      } else {
+        toast.success('Máquina actualizada correctamente');
+      }
+
+      // Recargar la página para ver los cambios
+      setTimeout(() => {
+        router.push(`/machines`);
+      }, 1000);
+
     } catch (error) {
-      toast.error(error.response?.data?.message || error.message || 'Error al actualizar máquina');
+      console.error('❌ Error actualizando máquina:', error);
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.detail || 
+                          error.message || 
+                          'Error al actualizar máquina';
+      toast.error(errorMessage);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  if (initialLoad) {
+  // Manejar eliminación
+  const handleDelete = async () => {
+    if (!confirm('¿Estás seguro de que deseas eliminar esta máquina? Esta acción eliminará también su carpeta y no se puede deshacer.')) {
+      return;
+    }
+
+    try {
+      // Primero eliminar la carpeta de la máquina si existe
+      if (currentMachineFolder) {
+        await Axios.delete(`${API_URL}/folders/${currentMachineFolder.id}/`);
+        console.log('✅ Carpeta de máquina eliminada');
+      }
+
+      // Luego eliminar la máquina
+      await Axios.delete(`${API_URL}/machines/${id}/`);
+      
+      toast.success('Máquina y carpeta eliminadas correctamente');
+      router.push('/maquinas');
+    } catch (error) {
+      console.error('Error eliminando máquina:', error);
+      toast.error('Error al eliminar la máquina');
+    }
+  };
+
+  const handleBack = () => {
+    router.back();
+  };
+
+  if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-        <CircularProgress />
-      </Box>
+      <div className="min-h-screen bg-[#1a1a1a] text-white p-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="animate-pulse">
+            <div className="h-8 bg-[#292929] rounded w-1/4 mb-6"></div>
+            <div className="grid grid-cols-1 gap-6">
+              <div className="h-64 bg-[#292929] rounded"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#1a1a1a] text-white p-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <h2 className="text-xl font-semibold text-white mb-2">Error al cargar</h2>
+            <p className="text-[#d9d9d9] mb-4">{error}</p>
+            <button
+              onClick={handleBack}
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg transition duration-200"
+            >
+              Volver
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Editar Máquina
-      </Typography>
-      
-      <Paper elevation={3} sx={{ p: 3 }}>
-        <form onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
-            {/* Nombre */}
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Nombre de la máquina"
-                name="nombre"
-                value={formData.nombre}
-                onChange={handleChange}
-                required
-              />
-            </Grid>
+    <div className="min-h-screen bg-[#1a1a1a] text-white font-sans">
+      {/* Header */}
+      <div className="bg-[#292929] border-b border-[#333]">
+        <div className="max-w-4xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleBack}
+                className="flex items-center gap-2 text-[#d9d9d9] hover:text-white transition-colors"
+              >
+                <ArrowLeft size={20} />
+                <span>Volver</span>
+              </button>
+              <div>
+                <h1 className="text-2xl font-bold text-white">Editar Máquina</h1>
+                <p className="text-[#d9d9d9]">Modificar información del equipo y su ubicación</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+        
+            </div>
+          </div>
+        </div>
+      </div>
 
-            {/* Código de equipo */}
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Código de equipo"
-                name="codigo_equipo"
-                value={formData.codigo_equipo}
-                onChange={handleChange}
-                InputProps={{
-                  readOnly: true,
-                }}
-              />
-            </Grid>
+      {/* Formulario */}
+      <div className="max-w-4xl mx-auto p-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Información de la Máquina */}
+          <div className="bg-[#292929] rounded-lg border border-[#333] p-6">
+            <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+              <Cpu size={24} className="text-red-500" />
+              Información de la Máquina
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Nombre */}
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Nombre de la Máquina *
+                </label>
+                <input
+                  type="text"
+                  name="nombre"
+                  value={formData.nombre}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#444] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  required
+                  placeholder="Ej: Compresor Principal"
+                />
+              </div>
 
-            {/* Componente */}
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Componente"
-                name="componente"
-                value={formData.componente}
-                onChange={handleChange}
-                required
-              />
-            </Grid>
+              {/* Código de Equipo */}
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Código de Equipo *
+                </label>
+                <input
+                  type="text"
+                  name="codigo_equipo"
+                  value={formData.codigo_equipo}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#444] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  required
+                  placeholder="Ej: EQ-001"
+                />
+              </div>
 
-            {/* Tipo de aceite */}
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Tipo de aceite"
-                name="tipoAceite"
-                value={formData.tipoAceite}
-                onChange={handleChange}
-                required
-              />
-            </Grid>
+              {/* Número de Serie */}
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Número de Serie
+                </label>
+                <input
+                  type="text"
+                  name="numero_serie"
+                  value={formData.numero_serie}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#444] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  placeholder="Ej: SN123456789"
+                />
+              </div>
 
-            {/* Frecuencia de cambio */}
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Frecuencia de cambio (horas)"
-                name="frecuenciaCambio"
-                type="number"
-                value={formData.frecuenciaCambio}
-                onChange={handleChange}
-                required
-                inputProps={{ min: 1 }}
-              />
-            </Grid>
-
-            {/* Frecuencia de análisis */}
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Frecuencia de análisis (horas)"
-                name="frecuenciaAnalisis"
-                type="number"
-                value={formData.frecuenciaAnalisis}
-                onChange={handleChange}
-                required
-                inputProps={{ min: 1 }}
-              />
-            </Grid>
-
-            {/* Número de serie */}
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Número de serie"
-                name="numero_serie"
-                value={formData.numero_serie}
-                onChange={handleChange}
-              />
-            </Grid>
-
-            {/* Estado */}
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Estado</InputLabel>
-                <Select
+              {/* Estado */}
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Estado
+                </label>
+                <select
                   name="estado"
                   value={formData.estado}
-                  label="Estado"
                   onChange={handleChange}
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#444] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 >
-                  <MenuItem value="activo">Activo</MenuItem>
-                  <MenuItem value="inactivo">Inactivo</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
+                  <option value="activo">Activo</option>
+                  <option value="inactivo">Inactivo</option>
+                  <option value="mantenimiento">En Mantenimiento</option>
+                  <option value="reparacion">En Reparación</option>
+                </select>
+              </div>
 
-            {/* Botones */}
-            <Grid item xs={12}>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<Cancel />}
-                  onClick={() => router.push('/machines')}
-                  disabled={loading}
+              {/* Descripción */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-white mb-2">
+                  Descripción
+                </label>
+                <textarea
+                  name="descripcion"
+                  value={formData.descripcion}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#444] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-vertical"
+                  placeholder="Descripción detallada de la máquina, características técnicas, etc."
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Información de Empresa y Carpeta */}
+          <div className="bg-[#292929] rounded-lg border border-[#333] p-6">
+            <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+              <MapPin size={24} className="text-red-500" />
+              Ubicación y Organización
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Empresa - Selector */}
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Empresa *
+                </label>
+                <select
+                  name="empresa"
+                  value={formData.empresa}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#444] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  startIcon={loading ? <CircularProgress size={20} /> : <Save />}
-                  disabled={loading}
+                  <option value="">Seleccionar empresa</option>
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.nombre}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-[#888] mt-1">
+                  Seleccione la empresa a la que pertenece la máquina
+                </p>
+              </div>
+
+              {/* Carpeta - Selector */}
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Ubicación en Estructura
+                </label>
+                <select
+                  name="carpeta"
+                  value={formData.carpeta}
+                  onChange={handleChange}
+                  disabled={!formData.empresa}
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#444] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Actualizar Máquina
-                </Button>
-              </Box>
-            </Grid>
-          </Grid>
+                  <option value="">
+                    {formData.empresa ? 'Seleccionar ubicación' : 'Primero seleccione una empresa'}
+                  </option>
+                  {renderFolderOptions(filteredFolders)}
+                </select>
+                <p className="text-xs text-[#888] mt-1">
+                  {formData.empresa 
+                    ? '📍 Indica la ubicación actual - Seleccione nueva ubicación si desea mover la máquina' 
+                    : 'Seleccione una empresa para ver las ubicaciones disponibles'
+                  }
+                </p>
+              </div>
+
+              {/* Información de ubicación actual */}
+              {currentParentFolder && (
+                <div className="md:col-span-2 p-3 bg-blue-900/20 border border-blue-700 rounded-lg">
+                  <div className="flex items-center gap-2 text-blue-300">
+                    <MapPin size={16} />
+                    <span className="font-medium">Ubicación Actual:</span>
+                  </div>
+                  <p className="text-sm text-blue-200 mt-1">
+                    <strong>Ruta completa:</strong> {getCurrentLocationPath()}
+                  </p>
+                  <p className="text-sm text-blue-200 mt-1">
+                    <strong>Carpeta actual:</strong> {currentParentFolder.nombre || currentParentFolder.name}
+                  </p>
+                  <p className="text-xs text-blue-300 mt-1">
+                    <strong>Parent ID:</strong> {currentParentFolder.parentId || currentParentFolder.id_parent_node} | 
+                    <strong> ID:</strong> {currentParentFolder.id}
+                  </p>
+                </div>
+              )}
+
+              {/* ID de la Máquina (solo lectura) */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-white mb-2">
+                  ID de la Máquina
+                </label>
+                <input
+                  type="text"
+                  value={id}
+                  className="w-full px-4 py-2 bg-[#333] border border-[#444] rounded-lg text-[#888] cursor-not-allowed"
+                  readOnly
+                  disabled
+                />
+                <p className="text-xs text-[#888] mt-1">Este campo no se puede modificar</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Botones de acción */}
+          <div className="flex justify-between items-center pt-6 border-t border-[#333]">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="px-6 py-2 border border-[#444] text-white rounded-lg hover:bg-[#333] transition-colors"
+            >
+              Cancelar
+            </button>
+            
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-6 py-2 bg-red-800 hover:bg-red-900 text-white rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Trash2 size={16} />
+                Eliminar Máquina
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Guardando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} />
+                    <span>Guardar Cambios</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </form>
-      </Paper>
-    </Box>
+      </div>
+    </div>
   );
 };
 

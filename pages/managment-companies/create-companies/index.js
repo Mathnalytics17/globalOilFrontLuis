@@ -25,10 +25,10 @@ const CreateCompany = () => {
   
   // Estado del formulario
   const [formData, setFormData] = useState({
-    name: '',
+    nombre: '',
     nit: '',
-    address: '',
-    phone: '',
+    direccion: '',
+    telefono: '',
     email: '',
     is_active: true
   });
@@ -49,7 +49,7 @@ const CreateCompany = () => {
 
     try {
       // Validaciones básicas
-      if (!formData.name.trim()) {
+      if (!formData.nombre.trim()) {
         throw new Error('El nombre es requerido');
       }
       if (!formData.nit.trim()) {
@@ -82,8 +82,8 @@ const CreateCompany = () => {
               <TextField
                 fullWidth
                 label="Nombre *"
-                name="name"
-                value={formData.name}
+                name="nombre"
+                value={formData.nombre}
                 onChange={handleChange}
                 required
               />
@@ -106,8 +106,8 @@ const CreateCompany = () => {
               <TextField
                 fullWidth
                 label="Dirección"
-                name="address"
-                value={formData.address}
+                name="direccion"
+                value={formData.direccion}
                 onChange={handleChange}
               />
             </Grid>
@@ -117,8 +117,8 @@ const CreateCompany = () => {
               <TextField
                 fullWidth
                 label="Teléfono"
-                name="phone"
-                value={formData.phone}
+                name="telefono"
+                value={formData.telefono}
                 onChange={handleChange}
                 type="tel"
               />
