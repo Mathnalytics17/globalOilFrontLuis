@@ -262,7 +262,7 @@ const ProfileDropdown = ({ user }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const router = useRouter();
-
+ const { logout } = useAuth();
   // Cerrar dropdown al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -276,9 +276,8 @@ const ProfileDropdown = ({ user }) => {
   }, []);
 
   const handleLogout = () => {
-    // Aquí iría tu lógica de logout
     console.log('Cerrando sesión...');
-    router.push('/users/login');
+    logout(); // Usa el logout del AuthContext
   };
 
   const menuItems = [
