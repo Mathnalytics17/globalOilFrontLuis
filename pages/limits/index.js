@@ -85,7 +85,7 @@ const CrearLimite = () => {
           api.get('limites-viscosidad/'),
           api.get('limites-calidad/'),
           api.get('limites-genericos/'),
-          api.get('limites-elemento/'),
+          api.get('elementos/'),
           api.get('tipos-viscosidad/'),
           api.get('tipos-calidad/'),
           api.get('lubrication/tests/')
