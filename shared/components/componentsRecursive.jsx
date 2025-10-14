@@ -85,16 +85,48 @@ const ErrorMessage = ({ message, onRetry }) => (
     </button>
   </div>
 );
-
+// ✅ FUNCIÓN MEJORADA usando endpoint dedicado
+const ensureRootFoldersForCompanies = async () => {
+  try {
+    console.log('🔍 Sincronizando carpetas root con empresas...');
+    
+    const response = await Axios.post(`${API_URL}/sync-company-roots/`);
+    
+    if (response.data.success) {
+      toast.success(`✅ ${response.data.message}`);
+      console.log('✅ Sincronización completada:', response.data);
+      
+      // Recargar la estructura
+      reloadStructure();
+    } else {
+      toast.error('❌ Error en sincronización: ' + (response.data.error || 'Desconocido'));
+    }
+    
+  } catch (error) {
+    console.error('❌ Error sincronizando carpetas root:', error);
+    toast.error('❌ Error al sincronizar empresas: ' + (error.response?.data?.error || error.message));
+  }
+};
 // ✅ FUNCIÓN OPTIMIZADA: Obtener estructura desde el nuevo endpoint
 const initialStructure = async () => {
   try {
+    // ✅ SINCRONIZACIÓN AUTOMÁTICA: Verificar y crear carpetas root faltantes
+    try {
+      console.log('🔄 Verificando sincronización de empresas...');
+      const syncResponse = await Axios.post(`${API_URL}/sync-company-roots/`);
+      if (syncResponse.data.success && syncResponse.data.created_folders.length > 0) {
+        console.log('✅ Carpetas root creadas:', syncResponse.data.created_folders);
+      }
+    } catch (syncError) {
+      console.warn('⚠️ No se pudo sincronizar, continuando...', syncError.message);
+    }
+    
+    // Luego cargar estructura
     const response = await Axios.get(`${API_URL}/actives-tree/basic-structure/`);
     
     if (response.data.success) {
       console.log('🏗️ Estructura optimizada cargada:', response.data.structure);
       
-      // Transformar la estructura para que sea compatible con el frontend existente
       const transformStructure = (folders) => {
         return folders.map(folder => ({
           id_node: folder.id,
@@ -103,10 +135,10 @@ const initialStructure = async () => {
           typeFolder: folder.typeFolder,
           compania_id: folder.compania_info?.id || folder.compania,
           compania_info: folder.compania_info,
-          machines: folder.machine_info, // ← Cambiar de machine_info a machines
-          muestra: folder.muestra_info?.id || folder.muestra, // ← Mantener compatibilidad
-          muestra_info: folder.muestra_info, // ← Información completa de muestra
-          folders: folder.subfolders ? transformStructure(folder.subfolders) : [] // ← Cambiar subfolders a folders
+          machines: folder.machine_info,
+          muestra: folder.muestra_info?.id || folder.muestra,
+          muestra_info: folder.muestra_info,
+          folders: folder.subfolders ? transformStructure(folder.subfolders) : []
         }));
       };
       
@@ -118,7 +150,6 @@ const initialStructure = async () => {
     throw error;
   }
 };
-
 const RecursiveFolderDocumentStructure = () => {
   const { safeApiCall } = useSafeApi();
   const [initialStructureData, setInitialStructureData] = useState([]);
@@ -172,10 +203,23 @@ const RecursiveFolderDocumentStructure = () => {
   return (
     <div className="min-h-screen bg-[#1a1a1a] text-white font-sans">
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-2">Estructura de Activos</h1>
-          <p className="text-gray-400">Gestión jerárquica de equipos y puntos de medida</p>
-        </div>
+        <div className="mb-6 flex justify-between items-center">
+  <div>
+    <h1 className="text-3xl font-bold text-white mb-2">Estructura de Activos</h1>
+    <p className="text-gray-400">Gestión jerárquica de equipos y puntos de medida</p>
+  </div>
+  
+  {/* ✅ BOTÓN DE SINCRONIZACIÓN MANUAL */}
+  <Button 
+    variant="outline-warning" 
+    onClick={ensureRootFoldersForCompanies}
+    className="flex items-center gap-2"
+    title="Sincronizar carpetas root con empresas existentes"
+  >
+    <FolderPlus className="w-4 h-4" />
+    Sincronizar Empresas
+  </Button>
+</div>
         
         <div className="bg-[#292929] rounded-xl shadow-2xl p-6">
           <ul className="space-y-2">
