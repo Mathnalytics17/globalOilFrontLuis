@@ -12,7 +12,7 @@ const CrearPrueba = () => {
   const [limits, setLimits] = useState([]);
   const [selectedLimit, setSelectedLimit] = useState('');
   const [currentLimit, setCurrentLimit] = useState(null);
-
+ const [availableTests, setAvailableTests] = useState([]); // ← NUEVO ESTADO
   // Form data
   const [formData, setFormData] = useState({
     codigo: '',
@@ -25,7 +25,21 @@ const CrearPrueba = () => {
     parent_node: -1,
     activo: true
   });
-
+  // Fetch available tests for parent selection
+  useEffect(() => {
+    const fetchAvailableTests = async () => {
+      try {
+        const response = await api.get('lubrication/tests/');
+        // Filtrar solo pruebas que no son subpruebas (prueba_padre = null)
+        const mainTests = response.data.filter(test => test.prueba_padre === null);
+        setAvailableTests(mainTests);
+      } catch (error) {
+        console.error('Error al cargar pruebas disponibles:', error);
+        toast.error('Error al cargar pruebas disponibles');
+      }
+    };
+    fetchAvailableTests();
+  }, [api]);
   // Fetch content types
   useEffect(() => {
     const fetchContentTypes = async () => {
@@ -295,53 +309,62 @@ const CrearPrueba = () => {
           <div className="border-t border-gray-700 my-6"></div>
 
           {/* Configuración de Subprueba */}
-          <div className="mb-8">
-            <h2 className="text-xl font-bold text-white mb-4">
-              Configuración de Subprueba
-            </h2>
+         <div className="mb-8">
+          <h2 className="text-xl font-bold text-white mb-4">
+            Configuración de Subprueba
+          </h2>
 
-            <div className="space-y-4">
-              <div className="flex items-center">
-                <label className="flex items-center cursor-pointer">
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      checked={formData.is_subPrueba}
-                      onChange={handleIsSubPruebaChange}
-                      className="sr-only"
-                    />
-                    <div className={`block w-14 h-8 rounded-full transition-colors duration-200 ${
-                      formData.is_subPrueba ? 'bg-red-500' : 'bg-gray-600'
-                    }`}></div>
-                    <div className={`absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform duration-200 ${
-                      formData.is_subPrueba ? 'transform translate-x-6' : ''
-                    }`}></div>
-                  </div>
-                  <span className="ml-3 text-white font-medium">
-                    ¿Es una subprueba?
-                  </span>
-                </label>
-              </div>
-
-              {formData.is_subPrueba && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Prueba Padre *
-                  </label>
-                  <select
-                    name="parent_node"
-                    value={formData.parent_node}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors duration-200"
-                  >
-                    <option value="">Seleccione una prueba padre</option>
-                    {/* Aquí cargarías las pruebas disponibles */}
-                  </select>
+          <div className="space-y-4">
+            <div className="flex items-center">
+              <label className="flex items-center cursor-pointer">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_subPrueba}
+                    onChange={handleIsSubPruebaChange}
+                    className="sr-only"
+                  />
+                  <div className={`block w-14 h-8 rounded-full transition-colors duration-200 ${
+                    formData.is_subPrueba ? 'bg-red-500' : 'bg-gray-600'
+                  }`}></div>
+                  <div className={`absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform duration-200 ${
+                    formData.is_subPrueba ? 'transform translate-x-6' : ''
+                  }`}></div>
                 </div>
-              )}
+                <span className="ml-3 text-white font-medium">
+                  ¿Es una subprueba?
+                </span>
+              </label>
             </div>
+
+            {formData.is_subPrueba && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Prueba Padre *
+                </label>
+                <select
+                  name="parent_node"
+                  value={formData.parent_node}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors duration-200"
+                >
+                  <option value="">Seleccione una prueba padre</option>
+                  {availableTests.map(test => (
+                    <option key={test.id} value={test.id}>
+                      {test.codigo} - {test.nombre}
+                    </option>
+                  ))}
+                </select>
+                {availableTests.length === 0 && (
+                  <p className="text-yellow-400 text-sm mt-1">
+                    No hay pruebas disponibles para seleccionar como padre.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
+        </div>
 
           <div className="border-t border-gray-700 my-6"></div>
 
