@@ -86,15 +86,49 @@ const ErrorMessage = ({ message, onRetry }) => (
   </div>
 );
 
+// ✅ FUNCIÓN MEJORADA usando endpoint dedicado
+const ensureRootFoldersForCompanies = async (reloadStructure) => {
+  try {
+    console.log('🔍 Sincronizando carpetas root con empresas...');
+    
+    const response = await Axios.post(`${API_URL}/sync-company-roots/`);
+    
+    if (response.data.success) {
+      toast.success(`✅ ${response.data.message}`);
+      console.log('✅ Sincronización completada:', response.data);
+      
+      // Recargar la estructura
+      reloadStructure();
+    } else {
+      toast.error('❌ Error en sincronización: ' + (response.data.error || 'Desconocido'));
+    }
+    
+  } catch (error) {
+    console.error('❌ Error sincronizando carpetas root:', error);
+    toast.error('❌ Error al sincronizar empresas: ' + (error.response?.data?.error || error.message));
+  }
+};
+
 // ✅ FUNCIÓN OPTIMIZADA: Obtener estructura desde el nuevo endpoint
 const initialStructure = async () => {
   try {
+    // ✅ SINCRONIZACIÓN AUTOMÁTICA: Verificar y crear carpetas root faltantes
+    try {
+      console.log('🔄 Verificando sincronización de empresas...');
+      const syncResponse = await Axios.post(`${API_URL}/sync-company-roots/`);
+      if (syncResponse.data.success && syncResponse.data.created_folders.length > 0) {
+        console.log('✅ Carpetas root creadas:', syncResponse.data.created_folders);
+      }
+    } catch (syncError) {
+      console.warn('⚠️ No se pudo sincronizar, continuando...', syncError.message);
+    }
+    
+    // Luego cargar estructura
     const response = await Axios.get(`${API_URL}/actives-tree/basic-structure/`);
     
     if (response.data.success) {
       console.log('🏗️ Estructura optimizada cargada:', response.data.structure);
       
-      // Transformar la estructura para que sea compatible con el frontend existente
       const transformStructure = (folders) => {
         return folders.map(folder => ({
           id_node: folder.id,
@@ -103,10 +137,10 @@ const initialStructure = async () => {
           typeFolder: folder.typeFolder,
           compania_id: folder.compania_info?.id || folder.compania,
           compania_info: folder.compania_info,
-          machines: folder.machine_info, // ← Cambiar de machine_info a machines
-          muestra: folder.muestra_info?.id || folder.muestra, // ← Mantener compatibilidad
-          muestra_info: folder.muestra_info, // ← Información completa de muestra
-          folders: folder.subfolders ? transformStructure(folder.subfolders) : [] // ← Cambiar subfolders a folders
+          machines: folder.machine_info,
+          muestra: folder.muestra_info?.id || folder.muestra,
+          muestra_info: folder.muestra_info,
+          folders: folder.subfolders ? transformStructure(folder.subfolders) : []
         }));
       };
       
@@ -126,17 +160,58 @@ const RecursiveFolderDocumentStructure = () => {
   const [error, setError] = useState(null);
   const { user } = useAuth();
 
-  // ✅ ELIMINADO: Ya no necesitamos CheckAndCreateRootFolders ni GetCompanies
-  // porque el nuevo endpoint maneja todo automáticamente
+  // ✅ NUEVO: Estados para datos compartidos con valores por defecto
+  const [sharedData, setSharedData] = useState({
+    lubricants: [],
+    equipmentReferences: [],
+    users: [],
+    machines: []
+  });
+  const [sharedDataLoading, setSharedDataLoading] = useState(true);
 
-  // 3. Efecto para cargar la estructura inicial - OPTIMIZADO
+  // ✅ Cargar datos compartidos UNA SOLA VEZ
+  useEffect(() => {
+    const loadSharedData = async () => {
+      try {
+        setSharedDataLoading(true);
+        const [lubsRes, refsRes, usersRes, machinesRes] = await Promise.all([
+          Axios.get(`${API_URL}/lubrication/lubricants/`).then(res => res.data).catch(() => []),
+          Axios.get(`${API_URL}/lubrication/equipment-references/`).then(res => res.data).catch(() => []),
+          Axios.get(`${API_URL}/users/`).then(res => res.data).catch(() => []),
+          Axios.get(`${API_URL}/machines/`).then(res => res.data).catch(() => [])
+        ]);
+        
+        setSharedData({
+          lubricants: lubsRes || [],
+          equipmentReferences: refsRes || [],
+          users: usersRes || [],
+          machines: machinesRes || []
+        });
+      } catch (error) {
+        console.error('Error cargando datos compartidos:', error);
+        toast.error('Error al cargar datos necesarios');
+        // Asegurarse de que sharedData siempre tenga estructura
+        setSharedData({
+          lubricants: [],
+          equipmentReferences: [],
+          users: [],
+          machines: []
+        });
+      } finally {
+        setSharedDataLoading(false);
+      }
+    };
+
+    loadSharedData();
+  }, []);
+
+  // Efecto para cargar la estructura inicial
   useEffect(() => {
     const loadInitialData = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        // ✅ SOLO 1 PASO: Cargar estructura optimizada
         const structure = await initialStructure();
         setInitialStructureData(structure);
 
@@ -151,7 +226,7 @@ const RecursiveFolderDocumentStructure = () => {
     loadInitialData();
   }, []);
 
-  // 4. Función para recargar la estructura
+  // Función para recargar la estructura
   const reloadStructure = async () => {
     try {
       setLoading(true);
@@ -166,15 +241,27 @@ const RecursiveFolderDocumentStructure = () => {
     }
   };
 
-  if (loading) return <StructureSkeleton />;
+  if (loading || sharedDataLoading) return <StructureSkeleton />;
   if (error) return <ErrorMessage message={error} onRetry={reloadStructure} />;
 
   return (
     <div className="min-h-screen bg-[#1a1a1a] text-white font-sans">
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-2">Estructura de Activos</h1>
-          <p className="text-gray-400">Gestión jerárquica de equipos y puntos de medida</p>
+        <div className="mb-6 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-2">Estructura de Activos</h1>
+            <p className="text-gray-400">Gestión jerárquica de equipos y puntos de medida</p>
+          </div>
+          
+          <Button 
+            variant="outline-warning" 
+            onClick={() => ensureRootFoldersForCompanies(reloadStructure)}
+            className="flex items-center gap-2"
+            title="Sincronizar carpetas root con empresas existentes"
+          >
+            <FolderPlus className="w-4 h-4" />
+            Sincronizar Empresas
+          </Button>
         </div>
         
         <div className="bg-[#292929] rounded-xl shadow-2xl p-6">
@@ -183,7 +270,10 @@ const RecursiveFolderDocumentStructure = () => {
               <Folder 
                 folder={folder} 
                 key={folder.id_node} 
-                reloadStructure={reloadStructure} 
+                reloadStructure={reloadStructure}
+                // ✅ PASAR DATOS COMPARTIDOS COMO PROPS
+                sharedData={sharedData}
+                currentUser={user}
               />
             ))}
           </ul>
@@ -203,66 +293,24 @@ const RecursiveFolderDocumentStructure = () => {
   );
 };
 
-
-
-const Folder = ({ folder, reloadStructure }) => {
+// ✅ COMPONENTE FOLDER CORREGIDO con manejo seguro de sharedData
+const Folder = ({ folder, reloadStructure, sharedData = {}, currentUser }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isOpenModalFolder, setIsOpenModalFolder] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [machines, setMachines] = useState([]);
-  const [lubricants, setLubricants] = useState([]);
-  const [equipmentReferences, setReferences] = useState([]);
-  const [users, setUsers] = useState([]);
   const [editFormData, setEditFormData] = useState({});
-  const { user } = useAuth();
-  const currentUser = user;
 
-  // Cargar datos necesarios (se mantiene igual)
-  useEffect(() => {
-    const loadData = async () => {
-      const [lubsRes, refsRes, usersRefs] = await Promise.all([
-        Axios.get(`${API_URL}/lubrication/lubricants/`).then(res => res.data),
-        Axios.get(`${API_URL}/lubrication/equipment-references/`).then(res => res.data),
-        Axios.get(`${API_URL}/users/`).then(res => res.data),
-      ]);
-      
-      setLubricants(lubsRes);
-      setReferences(refsRes);
-      setUsers(usersRefs);
-    };
-  
-    loadData();
-  }, []);
+  // ✅ USAR DATOS COMPARTIDOS DIRECTAMENTE con valores por defecto
+  const { 
+    lubricants = [], 
+    equipmentReferences = [], 
+    users = [], 
+    machines = [] 
+  } = sharedData || {};
 
-  // Cargar datos específicos cuando se abre el modal de edición (se mantiene igual)
-  useEffect(() => {
-    if (showEditModal && folder.typeFolder === 'machine') {
-      const loadMachineData = async () => {
-        console.log(folder)
-        try {
-          const response = await Axios.get(`${API_URL}/machines/${folder.machines.id}/`);
-          setEditFormData(response.data);
-        } catch (error) {
-          console.error('Error cargando datos de máquina:', error);
-        }
-      };
-      loadMachineData();
-    } else if (showEditModal && folder.typeFolder === 'muestra') {
-      const loadMuestraData = async () => {
-        try {
-          const response = await Axios.get(`${API_URL}/lubrication/samples/${folder.muestra}/`);
-          setEditFormData(response.data);
-        } catch (error) {
-          console.error('Error cargando datos de muestra:', error);
-        }
-      };
-      loadMuestraData();
-    }
-  }, [showEditModal, folder]);
-
-  // LOGICA CREACION DE FOLDER Y MAQUINA (se mantiene igual)
+  // LOGICA CREACION DE FOLDER Y MAQUINA
   const handleCreateFile = async (data, nombre, typeFolder, parentId, compania_id) => {
     const folderData = {
       nombre: nombre,
@@ -300,7 +348,7 @@ const Folder = ({ folder, reloadStructure }) => {
     }
   };
 
-  // LOGICA ELIMINACION (se mantiene igual)
+  // LOGICA ELIMINACION
   const handleDelete = async () => {
     const confirmDelete = window.confirm(`¿Estás seguro de que deseas eliminar "${folder.name}"?`);
     if (!confirmDelete) return;
@@ -317,14 +365,14 @@ const Folder = ({ folder, reloadStructure }) => {
     }
   };
 
-  // Función para manejar cuando se crea una muestra (se mantiene igual)
+  // Función para manejar cuando se crea una muestra
   const handleMuestraCreada = (muestraCreada) => {
     toast.success('Punto de medida creado exitosamente');
     reloadStructure();
     setIsOpenModalFolder(false);
   };
 
-  // Función para guardar edición (se mantiene igual)
+  // Función para guardar edición
   const handleSaveEdit = async () => {
     try {
       if (folder.typeFolder === 'machine') {
@@ -342,7 +390,7 @@ const Folder = ({ folder, reloadStructure }) => {
     }
   };
 
-  // Función para navegar a vista completa (se mantiene igual)
+  // Función para navegar a vista completa
   const handleNavigateToFullView = () => {
     if (folder.typeFolder === 'machine') {
       window.location.href = `/machines/detail-machine?id=${folder.machines.id}`;
@@ -351,7 +399,7 @@ const Folder = ({ folder, reloadStructure }) => {
     }
   };
 
-  // Función para navegar a edición completa (se mantiene igual)
+  // Función para navegar a edición completa
   const handleNavigateToFullEdit = () => {
     if (folder.typeFolder === 'machine') {
       window.location.href = `/machines/edit-machine?id=${folder.machines.id}`;
@@ -360,7 +408,7 @@ const Folder = ({ folder, reloadStructure }) => {
     }
   };
 
-  // Manejar cambios en el formulario de edición (se mantiene igual)
+  // Manejar cambios en el formulario de edición
   const handleEditFormChange = (e) => {
     const { name, value } = e.target;
     setEditFormData(prev => ({
@@ -369,7 +417,7 @@ const Folder = ({ folder, reloadStructure }) => {
     }));
   };
 
-  // Determinar el icono según el tipo de carpeta (se mantiene igual)
+  // Determinar el icono según el tipo de carpeta
   const getFolderIcon = () => {
     switch (folder.typeFolder) {
       case 'root':
@@ -384,7 +432,7 @@ const Folder = ({ folder, reloadStructure }) => {
     }
   };
 
-  // Determinar qué botones mostrar según el tipo de carpeta (se mantiene igual)
+  // Determinar qué botones mostrar según el tipo de carpeta
   const renderActionButtons = () => {
     switch (folder.typeFolder) {
       case 'root':
@@ -482,7 +530,7 @@ const Folder = ({ folder, reloadStructure }) => {
     }
   };
 
-  // Determinar si se debe mostrar el botón de expandir (se mantiene igual)
+  // Determinar si se debe mostrar el botón de expandir
   const shouldShowExpandButton = () => {
     return folder.folders && folder.folders.length > 0;
   };
@@ -532,7 +580,7 @@ const Folder = ({ folder, reloadStructure }) => {
         compania_id={folder.compania_id?.id || folder.compania_id}
       />
 
-      {/* Modal para crear muestra */}
+      {/* Modal para crear muestra - CON DATOS SEGUROS */}
       <ModalMuestra
         show={isOpenModalFolder}
         onHide={() => setIsOpenModalFolder(false)}
@@ -565,7 +613,6 @@ const Folder = ({ folder, reloadStructure }) => {
                 <p><strong>Nombre:</strong> {folder.name}</p>
                 <p><strong>Empresa:</strong> {folder.compania_info?.nombre}</p>
                 <p><strong>ID:</strong> {folder.machines?.id}</p>
-                {/* Aquí puedes agregar más campos de solo lectura */}
               </div>
             ) : (
               <div>
@@ -573,7 +620,6 @@ const Folder = ({ folder, reloadStructure }) => {
                 <p><strong>Nombre:</strong> {folder.name}</p>
                 <p><strong>ID Muestra:</strong> {folder.muestra}</p>
                 <p><strong>Máquina:</strong> {folder.machines?.nombre}</p>
-                {/* Aquí puedes agregar más campos de solo lectura */}
               </div>
             )}
           </div>
@@ -624,7 +670,6 @@ const Folder = ({ folder, reloadStructure }) => {
                   placeholder="Descripción de la máquina"
                 />
               </Form.Group>
-              {/* Agregar más campos según tu modelo de máquina */}
             </Form>
           ) : (
             <Form>
@@ -649,7 +694,6 @@ const Folder = ({ folder, reloadStructure }) => {
                   placeholder="Contacto del cliente"
                 />
               </Form.Group>
-              {/* Agregar más campos según tu modelo de muestra */}
             </Form>
           )}
         </Modal.Body>
@@ -674,6 +718,8 @@ const Folder = ({ folder, reloadStructure }) => {
               folder={subFolder}
               key={subFolder.id_node}
               reloadStructure={reloadStructure}
+              sharedData={sharedData}
+              currentUser={currentUser}
             />
           ))}
         </ul>
