@@ -54,10 +54,7 @@ const ModalMuestra = ({
   const equipoActual = folder?.machine?.id || folder?.machines?.id;
   const telefonoEmpresa = folder?.compania_info?.telefono || '';
 
-  // Cargar datos iniciales
-  useEffect(() => {
-    cargarDatosIniciales();
-  }, []);
+ 
 
   // Resetear formulario cuando se muestra el modal
   useEffect(() => {
@@ -80,25 +77,7 @@ const ModalMuestra = ({
     }
   }, [show, equipoActual, empresaActual, telefonoEmpresa]);
 
-  const cargarDatosIniciales = async () => {
-    try {
-      const [lubricantesRes, typeEquiposRes, clientesRes, foldersRes] = await Promise.all([
-        Axios.get(`${API_URL}/lubrication/lubricants/`),
-        Axios.get(`${API_URL}/lubrication/equipment-types/`),
-        Axios.get(`${API_URL}/companies/`),
-        Axios.get(`${API_URL}/folders/`)
-      ]);
-
-      setLubricantes(lubricantesRes.data);
-      setTipoEquipo(typeEquiposRes.data);
-      setClientes(clientesRes.data);
-      setFolders(foldersRes.data);
-
-    } catch (error) {
-      console.error('Error cargando datos:', error);
-      toast.error('Error al cargar datos iniciales');
-    }
-  };
+ 
 
   // Función para encontrar la carpeta de una máquina
   const encontrarCarpetaMaquina = (maquinaId) => {
@@ -483,7 +462,7 @@ const ModalMuestra = ({
                     disabled={loading}
                   >
                     <option value="" className="text-muted">Seleccione un lubricante</option>
-                    {lubricantes.map(lub => (
+                    {lubricants.map(lub => (
                       <option key={lub.id} value={lub.id}>
                         {lub.referencia} - {lub.grado_viscosidad}
                       </option>
@@ -625,9 +604,9 @@ const ModalMuestra = ({
                     disabled={loading}
                   >
                     <option value="" className="text-muted">Seleccione tipo de equipo</option>
-                    {tipoEquipo.map(tipo => (
+                    {equipmentReferences.map(tipo => (
                       <option key={tipo.id} value={tipo.id}>
-                        {tipo.nombre}
+                        {tipo.descripcion}
                       </option>
                     ))}
                   </Form.Select>
