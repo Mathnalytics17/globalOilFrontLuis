@@ -13,10 +13,10 @@ const ModalMuestra = ({
   show,
   onHide,
   onCreate,
-  machines,
-  lubricants,
-  equipmentReferences,
-  users,
+  machines = [],
+  lubricants = [],
+  equipmentReferences = [],
+  users = [],
   currentUser,
   folder
 }) => {
@@ -25,7 +25,7 @@ const ModalMuestra = ({
     lubricante: '',
     contacto_cliente: '',
     equipo_placa: '',
-    referencia_equipo: '',
+    referencia_equipo: '', // Este campo ahora será automático
     periodo_servicio_aceite: '',
     unidad_periodo_aceite: '',
     periodo_servicio_equipo: '',
@@ -44,19 +44,31 @@ const ModalMuestra = ({
     requerido: false
   });
   const [loading, setLoading] = useState(false);
-  const [lubricantes, setLubricantes] = useState([]);
-  const [tipoEquipo, setTipoEquipo] = useState([]);
-  const [clientes, setClientes] = useState([]);
   const [folders, setFolders] = useState([]);
 
   // Obtener datos del folder actual
   const empresaActual = folder?.compania_id?.id || folder?.compania_id;
   const equipoActual = folder?.machine?.id || folder?.machines?.id;
   const telefonoEmpresa = folder?.compania_info?.telefono || '';
+  const nombreEquipo = folder?.name || 'Equipo actual';
 
- 
+  // Cargar folders para encontrar carpetas de máquinas
+  useEffect(() => {
+    const loadFolders = async () => {
+      try {
+        const response = await Axios.get(`${API_URL}/folders/`);
+        setFolders(response.data);
+      } catch (error) {
+        console.error('Error cargando folders:', error);
+      }
+    };
 
-  // Resetear formulario cuando se muestra el modal
+    if (show) {
+      loadFolders();
+    }
+  }, [show]);
+
+  // Resetear formulario cuando se muestra el modal - CORREGIDO
   useEffect(() => {
     if (show) {
       setFormData({
@@ -64,7 +76,7 @@ const ModalMuestra = ({
         lubricante: '',
         contacto_cliente: telefonoEmpresa,
         equipo_placa: '',
-        referencia_equipo: equipoActual || '',
+        referencia_equipo: equipoActual || '', // ✅ Se asigna automáticamente
         periodo_servicio_aceite: '',
         unidad_periodo_aceite: '',
         periodo_servicio_equipo: '',
@@ -77,19 +89,30 @@ const ModalMuestra = ({
     }
   }, [show, equipoActual, empresaActual, telefonoEmpresa]);
 
- 
-
-  // Función para encontrar la carpeta de una máquina
+  // Función para encontrar la carpeta de una máquina - CORREGIDA
   const encontrarCarpetaMaquina = (maquinaId) => {
+    console.log(console.log('Buscando carpeta para máquina ID:', maquinaId));
+    if (!maquinaId) {
+      console.warn('No se proporcionó ID de máquina');
+      return null;
+    }
+    
+    // Buscar la carpeta de la máquina actual
+    
+    console.log(folders.machine_info)
     const carpetaMaquina = folders.find(folder => 
-      folder.machine === maquinaId || folder.machines === maquinaId
+      folder.machine === maquinaId || 
+      (folder.machines && folder.machines.id === maquinaId) ||
+      (folder.machine_info && folder.machine_info.id === maquinaId)
     );
     
     if (!carpetaMaquina) {
       console.warn(`No se encontró carpeta para la máquina ID: ${maquinaId}`);
-      return null;
+      // Si no se encuentra, usar el folder actual como padre
+      console.log('Usando carpeta actual como padre:', folder);
+      return folder?.folder.machine_info.id;
     }
-    
+    console.log(carpetaMaquina)
     return carpetaMaquina.id;
   };
 
@@ -152,6 +175,8 @@ const ModalMuestra = ({
     setLoading(true);
 
     try {
+      console.log('Iniciando envío de muestra...');
+
       // Validaciones
       if (!formData.lubricante) {
         toast.error('Por favor seleccione un lubricante');
@@ -159,20 +184,21 @@ const ModalMuestra = ({
         return;
       }
 
+      // ✅ La referencia de equipo ya está asignada automáticamente
       if (!formData.referencia_equipo) {
-        toast.error('Por favor seleccione una referencia de equipo');
+        toast.error('No se pudo determinar la referencia de equipo');
         setLoading(false);
         return;
       }
 
-      console.log(formData.referencia_equipo)
+      console.log('Referencia equipo asignada automáticamente:', formData.referencia_equipo);
 
       // ✅ 1. Encontrar la carpeta de la máquina seleccionada
       const parentFolderId = encontrarCarpetaMaquina(parseInt(formData.referencia_equipo));
-      console.log(parentFolderId)
+      console.log('Carpeta padre encontrada:', parentFolderId);
       
       if (!parentFolderId) {
-        toast.error('No se pudo encontrar la carpeta de la máquina seleccionada');
+        toast.error('No se pudo encontrar la carpeta de la máquina');
         setLoading(false);
         return;
       }
@@ -182,10 +208,10 @@ const ModalMuestra = ({
         ...formData,
         periodo_servicio_aceite: formData.periodo_servicio_aceite ? parseFloat(formData.periodo_servicio_aceite) : null,
         periodo_servicio_equipo: formData.periodo_servicio_equipo ? parseFloat(formData.periodo_servicio_equipo) : null,
-        usuario_registro: user.user.id,
+        usuario_registro: user?.user?.id || currentUser?.id,
         campos_adicionales: camposAdicionales.reduce((acc, campo) => {
-          if (campo.valor) {
-            acc[campo.nombre] = campo.valor;
+          if (campo.valor || campo.requerido) {
+            acc[campo.nombre] = campo.valor || '';
           }
           return acc;
         }, {})
@@ -196,18 +222,20 @@ const ModalMuestra = ({
       // ✅ 3. Crear la muestra principal
       const response = await Axios.post(`${API_URL}/lubrication/samples/`, muestraData);
       const muestraCreada = response.data;
+      console.log('Muestra creada:', muestraCreada);
+  
 
-      // ✅ 4. Preparar datos para la carpeta de muestra
+      // ✅ 4. Preparar datos para la carpeta de muestra - CORREGIDO
       const folderData = {
-        nombre: muestraCreada.id.toString(),
+        nombre: `Muestra-${muestraCreada.id}`,
         typeFolder: 'muestra',
-        parentId: parentFolderId,
+        parentId: parentFolderId, // ✅ Se guarda dentro de la máquina
         id_parent_node: parentFolderId,
         compania: parseInt(formData.cliente),
         isMachine: false,
         is_pt_medida: true,
         muestra: muestraCreada.id,
-        machine: parseInt(formData.referencia_equipo)
+        machine: parseInt(formData.referencia_equipo) // ✅ Referencia a la máquina
       };
 
       console.log('Enviando datos de carpeta:', folderData);
@@ -228,7 +256,7 @@ const ModalMuestra = ({
           valor_fecha: campo.tipo === 'date' ? campo.valor : null,
           requerido: campo.requerido,
           estado: 'activo',
-          usuario_creacion: user.user.id,
+          usuario_creacion: user?.user?.id || currentUser?.id,
           orden: camposAdicionales.indexOf(campo)
         }));
 
@@ -329,8 +357,9 @@ const ModalMuestra = ({
           {/* Información predefinida */}
           <div className="alert alert-info mb-4">
             <strong>Empresa:</strong> {folder?.compania_info?.nombre || 'Empresa actual'}<br />
-            <strong>Equipo:</strong> {folder?.name || 'Equipo actual'}<br />
-            <strong>Contacto:</strong> {telefonoEmpresa || 'No disponible'}
+            <strong>Equipo:</strong> {nombreEquipo}<br />
+            <strong>Contacto:</strong> {telefonoEmpresa || 'No disponible'}<br />
+            <strong>Referencia Equipo:</strong> {formData.referencia_equipo || 'No asignada'}
           </div>
 
           {/* Botón para agregar campo */}
@@ -424,7 +453,7 @@ const ModalMuestra = ({
             </div>
           )}
 
-          <Form onSubmit={handleSubmit}>
+          <Form onSubmit={handleSubmit} id="muestra-form">
             {/* Información de la Muestra */}
             <div className="row mb-4">
               <div className="col-12">
@@ -514,6 +543,13 @@ const ModalMuestra = ({
                 </Form.Group>
               </div>
             </div>
+
+            {/* ✅ REFERENCIA DE EQUIPO OCULTA - Se asigna automáticamente */}
+            <input 
+              type="hidden" 
+              name="referencia_equipo" 
+              value={formData.referencia_equipo} 
+            />
 
             {/* Periodos de Servicio */}
             <div className="row mb-4">
@@ -730,9 +766,9 @@ const ModalMuestra = ({
                 Cancelar
               </button>
               <button 
-                type="button" 
+                type="submit" 
                 className="btn btn-danger d-flex align-items-center gap-2"
-                onClick={handleSubmit}
+                form="muestra-form"
                 disabled={loading}
               >
                 {loading ? (
