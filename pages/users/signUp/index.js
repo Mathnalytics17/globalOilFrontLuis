@@ -1,4 +1,4 @@
-import SignUpIndex from "../../../views/users/signUp/index";
+import SignUpIndex from '@features/auth/presentation/SignUpPage';
 
 export default function Index() {
   return (

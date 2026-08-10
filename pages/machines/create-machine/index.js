@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '../../../shared/context/AuthContext';
 import { toast } from 'react-toastify';
-import Axios from 'axios';
+import { companiesService } from '@features/companies/infrastructure/companiesService';
+import { foldersService } from '@features/asset-tree/infrastructure/foldersService';
+import { machinesService } from '@features/machines/infrastructure/machinesService';
+import { authService } from '@features/auth/infrastructure/authService';
 
 const CreateMachine = () => {
-  const { api, user } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [folders, setFolders] = useState([]);
   const [filteredFolders, setFilteredFolders] = useState([]);
-  const API_URL = process.env.NEXT_PUBLIC_API_URL;
+  const [currentUser, setCurrentUser] = useState(null);
   
   // Estado del formulario
   const [formData, setFormData] = useState({
@@ -22,7 +23,6 @@ const CreateMachine = () => {
     frecuenciaAnalisis: '',
     numero_serie: '',
     codigo_equipo: '', // ✅ Ahora editable y más amigable
-    estado: 'activo',
     empresa: '',
     carpeta: ''
   });
@@ -44,10 +44,19 @@ const CreateMachine = () => {
   useEffect(() => {
     const loadCompanies = async () => {
       try {
-        const response = await Axios.get(`${API_URL}/companies/`);
-        setCompanies(response.data);
+        const [data, user] = await Promise.all([
+          companiesService.list(),
+          authService.getCurrentUser().catch(() => null),
+        ]);
+        setCurrentUser(user);
+        const isGlobal = user?.role === 'GLOBAL' || user?.is_superuser || user?.is_staff;
+        if (!isGlobal && user?.empresa_id) {
+          setCompanies([{ id: user.empresa_id, nombre: user.empresa }]);
+          setFormData((prev) => ({ ...prev, empresa: String(user.empresa_id) }));
+        } else {
+          setCompanies(data);
+        }
       } catch (error) {
-        console.error('Error cargando empresas:', error);
         toast.error('Error al cargar empresas');
       }
     };
@@ -58,11 +67,10 @@ const CreateMachine = () => {
   useEffect(() => {
     const loadFolders = async () => {
       try {
-        const response = await Axios.get(`${API_URL}/folders/`);
-        console.log(response.data)
-        setFolders(response.data);
+        const data = await foldersService.list();
+        setFolders(data);
       } catch (error) {
-        console.error('Error cargando carpetas:', error);
+        toast.error('Error al cargar carpetas');
       }
     };
     loadFolders();
@@ -107,7 +115,6 @@ const CreateMachine = () => {
     // Primero agregar el folder root de la empresa
     const rootFolder = foldersList.find(f => f.typeFolder === 'root');
     if (rootFolder && level === 0) {
-      console.log(rootFolder)
       options.push(
         <option key={rootFolder.id} value={rootFolder.id}>
           {rootFolder.name || rootFolder.nombre} (Root)
@@ -148,12 +155,6 @@ const CreateMachine = () => {
       if (!formData.nombre.trim()) {
         throw new Error('El nombre es requerido');
       }
-      if (!formData.componente.trim()) {
-        throw new Error('El componente es requerido');
-      }
-      if (!formData.tipoAceite.trim()) {
-        throw new Error('El tipo de aceite es requerido');
-      }
       if (!formData.empresa) {
         throw new Error('La empresa es requerida');
       }
@@ -176,64 +177,52 @@ const CreateMachine = () => {
         throw new Error('ID de carpeta inválido. Debe ser un número.');
       }
 
-      console.log('📋 Datos del formulario:', formData);
-      console.log('🔍 ID de carpeta padre:', parentFolderId);
 
       // 1. Preparar datos para la máquina
       const machinePayload = {
         nombre: formData.nombre,
-        descripcion: formData.componente,
+        descripcion: formData.numero_serie || '',
         empresa: parseInt(formData.empresa),
-        componente: formData.componente,
-        tipoAceite: formData.tipoAceite,
-        frecuenciaCambio: Number(formData.frecuenciaCambio),
-        frecuenciaAnalisis: Number(formData.frecuenciaAnalisis),
+        componente: '',
+        tipoAceite: '',
+        frecuenciaCambio: formData.frecuenciaCambio ? Number(formData.frecuenciaCambio) : 0,
+        frecuenciaAnalisis: formData.frecuenciaAnalisis ? Number(formData.frecuenciaAnalisis) : 0,
         numero_serie: formData.numero_serie,
         codigo_equipo: formData.codigo_equipo, // ✅ Usar el código ingresado por el usuario
-        activo: formData.estado === 'activo'
       };
 
-      console.log('📦 Payload máquina:', machinePayload);
 
       // 2. Crear la máquina
-      const machineResponse = await Axios.post(`${API_URL}/machines/`, machinePayload);
-      const machineResult = machineResponse.data;
-      console.log('✅ Máquina creada:', machineResult);
+      const machineResult = await machinesService.create(machinePayload);
 
       // 3. ✅ VERIFICAR que la carpeta padre existe
       const parentFolder = filteredFolders.find(f => f.id === parentFolderId);
       if (!parentFolder) {
         throw new Error(`No se encontró la carpeta padre con ID: ${parentFolderId}`);
       }
-      console.log('📂 Carpeta padre encontrada:', parentFolder);
 
       // 4. Preparar datos para la carpeta (usando el ID numérico)
       const folderData = {
         nombre: formData.nombre,
         typeFolder: 'machine',
-        parentId: parentFolderId,
         id_parent_node: parentFolderId.toString(),
         compania: parseInt(formData.empresa),
         isMachine: true,
         machine: machineResult.id
       };
 
-      console.log('📦 Payload carpeta:', folderData);
 
       // 5. Crear la carpeta
-      const folderResponse = await Axios.post(`${API_URL}/folders/`, folderData);
-      console.log('✅ Carpeta creada:', folderResponse.data);
+      await foldersService.create(folderData);
       
       toast.success('Máquina y carpeta creadas correctamente');
       router.push('/machines');
       
     } catch (error) {
-      console.error('❌ Error completo:', error);
       
       // Mostrar error más detallado
       let errorMessage = 'Error al crear máquina';
       if (error.response?.data) {
-        console.error('📋 Detalles del error:', error.response.data);
         if (typeof error.response.data === 'object') {
           errorMessage = Object.values(error.response.data).flat().join(', ');
         } else {
@@ -282,6 +271,7 @@ const CreateMachine = () => {
                   value={formData.empresa}
                   onChange={handleChange}
                   required
+                  disabled={currentUser && !(currentUser.role === 'GLOBAL' || currentUser.is_superuser || currentUser.is_staff)}
                   className="w-full px-4 py-3 bg-[#292929] border border-[#444] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors"
                 >
                   <option value="" className="text-gray-400">Seleccionar empresa</option>
@@ -363,6 +353,8 @@ const CreateMachine = () => {
                 </p>
               </div>
 
+              {false && (
+              <>
               {/* Componente */}
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-white">
@@ -429,6 +421,9 @@ const CreateMachine = () => {
                 />
               </div>
 
+              </>
+              )}
+
               {/* Número de serie */}
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-white">
@@ -444,21 +439,6 @@ const CreateMachine = () => {
                 />
               </div>
 
-              {/* Estado */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-white">
-                  Estado
-                </label>
-                <select
-                  name="estado"
-                  value={formData.estado}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-[#292929] border border-[#444] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors"
-                >
-                  <option value="activo" className="text-white bg-[#292929]">Activo</option>
-                  <option value="inactivo" className="text-white bg-[#292929]">Inactivo</option>
-                </select>
-              </div>
             </div>
 
             {/* Botones */}

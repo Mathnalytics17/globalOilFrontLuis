@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { toast } from 'react-toastify';
-import Axios from 'axios';
 import { ArrowLeft, Cpu, Calendar, Settings, FileText, Edit } from 'lucide-react';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+import { machinesService } from '@features/machines/infrastructure/machinesService';
+import { samplesService } from '@features/samples/infrastructure/samplesService';
 
 const DetailMachine = () => {
   const router = useRouter();
@@ -24,25 +23,20 @@ const DetailMachine = () => {
         setError(null);
 
         // Fetch de la máquina principal
-        const machineResponse = await Axios.get(`${API_URL}/machines/${id}/`);
-        const machineData = machineResponse.data;
+        const machineData = await machinesService.getById(id);
         setMachine(machineData);
 
         // Fetch de muestras asociadas a esta máquina
         try {
-          const muestrasResponse = await Axios.get(`${API_URL}/lubrication/samples/`, {
-            params: {
-              referencia_equipo: id
-            }
+          const muestrasData = await samplesService.list({
+            referencia_equipo: id
           });
-          setMuestras(muestrasResponse.data);
+          setMuestras(muestrasData);
         } catch (error) {
-          console.error('Error cargando muestras:', error);
           setMuestras([]);
         }
 
       } catch (error) {
-        console.error('Error cargando máquina:', error);
         setError('No se pudo cargar la información de la máquina');
         toast.error('Error al cargar los datos de la máquina');
       } finally {
@@ -203,7 +197,7 @@ const DetailMachine = () => {
                   <span className="text-white font-medium">{machine.numero_serie || 'No especificado'}</span>
                 </div>
 
-                <div className="flex justify-between items-center py-2 border-b border-[#444]">
+                <div className="hidden justify-between items-center py-2 border-b border-[#444]">
                   <span className="text-[#d9d9d9]">Estado</span>
                   <span className={`font-medium px-2 py-1 rounded ${
                     machine.estado === 'activo' 

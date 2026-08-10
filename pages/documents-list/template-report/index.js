@@ -4,7 +4,7 @@ import { useAuth } from '../../../shared/context/AuthContext';
 import { toast } from 'react-toastify';
 import dynamic from 'next/dynamic';
 
-// Importar ReactQuill de forma dinámica para evitar SSR
+// Importar ReactQuill de forma din?mica para evitar SSR
 const ReactQuill = dynamic(() => import('react-quill'), {
   ssr: false,
   loading: () => <div>Cargando editor...</div>
@@ -100,124 +100,42 @@ const SignaturePad = ({ onSave, onClose }) => {
         </button>
       </div>
       <p className="text-xs text-gray-500 mt-2 text-center">
-        Firma en el área arriba. Funciona con mouse y pantallas táctiles.
+        Firma en el ?rea arriba. Funciona con mouse y pantallas t?ctiles.
       </p>
     </div>
   );
 };
 
-// Función para evaluar resultados con límites
+// Evalua el snapshot dinamico resuelto por backend.
 const evaluateResult = (valor, limites) => {
   if (!limites || valor === null || valor === undefined || valor === '') {
     return { status: 'pending', comment: 'PENDIENTE' };
   }
-  
-  const numValor = parseFloat(valor);
-  const isNumeric = !isNaN(numValor);
 
-  if (!isNumeric && valor) {
+  const numericValue = Number(valor);
+  if (!Number.isFinite(numericValue)) {
     return { status: 'normal', comment: 'NORMAL' };
   }
 
-  if (!isNumeric) {
-    return { status: 'pending', comment: 'PENDIENTE' };
+  const minimum = limites.minimo === null || limites.minimo === undefined ? null : Number(limites.minimo);
+  const maximum = limites.maximo === null || limites.maximo === undefined ? null : Number(limites.maximo);
+  let complies = true;
+
+  switch (limites.operador) {
+    case 'rango': complies = numericValue >= minimum && numericValue <= maximum; break;
+    case 'menor': complies = numericValue < maximum; break;
+    case 'menor_igual': complies = numericValue <= maximum; break;
+    case 'mayor': complies = numericValue > minimum; break;
+    case 'mayor_igual': complies = numericValue >= minimum; break;
+    case 'igual': complies = numericValue === minimum; break;
+    case 'texto': return { status: 'normal', comment: 'NORMAL' };
+    default: return { status: 'pending', comment: 'PENDIENTE' };
   }
 
-  switch (limites.tipo) {
-    case 'generico':
-      return evaluateGenericLimit(numValor, limites);
-    case 'viscosidad':
-      return evaluateViscosityLimit(numValor, limites);
-    case 'calidad':
-      return evaluateQualityLimit(numValor, limites);
-    case 'elemento_analisis':
-      return evaluateElementAnalysis(numValor, limites);
-    default:
-      return { status: 'normal', comment: 'NORMAL' };
-  }
+  return complies
+    ? { status: 'normal', comment: 'NORMAL' }
+    : { status: 'warning', comment: 'NO DESEADO' };
 };
-
-const evaluateGenericLimit = (valor, limites) => {
-  const { symbol_operation, valor: limiteValor } = limites;
-  
-  if (limiteValor === null || limiteValor === undefined) {
-    return { status: 'normal', comment: 'NORMAL' };
-  }
-
-  const numLimite = parseFloat(limiteValor);
-  if (isNaN(numLimite)) return { status: 'normal', comment: 'NORMAL' };
-
-  switch (symbol_operation) {
-    case '<': return valor < numLimite ? { status: 'normal', comment: 'NORMAL' } : { status: 'warning', comment: 'NO DESEADO' };
-    case '<=': return valor <= numLimite ? { status: 'normal', comment: 'NORMAL' } : { status: 'warning', comment: 'NO DESEADO' };
-    case '>': return valor > numLimite ? { status: 'normal', comment: 'NORMAL' } : { status: 'warning', comment: 'NO DESEADO' };
-    case '>=': return valor >= numLimite ? { status: 'normal', comment: 'NORMAL' } : { status: 'warning', comment: 'NO DESEADO' };
-    case '=': return valor === numLimite ? { status: 'normal', comment: 'NORMAL' } : { status: 'warning', comment: 'NO DESEADO' };
-    default: return { status: 'normal', comment: 'NORMAL' };
-  }
-};
-
-const evaluateViscosityLimit = (valor, limites) => {
-  const { vmin, vmax } = limites;
-  
-  if (vmin !== null && vmax !== null) {
-    const min = parseFloat(vmin);
-    const max = parseFloat(vmax);
-    
-    if (!isNaN(min) && !isNaN(max)) {
-      return valor >= min && valor <= max
-        ? { status: 'normal', comment: 'NORMAL' }
-        : { status: 'warning', comment: 'NO DESEADO' };
-    }
-  }
-  
-  return { status: 'normal', comment: 'NORMAL' };
-};
-
-const evaluateQualityLimit = (valor, limites) => {
-  return { status: 'normal', comment: 'NORMAL' };
-};
-
-const evaluateElementAnalysis = (valor, limites) => {
-  if (!limites || limites.valor === null || limites.valor === undefined) {
-    return { status: 'normal', comment: 'NORMAL' };
-  }
-
-  const numValor = parseFloat(valor);
-  const numLimite = parseFloat(limites.valor);
-  
-  if (isNaN(numValor) || isNaN(numLimite)) {
-    return { status: 'pending', comment: 'PENDIENTE' };
-  }
-
-  const { symbol_operation } = limites;
-  
-  switch (symbol_operation) {
-    case '<':
-      return numValor < numLimite 
-        ? { status: 'normal', comment: 'NORMAL' } 
-        : { status: 'warning', comment: 'NO DESEADO' };
-    case '<=':
-      return numValor <= numLimite 
-        ? { status: 'normal', comment: 'NORMAL' } 
-        : { status: 'warning', comment: 'NO DESEADO' };
-    case '>':
-      return numValor > numLimite 
-        ? { status: 'normal', comment: 'NORMAL' } 
-        : { status: 'warning', comment: 'NO DESEADO' };
-    case '>=':
-      return numValor >= numLimite 
-        ? { status: 'normal', comment: 'NORMAL' } 
-        : { status: 'warning', comment: 'NO DESEADO' };
-    case '=':
-      return numValor === numLimite 
-        ? { status: 'normal', comment: 'NORMAL' } 
-        : { status: 'warning', comment: 'NO DESEADO' };
-    default:
-      return { status: 'normal', comment: 'NORMAL' };
-  }
-};
-
 const AnalysisReport = () => {
   const router = useRouter();
   const { muestra } = router.query;
@@ -245,10 +163,10 @@ const AnalysisReport = () => {
   const [signaturePath, setSignaturePath] = useState(null);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
 
-  // Estados para comentarios automáticos
+  // Estados para comentarios autom?ticos
   const [autoComments, setAutoComments] = useState({});
 
-  // Configuración de React Quill
+  // Configuraci?n de React Quill
   const quillModules = {
     toolbar: [
       [{ 'header': [1, 2, 3, false] }],
@@ -273,10 +191,10 @@ const AnalysisReport = () => {
     { value: 'NO DESEADO', label: 'NO DESEADO', color: 'bg-red-100 text-red-800' },
     { value: 'PENDIENTE', label: 'PENDIENTE', color: 'bg-yellow-100 text-yellow-800' },
     { value: 'REVISAR', label: 'REVISAR', color: 'bg-orange-100 text-orange-800' },
-    { value: 'CRÍTICO', label: 'CRÍTICO', color: 'bg-purple-100 text-purple-800' }
+    { value: 'CR?TICO', label: 'CR?TICO', color: 'bg-purple-100 text-purple-800' }
   ];
 
-  // NUEVA: Función para cargar firma en base64
+  // NUEVA: Funci?n para cargar firma en base64
 
 
   useEffect(() => {
@@ -297,12 +215,12 @@ const AnalysisReport = () => {
             setReportComments(report.comentarios || '');
             setReportConclusions(report.conclusiones || '');
             
-            // Cargar el estado de límites desde el reporte
+            // Cargar el estado de l?mites desde el reporte
             setShowLimits(report.with_limites || false);
             
             // Cargar firma en base64 si existe
             if (report.firma_ruta) {
-              // Intentar cargar desde el endpoint específico
+              // Intentar cargar desde el endpoint espec?fico
           
               if  (report.firma_base64) {
                 // Usar el base64 que viene en el reporte
@@ -319,7 +237,6 @@ const AnalysisReport = () => {
             }
           }
         } catch (error) {
-          console.log('No se encontró reporte existente');
         }
 
         // Inicializar resultados editados y comentarios
@@ -339,7 +256,7 @@ const AnalysisReport = () => {
         setEditedResults(initialResults);
         setEditedComments(initialComments);
 
-        // Calcular comentarios automáticos
+        // Calcular comentarios autom?ticos
         calculateAutoComments(sampleResponse.data, initialResults);
         
       } catch (error) {
@@ -353,254 +270,18 @@ const AnalysisReport = () => {
     fetchData();
   }, [muestra, api]);
 
-  // Función mejorada para calcular comentarios automáticos
-  const calculateAutoComments = (data, currentResults = editedResults) => {
-    const comments = {};
-    
-    const evaluateTestWithLimits = (test, value) => {
-      if (test.prueba.limites) {
-        const evaluation = evaluateResult(value, test.prueba.limites);
-        return evaluation.comment;
-      }
-      return test.completada ? 'NORMAL' : 'PENDIENTE';
-    };
-    
-    data.pruebas_estructuradas?.forEach(prueba => {
-      const valor = currentResults[prueba.id] ?? prueba.valor;
-      comments[prueba.id] = evaluateTestWithLimits(prueba, valor);
-      
-      prueba.subpruebas?.forEach(subprueba => {
-        const subValor = currentResults[subprueba.id] ?? subprueba.valor;
-        comments[subprueba.id] = evaluateTestWithLimits(subprueba, subValor);
-      });
-    });
-
-    data.resultados?.forEach(resultado => {
-      const valor = currentResults[resultado.id] ?? resultado.valor;
-      comments[resultado.id] = evaluateTestWithLimits(resultado, valor);
-    });
-
-    setAutoComments(comments);
-  };
-
-  useEffect(() => {
-    if (sampleData) {
-      calculateAutoComments(sampleData);
-    }
-  }, [editedResults, sampleData]);
-
-  // Guardar resultados en sample-tests
-  const saveResults = async () => {
-    setSaving(true);
-    try {
-      const updatePromises = [];
-      
-      const allTests = [
-        ...(sampleData.pruebas_estructuradas || []),
-        ...(sampleData.resultados || [])
-      ];
-
-      allTests.forEach(test => {
-        const testId = test.id;
-        const updateData = {
-          valor: editedResults[testId] || test.valor,
-          observaciones: editedComments[testId] || test.observaciones
-        };
-
-        if (updateData.valor !== test.valor || updateData.observaciones !== test.observaciones) {
-          updatePromises.push(
-            api.patch(`lubrication/sample-tests/${testId}/`, updateData)
-          );
-        }
-      });
-
-      if (updatePromises.length > 0) {
-        await Promise.all(updatePromises);
-        toast.success('Resultados guardados exitosamente');
-      }
-
-      // Recargar datos
-      const response = await api.get(`lubrication/samples/${muestra}/`);
-      setSampleData(response.data);
-      
-    } catch (error) {
-      console.error('Error saving results:', error);
-      toast.error('Error al guardar resultados: ' + (error.response?.data?.message || error.message));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Función para guardar la firma físicamente
-  const saveSignatureToFile = async (signatureData) => {
-    try {
-      // signatureData ya viene en base64 del SignaturePad
-      let blob;
-      if (signatureData.startsWith('data:')) {
-        const response = await fetch(signatureData);
-        blob = await response.blob();
-      } else {
-        // Si es otra cosa, manejar según corresponda
-        const response = await fetch(signatureData);
-        blob = await response.blob();
-      }
-      
-      const formData = new FormData();
-      const fileName = `firma_${muestra}_${Date.now()}.png`;
-      formData.append('file', blob, fileName);
-      formData.append('folder', 'firmas');
-      
-      const uploadResponse = await api.post('upload/signature/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      return uploadResponse.data.filePath;
-      
-    } catch (error) {
-      console.error('Error guardando firma:', error);
-      throw error;
-    }
-  };
-
-  // Modificar handleSaveSignature
-  const handleSaveSignature = async (signatureData) => {
-    try {
-      // Guardar firma físicamente y obtener ruta
-      const signatureFilePath = await saveSignatureToFile(signatureData);
-      
-      // Actualizar estados - signatureData ya es base64
-      setSignature(signatureData); // Mantenemos el base64 para mostrar
-      setSignaturePath(signatureFilePath); // Guardamos la ruta para la BD
-      
-      setShowSignatureModal(false);
-      toast.success('Firma guardada correctamente');
-    } catch (error) {
-      console.error('Error al guardar la firma:', error);
-      toast.error('Error al guardar la firma');
-    }
-  };
-
-  // Guardar metadata del reporte
-  const saveReportMetadata = async () => {
-    try {
-      const reportPayload = {
-        muestra: muestra,
-        comentarios: reportComments,
-        conclusiones: reportConclusions,
-        responsable: responsibleName,
-        empresa: companyName,
-        firma_ruta: signaturePath, // Guardamos la ruta del archivo
-        with_limites: showLimits,
-        usuario_emision: user?.id
-      };
-
-      console.log('Guardando reporte con payload:', reportPayload);
-
-      if (reportData && reportData?.id) {
-        // Actualizar reporte existente
-        await api.patch(`lubrication/reports/${reportData.id}/`, reportPayload);
-        toast.success('Reporte actualizado exitosamente');
-      } else {
-        // Crear nuevo reporte
-        const newReport = await api.post('lubrication/reports/', {
-          ...reportPayload,
-          consecutivo: `R${new Date().getFullYear()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-          fecha_emision: new Date().toISOString()
-        });
-        setReportData(newReport.data);
-        toast.success('Reporte creado exitosamente');
-      }
-
-    } catch (error) {
-      console.error('Error saving report:', error);
-      toast.error('Error al guardar el reporte: ' + (error.response?.data?.message || error.message));
-    }
-  };
-
-  // Función para activar/desactivar límites
-  const toggleLimits = async () => {
-    const newShowLimits = !showLimits;
-    setShowLimits(newShowLimits);
-    
-    // Actualizar inmediatamente en la base de datos
-    if (reportData?.id) {
-      try {
-        await api.patch(`lubrication/reports/${reportData.id}/`, {
-          with_limites: newShowLimits
-        });
-        toast.success(`Límites ${newShowLimits ? 'activados' : 'desactivados'}`);
-      } catch (error) {
-        console.error('Error actualizando límites:', error);
-        toast.error('Error al actualizar límites');
-        // Revertir el cambio si hay error
-        setShowLimits(!newShowLimits);
-      }
-    }
-  };
-
-  const handleSaveAll = async () => {
-    await saveResults();
-    setEditing(false);
-  };
-
-  const handleCancel = () => {
-    setEditing(false);
-    if (sampleData) {
-      const originalResults = {};
-      const originalComments = {};
-      
-      const allTests = [
-        ...(sampleData.pruebas_estructuradas || []),
-        ...(sampleData.resultados || [])
-      ];
-
-      allTests.forEach(test => {
-        originalResults[test.id] = test.valor || '';
-        originalComments[test.id] = test.observaciones || '';
-      });
-      
-      setEditedResults(originalResults);
-      setEditedComments(originalComments);
-    }
-  };
-
-  const handleResultChange = (pruebaId, newValue) => {
-    setEditedResults(prev => ({
-      ...prev,
-      [pruebaId]: newValue
-    }));
-  };
-
-  const handleCommentChange = (pruebaId, newComment) => {
-    setEditedComments(prev => ({
-      ...prev,
-      [pruebaId]: newComment
-    }));
-  };
-
-  // Función para formatear límites
   const formatLimits = (limites) => {
     if (!showLimits || !limites) return '-';
-    
-    switch (limites.tipo) {
-      case 'generico':
-        return `${limites.symbol_operation || ''} ${limites.valor !== null ? limites.valor : ''}`.trim();
-      case 'viscosidad':
-        if (limites.vmin !== null && limites.vmax !== null) {
-          return `${limites.vmin} - ${limites.vmax}`;
-        }
-        return '-';
-      case 'calidad':
-        const parts = [];
-        if (limites.c1) parts.push(`C1: ${limites.c1}`);
-        if (limites.c2) parts.push(`C2: ${limites.c2}`);
-        return parts.length > 0 ? parts.join(', ') : '-';
-      case 'elemento_analisis':
-        return `${limites.symbol_operation || ''} ${limites.valor !== null ? limites.valor : ''}`.trim();
-      default:
-        return '-';
+
+    switch (limites.operador) {
+      case 'rango': return `${limites.minimo ?? '-'} - ${limites.maximo ?? '-'}`;
+      case 'menor': return `< ${limites.maximo ?? '-'}`;
+      case 'menor_igual': return `<= ${limites.maximo ?? '-'}`;
+      case 'mayor': return `> ${limites.minimo ?? '-'}`;
+      case 'mayor_igual': return `>= ${limites.minimo ?? '-'}`;
+      case 'igual': return `= ${limites.minimo ?? '-'}`;
+      case 'texto': return limites.texto || '-';
+      default: return '-';
     }
   };
 
@@ -627,36 +308,22 @@ const AnalysisReport = () => {
     );
   }
 
-  // Función para ver/generar PDF
+  // Funci?n para ver/generar PDF
   const handleViewPDF = async () => {
     try {
       setGeneratingPDF(true);
       
-      // Llamar al endpoint para generar el PDF
-      const response = await api.get(`lubrication/reports/imprimir_reporte/?pdf=${muestra}`);
-      
-      if (response.data.error) {
-        toast.error('Error generando PDF: ' + response.data.message);
-        return;
-      }
-
-      // Convertir base64 a Blob
-      const pdfBase64 = response.data.pdf;
-      const byteCharacters = atob(pdfBase64);
-      const byteNumbers = new Array(byteCharacters.length);
-      
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      const response = await api.get('lubrication/reports/imprimir_reporte/', {
+        params: { pdf: muestra },
+        responseType: 'blob',
+      });
+      const blob = response.data;
       
       // Crear URL para el PDF
       const url = URL.createObjectURL(blob);
       setPdfUrl(url);
       
-      // Abrir en nueva pestaña
+      // Abrir en nueva pesta?a
       window.open(url, '_blank');
       
       toast.success('PDF generado exitosamente');
@@ -681,14 +348,14 @@ const AnalysisReport = () => {
         </div>
       )}
 
-      {/* Header con controles de edición */}
+      {/* Header con controles de edici?n */}
       <div className="flex justify-between items-center mb-4 p-3 bg-gray-50 rounded-lg border">
         <h2 className="text-lg font-bold text-gray-800">
-          Reporte de Análisis - Muestra {muestra}
+          Reporte de An?lisis - Muestra {muestra}
         </h2>
         
         <div className="flex gap-2 items-center">
-          {/* Botón para activar/desactivar límites */}
+          {/* Bot?n para activar/desactivar l?mites */}
           <button
             onClick={toggleLimits}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
@@ -700,7 +367,7 @@ const AnalysisReport = () => {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
-            {showLimits ? 'Desactivar Límites' : 'Activar Límites'}
+            {showLimits ? 'Desactivar L?mites' : 'Activar L?mites'}
           </button>
           
           <button
@@ -732,7 +399,7 @@ const AnalysisReport = () => {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
-              Modo Edición
+              Modo Edici?n
             </button>
           ) : (
             <div className="flex gap-2">
@@ -775,17 +442,17 @@ const AnalysisReport = () => {
           <div className="flex flex-col justify-center text-center leading-[0.9] px-1 space-y-0">
             <p className="text-[9px]">NIT: 830135980-4</p>
             <p className="text-[9px]">Parque Industrial Ciem Oikos de Occidente</p>
-            <p className="text-[9px]">Autopista Bogotá - Medellín</p>
-            <p className="text-[9px]">KM 2.5 Vía a Parcelas 900 Mts - Bodega K172</p>
+            <p className="text-[9px]">Autopista Bogot? - Medell?n</p>
+            <p className="text-[9px]">KM 2.5 V?a a Parcelas 900 Mts - Bodega K172</p>
           </div>
         </div>
 
-        {/* Columna central (Título) */}
+        {/* Columna central (T?tulo) */}
         <div className="border-r border-black flex items-center justify-center">
-          <h1 className="text-[16px] font-semibold underline">ORDEN DE ANÁLISIS</h1>
+          <h1 className="text-[16px] font-semibold underline">ORDEN DE AN?LISIS</h1>
         </div>
 
-        {/* Columna con ícono */}
+        {/* Columna con ?cono */}
         <div className="border-r border-black flex items-center justify-center">
           <img src="/icon-report.png" alt="Icono" className="h-[70px] object-contain" />
         </div>
@@ -794,7 +461,7 @@ const AnalysisReport = () => {
         <div className="grid grid-rows-[1fr_1fr] h-full">
           <div className="flex flex-col border-b border-black">
             <div className="border-b border-black text-center text-[10px] font-semibold py-1">
-              Orden de Análisis N°
+              Orden de An?lisis N?
             </div>
             <div className="flex-1 flex items-center justify-center text-[13px] font-bold">
               {reportData?.consecutivo || '091-2025'}
@@ -811,7 +478,7 @@ const AnalysisReport = () => {
         </div>
       </div>
 
-      {/* Información de la muestra */}
+      {/* Informaci?n de la muestra */}
       <div className="w-full mt-4">
         <table className="w-full border-collapse border border-black text-[11px]">
           <tbody>
@@ -825,7 +492,7 @@ const AnalysisReport = () => {
             </tr>
             <tr>
               <td className="border border-black p-1 font-semibold bg-gray-100">Lubricante:</td>
-              <td className="border border-black p-1">{sampleData?.lubricante?.nombre_comercial || 'N/A'}</td>
+              <td className="border border-black p-1">{sampleData?.referencia_marca || 'N/A'}</td>
               <td className="border border-black p-1 font-semibold bg-gray-100">Equipo:</td>
               <td className="border border-black p-1">{sampleData?.referencia_equipo_info?.nombre || 'N/A'}</td>
             </tr>
@@ -850,11 +517,11 @@ const AnalysisReport = () => {
         <table className="w-full border-collapse border border-black text-[10px]">
           <thead>
             <tr className="bg-gray-100">
-              <th className="border border-black p-1 font-semibold text-left w-[220px]">ANÁLISIS</th>
+              <th className="border border-black p-1 font-semibold text-left w-[220px]">AN?LISIS</th>
               <th className="border border-black p-1 font-semibold text-center w-[110px]">MÉTODO</th>
               <th className="border border-black p-1 font-semibold text-center w-[80px]">RESULTADO</th>
               <th className="border border-black p-1 font-semibold text-center w-[70px]">UNIDADES</th>
-              <th className="border border-black p-1 font-semibold text-center w-[100px]">LÍMITE</th>
+              <th className="border border-black p-1 font-semibold text-center w-[100px]">L?MITE</th>
               <th className="border border-black p-1 font-semibold text-center w-[100px]">COMENTARIO</th>
             </tr>
           </thead>
@@ -956,7 +623,7 @@ const AnalysisReport = () => {
                       </div>
                     </td>
                     
-                    {/* COLUMNA DE LÍMITES - Subpruebas */}
+                    {/* COLUMNA DE L?MITES - Subpruebas */}
                     <td className="border border-black p-0 align-top">
                       <div className="flex flex-col">
                         {prueba.subpruebas.map((subprueba, index) => (

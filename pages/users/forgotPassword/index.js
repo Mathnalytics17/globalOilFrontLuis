@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useAuth } from '@context/AuthContext';
 import { useRouter } from 'next/router';
+import { authService } from '@features/auth/infrastructure/authService';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -8,7 +8,6 @@ export default function ForgotPassword() {
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState(false);
   
-  const { api } = useAuth();
   const router = useRouter();
 
   const handleChange = (e) => {
@@ -41,9 +40,7 @@ export default function ForgotPassword() {
     
     try {
       // Enviar solicitud al endpoint de Django
-      const response = await api.post('/users/password-reset/', {
-        email: email
-      });
+      await authService.forgotPassword(email);
       
       setSuccess(true);
       
@@ -53,7 +50,6 @@ export default function ForgotPassword() {
       }, 5000);
       
     } catch (error) {
-      console.error('Error sending reset email:', error);
       
       let errorMessage = 'Error al enviar el enlace de recuperación';
       

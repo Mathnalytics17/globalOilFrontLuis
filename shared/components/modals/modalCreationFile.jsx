@@ -2,9 +2,8 @@ import React, { useState } from "react";
 import Modal from "react-bootstrap/Modal";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
-import { v4 as uuidv4 } from 'uuid';
 
-const ModalCreationFile = ({ show, onHide, onCreate, parentId, compania_id }) => {
+const ModalCreationFile = ({ show, onHide, onCreate }) => {
   const [type, setType] = useState("folder");
   const [name, setName] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -29,8 +28,7 @@ const ModalCreationFile = ({ show, onHide, onCreate, parentId, compania_id }) =>
       isMachine:true,
     } : null;
 
-    // Pasar compania_id al crear
-    onCreate(machineData, name, type, parentId, compania_id);
+    onCreate(machineData, name, type);
     resetForm();
   };
 

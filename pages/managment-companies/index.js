@@ -1,10 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../shared/context/AuthContext';
 import { useRouter } from 'next/router';
 import { toast } from 'react-toastify';
+import { companiesService } from '@features/companies/infrastructure/companiesService';
+import RequirePermission from '@features/auth/presentation/RequirePermission';
+import SortableTableHeader from '@components/SortableTableHeader';
+import { useTableSort } from '@hooks/useTableSort';
+
+const COMPANY_SORT_COLUMNS = {
+  id: { type: 'number' },
+  nombre: {},
+  direccion: {},
+  telefono: {},
+  is_active: {},
+};
 
 const CompanyTable = () => {
-  const { api } = useAuth();
   const router = useRouter();
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,8 +28,8 @@ const CompanyTable = () => {
   const fetchCompanies = async () => {
     setLoading(true);
     try {
-      const response = await api.get('companies/');
-      setCompanies(response.data);
+      const data = await companiesService.list();
+      setCompanies(data);
     } catch (error) {
       toast.error('Error al cargar compañías: ' + (error.response?.data?.message || error.message));
     } finally {
@@ -42,6 +52,11 @@ const CompanyTable = () => {
 
     return matchesSearch && matchesStatus;
   });
+  const { sortedRows, sort, requestSort } = useTableSort(filteredData, {
+    defaultKey: 'id',
+    defaultDirection: 'desc',
+    columns: COMPANY_SORT_COLUMNS,
+  });
 
   // Contadores para el resumen
   const activeCount = companies.filter(c => c.is_active).length;
@@ -58,13 +73,13 @@ const CompanyTable = () => {
     if (window.confirm(`¿Estás seguro de ${company.is_active ? 'desactivar' : 'activar'} la compañía "${company.nombre}"?`)) {
       try {
         // Usar PATCH en lugar de DELETE para actualizar solo el campo is_active
-        const response = await api.patch(`companies/${company.id}/`, {
+        const updatedCompany = await companiesService.patch(company.id, {
           is_active: !company.is_active
         });
         
         // Actualizar el estado local con la respuesta del servidor
         setCompanies(prev => prev.map(comp => 
-          comp.id === company.id ? response.data : comp
+          comp.id === company.id ? updatedCompany : comp
         ));
         
         toast.success(`Compañía ${!company.is_active ? 'activada' : 'desactivada'} correctamente`);
@@ -78,7 +93,7 @@ const CompanyTable = () => {
   const handleDeleteCompany = async (company) => {
     if (window.confirm(`¿Estás seguro de ELIMINAR permanentemente la compañía "${company.nombre}"? Esta acción no se puede deshacer.`)) {
       try {
-        await api.delete(`companies/${company.id}/`);
+        await companiesService.remove(company.id);
         toast.success('Compañía eliminada permanentemente');
         fetchCompanies(); // Recargar la lista
       } catch (error) {
@@ -285,28 +300,18 @@ const CompanyTable = () => {
               <table className="min-w-full divide-y divide-gray-700">
                 <thead className="bg-gray-750">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      ID
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Nombre
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Dirección
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Teléfono
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Estado
-                    </th>
+                    <SortableTableHeader columnKey="id" sort={sort} onSort={requestSort} preferredDirection="desc" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">ID</SortableTableHeader>
+                    <SortableTableHeader columnKey="nombre" sort={sort} onSort={requestSort} className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Nombre</SortableTableHeader>
+                    <SortableTableHeader columnKey="direccion" sort={sort} onSort={requestSort} className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Dirección</SortableTableHeader>
+                    <SortableTableHeader columnKey="telefono" sort={sort} onSort={requestSort} className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Teléfono</SortableTableHeader>
+                    <SortableTableHeader columnKey="is_active" sort={sort} onSort={requestSort} className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Estado</SortableTableHeader>
                     <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
                       Acciones
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-[#292929] divide-y divide-gray-700">
-                  {filteredData.map((company) => (
+                  {sortedRows.map((company) => (
                     <tr key={company.id} className="hover:bg-gray-750 transition-colors duration-150">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-bold text-white">{company.id}</div>
@@ -388,4 +393,10 @@ const CompanyTable = () => {
   );
 };
 
-export default CompanyTable;
+export default function ProtectedCompanyTable() {
+  return (
+    <RequirePermission permissionsAny={['empresas.crear', 'empresas.bloquear', 'empresas.eliminar', 'empresas.ver_todo_global']}>
+      <CompanyTable />
+    </RequirePermission>
+  );
+}
