@@ -16,7 +16,7 @@ ENV NEXT_PUBLIC_FRONTEND_URL=$NEXT_PUBLIC_FRONTEND_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN npm run build
+RUN rm -rf .next && npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
