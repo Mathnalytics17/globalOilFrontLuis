@@ -9,7 +9,7 @@ export default function Login() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  
+
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
 
@@ -18,12 +18,12 @@ export default function Login() {
     const checkAuth = async () => {
       // Pequeño delay para evitar loops
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       if (isAuthenticated()) {
         router.push('/dashboard');
       }
     };
-    
+
     checkAuth();
   }, [isAuthenticated, router]);
 
@@ -33,7 +33,7 @@ export default function Login() {
       ...prev,
       [name]: value
     }));
-    
+
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -42,47 +42,47 @@ export default function Login() {
     }
   };
 
-const validateForm = () => {
-  const newErrors = {};
-  
-  if (!formData.email.trim()) {
-    newErrors.email = 'El email es requerido';
-  } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-    newErrors.email = 'Por favor ingrese un email válido';
-  }
-  
-  if (!formData.password) {
-    newErrors.password = 'La contraseña es requerida';
-  } else if (formData.password.length < 6) {
-    newErrors.password = 'La contraseña debe tener al menos 6 caracteres';
-  }
-  
-  setErrors(newErrors);
-  return Object.keys(newErrors).length === 0;
-};
+  const validateForm = () => {
+    const newErrors = {};
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  if (!validateForm()) return;
-  
-  setIsLoading(true);
-  setErrors({}); // Limpiar errores anteriores
-  
-  try {
-    const result = await login(formData.email, formData.password);
-    
-    if (!result.success) {
-      setErrors({ general: result.error });
+    if (!formData.email.trim()) {
+      newErrors.email = 'El email es requerido';
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = 'Por favor ingrese un email válido';
     }
-  } catch (error) {
-    // Este catch solo debería ejecutarse para errores inesperados
-    console.error('Error inesperado:', error);
-    setErrors({ general: 'Ocurrió un error inesperado. Por favor intente nuevamente.' });
-  } finally {
-    setIsLoading(false);
-  }
-};
+
+    if (!formData.password) {
+      newErrors.password = 'La contraseña es requerida';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'La contraseña debe tener al menos 6 caracteres';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!validateForm()) return;
+
+    setIsLoading(true);
+    setErrors({}); // Limpiar errores anteriores
+
+    try {
+      const result = await login(formData.email, formData.password);
+
+      if (!result.success) {
+        setErrors({ general: result.error });
+      }
+    } catch (error) {
+      // Este catch solo debería ejecutarse para errores inesperados
+      console.error('Error inesperado:', error);
+      setErrors({ general: 'Ocurrió un error inesperado. Por favor intente nuevamente.' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Spinner de carga mejorado
   if (authLoading) {
@@ -100,9 +100,9 @@ const handleSubmit = async (e) => {
   return (
     <div className="flex min-h-screen bg-[#777777] flex-col">
       <header className="p-4 flex justify-center md:justify-start">
-        <img 
-          src="/logo-global-oil.png" 
-          alt="Logo Global Oil" 
+        <img
+          src="/logo-global-oil.png"
+          alt="Logo Global Oil"
           className="w-40 md:w-32"
         />
       </header>
@@ -117,7 +117,7 @@ const handleSubmit = async (e) => {
         </div>
 
         <div className="flex-1 flex items-center justify-center">
-          <form 
+          <form
             onSubmit={handleSubmit}
             className="bg-[#9D9D9D] p-12 rounded-lg shadow-lg flex flex-col gap-4 w-full max-w-sm border-2 border-white min-h-[500px] h-auto"
           >
@@ -138,9 +138,8 @@ const handleSubmit = async (e) => {
                 placeholder="Email"
                 value={formData.email}
                 onChange={handleChange}
-                className={`border p-3 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                  errors.email ? 'border-red-500' : ''
-                }`}
+                className={`border p-3 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 ${errors.email ? 'border-red-500' : ''
+                  }`}
               />
               {errors.email && (
                 <span className="text-red-500 text-sm mt-1">{errors.email}</span>
@@ -154,16 +153,15 @@ const handleSubmit = async (e) => {
                 placeholder="Contraseña"
                 value={formData.password}
                 onChange={handleChange}
-                className={`border p-3 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                  errors.password ? 'border-red-500' : ''
-                }`}
+                className={`border p-3 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 ${errors.password ? 'border-red-500' : ''
+                  }`}
               />
               {errors.password && (
                 <span className="text-red-700 text-sm mt-1">{errors.password}</span>
               )}
             </div>
 
-            <button 
+            <button
               type="submit"
               disabled={isLoading}
               className="bg-[#D9D9D9] text-gray-800 py-3 px-8 rounded hover:bg-blue-300 transition duration-200 mx-auto w-40 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
@@ -180,11 +178,9 @@ const handleSubmit = async (e) => {
 
             <div className="mt-auto pt-8">
               <a href='/users/forgotPassword' className="text-white block mb-2 hover:underline cursor-pointer">
-                ¿Olvidaste tu contraseña?
+                ¿Olvidaste tu contraseña? Ingresa aquí
               </a>
-              <a href='/users/signUp' className="text-white block hover:underline cursor-pointer">
-                ¿No tienes cuenta? Crea tu usuario.
-              </a>
+
             </div>
           </form>
         </div>

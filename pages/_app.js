@@ -1,13 +1,9 @@
-import Layout from '../shared/components/layout'
+import AppLayout from '../src/app/layout/AppLayout';
 import "react-toastify/dist/ReactToastify.css";
 
-import Head from "next/head";
 import { useRouter } from "next/router";
-import { ToastContainer, toast } from "react-toastify";
+import { ToastContainer } from "react-toastify";
 import { AuthProvider } from '../shared/context/AuthContext';
-import { useAuth } from '../shared/context/AuthContext';
-import axios from 'axios';
-import { AppProvider } from '@toolpad/core/AppProvider';
 
 import "../pages/globals.css";
 
@@ -21,29 +17,34 @@ const pathsWithoutDefaultLayout = [
   "/financialProfile/financialStatement",
   "/financialProfile/indicators",
   "/auth/resetPassword",
-  "/auth/forgotPassword"
+  "/auth/forgotPassword",
+  "/users/signUp",
+  "/users/forgotPassword",
+  "/users/resetPassword",
+  "/users/confirmUser"
 ];
 
 export default function MyApp({ Component, pageProps }) {
   const router = useRouter();
 
-  
+
   const isErrorPage = pageProps?.statusCode === 404;
   return (
-    <> 
-       {!pathsWithoutDefaultLayout.includes(router.pathname) &&
-            !isErrorPage ? (
-              <AuthProvider>
-              <Layout>
-                <Component {...pageProps} />
-              </Layout>
-              </AuthProvider>
-            ) : (
-              <AuthProvider>
-              <Component {...pageProps} />
-              </AuthProvider>
-            )}
-    
+    <>
+      {!pathsWithoutDefaultLayout.includes(router.pathname) &&
+        !isErrorPage ? (
+        <AuthProvider>
+          <AppLayout>
+            <Component {...pageProps} />
+          </AppLayout>
+        </AuthProvider>
+      ) : (
+        <AuthProvider>
+          <Component {...pageProps} />
+        </AuthProvider>
+      )}
+      <ToastContainer position="top-right" autoClose={3500} />
+
     </>
   )
 }

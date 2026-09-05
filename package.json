@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit --pretty false",
+    "verify": "npm run typecheck && npm run build"
   },
   "dependencies": {
     "@emotion/cache": "^11.11.1",

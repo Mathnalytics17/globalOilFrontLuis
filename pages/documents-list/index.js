@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../shared/context/AuthContext';
+import { samplesService } from '@features/samples/infrastructure/samplesService';
+import { reportsService } from '@features/reports/infrastructure/reportsService';
+import { isCompanyAdmin, isGlobalUser } from '@features/auth/application/sessionAccess';
 
 const DocumentsList = () => {
   const router = useRouter();
-  const { api, user } = useAuth();
+  const { user } = useAuth();
   
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -17,17 +20,17 @@ const DocumentsList = () => {
   const [sendingReport, setSendingReport] = useState(false);
 
   // Verificar si el usuario actual tiene permisos para enviar reportes
-  const canSendReport = user && (user.role === 'ADMIN' || user.role === 'GLOBAL');
+  const canSendReport = Boolean(user) && isGlobalUser(user);
 
   // Cargar muestras aprobadas
   const loadApprovedSamples = async () => {
     try {
       setLoadingSamples(true);
-      const response = await api.get('lubrication/samples/');
-      const approved = response.data.filter(sample => sample.is_revisado === true);
+      const data = await samplesService.list();
+      const approved = data.filter(sample => sample.is_revisado === true);
       setApprovedSamples(approved);
     } catch (error) {
-      console.error('Error loading approved samples:', error);
+      setApprovedSamples([]);
     } finally {
       setLoadingSamples(false);
     }
@@ -37,10 +40,9 @@ const DocumentsList = () => {
   const loadGeneratedReports = async () => {
     try {
       setLoadingReports(true);
-      const response = await api.get('lubrication/reports/');
-      setGeneratedReports(response.data);
+      const data = await reportsService.list();
+      setGeneratedReports(data);
     } catch (error) {
-      console.error('Error loading reports:', error);
       setGeneratedReports([]);
     } finally {
       setLoadingReports(false);
@@ -99,9 +101,7 @@ const DocumentsList = () => {
         
         // Filtrar usuarios con rol ADMIN o GLOBAL
         if (empresaInfo.usuarios) {
-          adminUsers.push(...empresaInfo.usuarios.filter(u => 
-            u.role === 'ADMIN' || u.role === 'GLOBAL'
-          ));
+          adminUsers.push(...empresaInfo.usuarios.filter((u) => isCompanyAdmin(u) || isGlobalUser(u)));
         }
       }
 
@@ -112,15 +112,12 @@ const DocumentsList = () => {
 
       // Aquí iría la lógica real para enviar el reporte
       // Por ahora simulamos el envío
-      console.log('Enviando reporte a:', adminUsers);
-      
       // Simular envío
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       alert(`Reporte enviado exitosamente a ${adminUsers.length} usuario(s)`);
       
     } catch (error) {
-      console.error('Error enviando reporte:', error);
       alert('Error al enviar el reporte');
     } finally {
       setSendingReport(false);
@@ -404,7 +401,7 @@ const DocumentsList = () => {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className="text-gray-300">
-                                {sample.lubricante?.nombre_comercial || 'No especificado'}
+                                {sample.referencia_marca || 'No especificado'}
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
@@ -501,7 +498,7 @@ const DocumentsList = () => {
                                   <span className="text-white font-bold">#{sampleId}</span>
                                   {sample && (
                                     <div className="text-xs text-gray-400">
-                                      {sample.lubricante?.nombre_comercial} - {sample.referencia_equipo_info?.nombre}
+                                      {sample.referencia_marca || 'Sin referencia'} - {sample.referencia_equipo_info?.nombre}
                                     </div>
                                   )}
                                 </div>

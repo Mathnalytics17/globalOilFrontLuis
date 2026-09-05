@@ -37,11 +37,18 @@ const DataTable = ({
   selectable = false,
   pagination = true,
   searchable = false,
-  defaultSort = { field: 'id', order: 'asc' },
+  defaultSort = null,
   sx = {}
 }) => {
-  const [order, setOrder] = useState(defaultSort.order);
-  const [orderBy, setOrderBy] = useState(defaultSort.field);
+  const inferredSort = useMemo(() => {
+    if (defaultSort?.field) return defaultSort;
+    const dateColumn = columns.find((column) => /fecha|date|created|updated/i.test(column.id));
+    return dateColumn
+      ? { field: dateColumn.id, order: 'desc' }
+      : { field: columns[0]?.id || 'id', order: 'asc' };
+  }, [columns, defaultSort]);
+  const [order, setOrder] = useState(inferredSort.order);
+  const [orderBy, setOrderBy] = useState(inferredSort.field);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selected, setSelected] = useState([]);
@@ -159,7 +166,7 @@ const DataTable = ({
     : sortedData;
 
   const isSelected = (id) => selected.indexOf(id) !== -1;
-console.log(paginatedData)
+
   return (
     <Paper sx={{ width: '100%', overflow: 'hidden', ...sx }}>
       {searchable && (

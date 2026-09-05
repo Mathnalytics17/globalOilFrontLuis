@@ -1,726 +1,222 @@
-import Card from 'react-bootstrap/Card';
-import { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
-import Modal from "react-bootstrap/Modal";
-import Form from "react-bootstrap/Form";
-import { ChevronRightIcon, FolderIcon, DocumentIcon, TrashIcon, PlusIcon, PencilIcon, Battery0Icon } from '@heroicons/react/16/solid';
-import ModalCreationFile from '@components/modals/modalCreationFile';
-import ModalMuestra from '@components/modals/modelCreationPtMedida';
-import ModalEditarMuestra from './modals/modalEditPtMedida';
-import ModalAddResults from '@components/modals/modalAddResults';
+import { useEffect, useState } from 'react';
 import Button from 'react-bootstrap/Button';
-import { useFetch } from '@hooks/useFetch';
-import Axios from 'axios';
-import { v4 as uuidv4 } from 'uuid';
-import axios from "axios";
-import { PenLine, Trash2, PlusCircle, Eye, TestTube, Cpu } from "lucide-react";
-import { useAuth } from '../../shared/context/AuthContext';
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-import { FolderPlus, SquarePlus, FilePlus } from "lucide-react";
-import { useSafeApi } from '../hooks/safeApi';
+import Modal from 'react-bootstrap/Modal';
+import { ChevronRight, Eye, Folder, FolderPlus, Pencil, Trash2, Wrench, MapPin, ListFilter, Link2 } from 'lucide-react';
+import { toast } from 'react-toastify';
 
-// Componente Skeleton para carga moderna
-const FolderSkeleton = () => (
-  <div className="animate-pulse flex items-center gap-3 my-4">
-    <div className="w-5 h-5 bg-gray-600 rounded"></div>
-    <div className="w-6 h-6 bg-gray-700 rounded"></div>
-    <div className="flex-1">
-      <div className="h-4 bg-gray-600 rounded w-3/4"></div>
-    </div>
-    <div className="flex gap-2">
-      <div className="w-6 h-6 bg-gray-700 rounded"></div>
-      <div className="w-6 h-6 bg-gray-700 rounded"></div>
-    </div>
-  </div>
-);
+import ModalCreationFile from '@components/modals/modalCreationFile';
+import { assetTreeService } from '@features/asset-tree/infrastructure/assetTreeService';
+import { foldersService } from '@features/asset-tree/infrastructure/foldersService';
+import { machinesService } from '@features/machines/infrastructure/machinesService';
+import { sampleBatchesService } from '@features/samples/infrastructure/sampleBatchesService';
 
-const H1Skeleton = () => (
-  <div className="animate-pulse flex items-center gap-3 my-4">
-    <h1 className="w-5 h-5 bg-gray-600 rounded"></h1>
-  </div>
-);
+const transformStructure = (folders = []) =>
+  folders.map((folder) => ({
+    id: folder.id,
+    name: folder.nombre,
+    type: folder.typeFolder,
+    company: folder.compania_info,
+    machine: folder.machine_info,
+    sample: folder.muestra_info,
+    children: [
+      ...transformStructure(folder.subfolders),
+      ...(folder.sampling_points || []).map((point) => ({
+        id: `point-${point.id}`,
+        name: point.nombre,
+        type: 'sampling-point',
+        company: folder.compania_info,
+        machine: folder.machine_info,
+        point,
+        children: [],
+      })),
+    ],
+  }));
 
-const TextSkeleton = () => (
-  <div className="animate-pulse flex items-center gap-3 my-4">
-    <div className="w-full h-5 bg-gray-600 rounded"></div>
-  </div>
-);
-
-const CardSkeleton = () => (
-  <div className="animate-pulse w-full">
-    <div className="w-1/3 h-5 bg-gray-200 rounded mb-6"></div>
-    <H1Skeleton />
-    <TextSkeleton />
-    <div className="space-y-4 mt-6">
-      <FolderSkeleton />
-      <FolderSkeleton />
-      <FolderSkeleton />
-    </div>
-    <div className="pl-8 space-y-4 mt-4">
-      <FolderSkeleton />
-      <FolderSkeleton />
-    </div>
-  </div>
-);
-
-const StructureSkeleton = () => (
-  <div className="space-y-6 p-6">
-    <CardSkeleton/>
-  </div>
-);
-
-// Error component moderno
-const ErrorMessage = ({ message, onRetry }) => (
-  <div className="flex flex-col items-center justify-center p-8 text-center">
-    <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center mb-4">
-      <span className="text-2xl">⚠️</span>
-    </div>
-    <h3 className="text-xl font-semibold text-white mb-2">Error al cargar</h3>
-    <p className="text-gray-300 mb-4">{message}</p>
-    <button
-      onClick={onRetry}
-      className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg transition duration-200"
-    >
-      Reintentar
-    </button>
-  </div>
-);
-
-// ✅ FUNCIÓN MEJORADA usando endpoint dedicado
-const ensureRootFoldersForCompanies = async (reloadStructure) => {
-  try {
-    console.log('🔍 Sincronizando carpetas root con empresas...');
-    
-    const response = await Axios.post(`${API_URL}/sync-company-roots/`);
-    
-    if (response.data.success) {
-      toast.success(`✅ ${response.data.message}`);
-      console.log('✅ Sincronización completada:', response.data);
-      
-      // Recargar la estructura
-      reloadStructure();
-    } else {
-      toast.error('❌ Error en sincronización: ' + (response.data.error || 'Desconocido'));
-    }
-    
-  } catch (error) {
-    console.error('❌ Error sincronizando carpetas root:', error);
-    toast.error('❌ Error al sincronizar empresas: ' + (error.response?.data?.error || error.message));
-  }
+const loadTree = async () => {
+  const response = await assetTreeService.getBasicStructure();
+  return response.success ? transformStructure(response.structure) : [];
 };
 
-// ✅ FUNCIÓN OPTIMIZADA: Obtener estructura desde el nuevo endpoint
-const initialStructure = async () => {
-  try {
-    // ✅ SINCRONIZACIÓN AUTOMÁTICA: Verificar y crear carpetas root faltantes
+const TreeSkeleton = () => (
+  <div className="space-y-3 p-6 animate-pulse">
+    {[1, 2, 3, 4].map((item) => (
+      <div key={item} className="h-12 rounded bg-[#333]" />
+    ))}
+  </div>
+);
+
+const TreeNode = ({ node, reload }) => {
+  const [open, setOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [pointOpen, setPointOpen] = useState(false);
+  const [organizeOpen, setOrganizeOpen] = useState(false);
+
+  const hasChildren = node.children.length > 0;
+  const canCreate = node.type === 'root' || node.type === 'folder';
+
+  const createChild = async (machineData, name, type) => {
+    let machine;
     try {
-      console.log('🔄 Verificando sincronización de empresas...');
-      const syncResponse = await Axios.post(`${API_URL}/sync-company-roots/`);
-      if (syncResponse.data.success && syncResponse.data.created_folders.length > 0) {
-        console.log('✅ Carpetas root creadas:', syncResponse.data.created_folders);
-      }
-    } catch (syncError) {
-      console.warn('⚠️ No se pudo sincronizar, continuando...', syncError.message);
-    }
-    
-    // Luego cargar estructura
-    const response = await Axios.get(`${API_URL}/actives-tree/basic-structure/`);
-    
-    if (response.data.success) {
-      console.log('🏗️ Estructura optimizada cargada:', response.data.structure);
-      
-      const transformStructure = (folders) => {
-        return folders.map(folder => ({
-          id_node: folder.id,
-          id_parent_node: folder.id_parent_node,
-          name: folder.nombre,
-          typeFolder: folder.typeFolder,
-          compania_id: folder.compania_info?.id || folder.compania,
-          compania_info: folder.compania_info,
-          machines: folder.machine_info,
-          muestra: folder.muestra_info?.id || folder.muestra,
-          muestra_info: folder.muestra_info,
-          folders: folder.subfolders ? transformStructure(folder.subfolders) : []
-        }));
-      };
-      
-      return transformStructure(response.data.structure);
-    }
-    return [];
-  } catch (error) {
-    console.error('❌ Error fetching optimized structure:', error);
-    throw error;
-  }
-};
-
-const RecursiveFolderDocumentStructure = () => {
-  const { safeApiCall } = useSafeApi();
-  const [initialStructureData, setInitialStructureData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { user } = useAuth();
-
-  // ✅ NUEVO: Estados para datos compartidos con valores por defecto
-  const [sharedData, setSharedData] = useState({
-    lubricants: [],
-    equipmentReferences: [],
-    users: [],
-    machines: []
-  });
-  const [sharedDataLoading, setSharedDataLoading] = useState(true);
-
-  // ✅ Cargar datos compartidos UNA SOLA VEZ
-  useEffect(() => {
-    const loadSharedData = async () => {
-      try {
-        setSharedDataLoading(true);
-        const [lubsRes, refsRes, usersRes, machinesRes] = await Promise.all([
-          Axios.get(`${API_URL}/lubrication/lubricants/`).then(res => res.data).catch(() => []),
-          Axios.get(`${API_URL}/lubrication/equipment-references/`).then(res => res.data).catch(() => []),
-          Axios.get(`${API_URL}/users/`).then(res => res.data).catch(() => []),
-          Axios.get(`${API_URL}/machines/`).then(res => res.data).catch(() => [])
-        ]);
-        
-        setSharedData({
-          lubricants: lubsRes || [],
-          equipmentReferences: refsRes || [],
-          users: usersRes || [],
-          machines: machinesRes || []
-        });
-      } catch (error) {
-        console.error('Error cargando datos compartidos:', error);
-        toast.error('Error al cargar datos necesarios');
-        // Asegurarse de que sharedData siempre tenga estructura
-        setSharedData({
-          lubricants: [],
-          equipmentReferences: [],
-          users: [],
-          machines: []
-        });
-      } finally {
-        setSharedDataLoading(false);
-      }
-    };
-
-    loadSharedData();
-  }, []);
-
-  // Efecto para cargar la estructura inicial
-  useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const structure = await initialStructure();
-        setInitialStructureData(structure);
-
-      } catch (err) {
-        console.error('❌ Error en loadInitialData:', err);
-        setError(err.message || 'Error al cargar la estructura');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadInitialData();
-  }, []);
-
-  // Función para recargar la estructura
-  const reloadStructure = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await initialStructure();
-      setInitialStructureData(data);
-    } catch (err) {
-      setError('Error al recargar la estructura');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading || sharedDataLoading) return <StructureSkeleton />;
-  if (error) return <ErrorMessage message={error} onRetry={reloadStructure} />;
-
-  return (
-    <div className="min-h-screen bg-[#1a1a1a] text-white font-sans">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-6 flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Estructura de Activos</h1>
-            <p className="text-gray-400">Gestión jerárquica de equipos y puntos de medida</p>
-          </div>
-          
-          <Button 
-            variant="outline-warning" 
-            onClick={() => ensureRootFoldersForCompanies(reloadStructure)}
-            className="flex items-center gap-2"
-            title="Sincronizar carpetas root con empresas existentes"
-          >
-            <FolderPlus className="w-4 h-4" />
-            Sincronizar Empresas
-          </Button>
-        </div>
-        
-        <div className="bg-[#292929] rounded-xl shadow-2xl p-6">
-          <ul className="space-y-2">
-            {initialStructureData.map((folder) => (
-              <Folder 
-                folder={folder} 
-                key={folder.id_node} 
-                reloadStructure={reloadStructure}
-                // ✅ PASAR DATOS COMPARTIDOS COMO PROPS
-                sharedData={sharedData}
-                currentUser={user}
-              />
-            ))}
-          </ul>
-          
-          {initialStructureData.length === 0 && (
-            <div className="text-center py-12">
-              <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FolderIcon className="w-12 h-12 text-gray-500" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-300 mb-2">No hay estructura cargada</h3>
-              <p className="text-gray-500">Comienza creando tu primera carpeta o equipo</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ✅ COMPONENTE FOLDER CORREGIDO con manejo seguro de sharedData
-const Folder = ({ folder, reloadStructure, sharedData = {}, currentUser }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isOpenModalFolder, setIsOpenModalFolder] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editFormData, setEditFormData] = useState({});
-
-  // ✅ USAR DATOS COMPARTIDOS DIRECTAMENTE con valores por defecto
-  const { 
-    lubricants = [], 
-    equipmentReferences = [], 
-    users = [], 
-    machines = [] 
-  } = sharedData || {};
-
-  // LOGICA CREACION DE FOLDER Y MAQUINA
-  const handleCreateFile = async (data, nombre, typeFolder, parentId, compania_id) => {
-    const folderData = {
-      nombre: nombre,
-      typeFolder: typeFolder || 'folder',
-      parentId: parentId,
-      id_parent_node: parentId,
-      compania: compania_id,
-      isMachine: typeFolder === 'machine'
-    };
-
-    try {
-      const response = await Axios.post(`${API_URL}/folders/`, folderData);
-      const result = response.data;
-
-      if (typeFolder === "machine") {
-        const machineData = {
-          nombre: data.nombre,
-          descripcion: data.descripcion,
-          empresa: compania_id,
-        };
-        
-        const machineResponse = await Axios.post(`${API_URL}/machines/`, machineData);
-        const machineResult = machineResponse.data;
-
-        await Axios.patch(`${API_URL}/folders/${result.id}/`, {
-          machine: machineResult.id
+      if (type === 'machine') {
+        machine = await machinesService.create({
+          nombre: machineData.nombre,
+          componente: machineData.descripcion,
+          empresa: node.company?.id,
         });
       }
-      
-      reloadStructure();
-      
-    } catch (error) {
-      console.error('Error completo:', error);
-      alert(`Error al crear: ${error.response?.data?.detail || error.message}`);
-    }
-  };
 
-  // LOGICA ELIMINACION
-  const handleDelete = async () => {
-    const confirmDelete = window.confirm(`¿Estás seguro de que deseas eliminar "${folder.name}"?`);
-    if (!confirmDelete) return;
-   
-    try {
-      if (folder.typeFolder === 'machine' && folder.machines) {
-        await Axios.delete(`${API_URL}/machines/${folder.machines.id}/`);
+      await foldersService.create({
+        nombre: name,
+        typeFolder: type,
+        id_parent_node: String(node.id),
+        compania: node.company?.id,
+        isMachine: type === 'machine',
+        machine: machine?.id || null,
+      });
+      toast.success(type === 'machine' ? 'Maquina creada' : 'Carpeta creada');
+      reload();
+    } catch (error) {
+      if (machine?.id) {
+        await machinesService.remove(machine.id).catch(() => null);
       }
-      await Axios.delete(`${API_URL}/folders/${folder.id_node}/`);
-      reloadStructure();
-    } catch (error) {
-      console.error('Error:', error);
-      alert(`Error al eliminar: ${error.message}`);
+      toast.error(error.response?.data?.detail || 'No se pudo crear el registro');
     }
   };
 
-  // Función para manejar cuando se crea una muestra
-  const handleMuestraCreada = (muestraCreada) => {
-    toast.success('Punto de medida creado exitosamente');
-    reloadStructure();
-    setIsOpenModalFolder(false);
-  };
-
-  // Función para guardar edición
-  const handleSaveEdit = async () => {
+  const removeNode = async () => {
+    const verb = node.type === 'sampling-point' ? 'Desactivar' : 'Eliminar';
+    if (!window.confirm(`${verb} "${node.name}"?`)) return;
     try {
-      if (folder.typeFolder === 'machine') {
-        await Axios.put(`${API_URL}/machines/${folder.machines.id}/`, editFormData);
-        toast.success('Máquina actualizada correctamente');
-      } else if (folder.typeFolder === 'muestra') {
-        await Axios.put(`${API_URL}/lubrication/samples/${folder.muestra}/`, editFormData);
-        toast.success('Muestra actualizada correctamente');
+      if (node.type === 'sampling-point') {
+        await assetTreeService.removeSamplingPoint(node.point.id);
+      } else if (node.machine?.id) {
+        await machinesService.remove(node.machine.id);
+      } else {
+        await foldersService.remove(node.id);
       }
-      reloadStructure();
-      setShowEditModal(false);
+      toast.success('Registro eliminado');
+      reload();
     } catch (error) {
-      console.error('Error al guardar:', error);
-      toast.error('Error al guardar los cambios');
+      toast.error(error.response?.data?.detail || 'No se pudo eliminar el registro');
     }
   };
 
-  // Función para navegar a vista completa
-  const handleNavigateToFullView = () => {
-    if (folder.typeFolder === 'machine') {
-      window.location.href = `/machines/detail-machine?id=${folder.machines.id}`;
-    } else if (folder.typeFolder === 'muestra') {
-      window.location.href = `/machines/edit-machine?id=${folder.muestra}`;
-    }
+  const openFilteredLots = () => {
+    const params = new URLSearchParams();
+    if (node.type === 'sampling-point') params.set('sampling_point_id', node.point.id);
+    else params.set('machine_id', node.machine.id);
+    window.location.href = `/muestras/lotes?${params.toString()}`;
   };
 
-  // Función para navegar a edición completa
-  const handleNavigateToFullEdit = () => {
-    if (folder.typeFolder === 'machine') {
-      window.location.href = `/machines/edit-machine?id=${folder.machines.id}`;
-    } else if (folder.typeFolder === 'muestra') {
-      window.location.href = `/muestras/editar-muestra?muestra=${folder.muestra}`;
-    }
-  };
-
-  // Manejar cambios en el formulario de edición
-  const handleEditFormChange = (e) => {
-    const { name, value } = e.target;
-    setEditFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  // Determinar el icono según el tipo de carpeta
-  const getFolderIcon = () => {
-    switch (folder.typeFolder) {
-      case 'root':
-      case 'folder':
-        return <FolderIcon style={{ width: "20px", height: "20px" }} className="text-sky-500" />;
-      case 'machine':
-        return <PenLine style={{ width: "20px", height: "20px" }} className="text-green-500" />;
-      case 'muestra':
-        return <TestTube style={{ width: "20px", height: "20px" }} className="text-yellow-500" />;
-      default:
-        return <FolderIcon style={{ width: "20px", height: "20px" }} className="text-gray-500" />;
-    }
-  };
-
-  // Determinar qué botones mostrar según el tipo de carpeta
-  const renderActionButtons = () => {
-    switch (folder.typeFolder) {
-      case 'root':
-      case 'folder':
-        return (
-          <div className="d-flex align-items-center gap-1">
-            <Button
-              variant="outline-primary"
-              onClick={() => setShowModal(true)}
-              className="d-flex align-items-center gap-1"
-              size="sm"
-              style={{ padding: 0, border: 0, outline: "none" }}
-              title="Crear carpeta o máquina"
-            >
-              <FolderPlus className="w-4 h-4 text-blue-400" />
-            </Button>
-            <Button
-              variant="link"
-              style={{ padding: 0, border: 0, outline: "none" }}
-              onClick={handleDelete}
-            >
-              <TrashIcon style={{ width: "20px", height: "20px", color: "#ef4444" }} />
-            </Button>
-          </div>
-        );
-      
-      case 'machine':
-        return (
-          <div className="d-flex align-items-center gap-1">
-            <Button
-              variant="link"
-              style={{ padding: 0, border: 0, outline: "none" }}
-              onClick={() => setIsOpenModalFolder(true)}
-              title="Crear punto de medida"
-            >
-              <PlusIcon style={{ width: "20px", height: "20px", color: "#f59e0b" }} />
-            </Button>
-            <Button
-              variant="link"
-              style={{ padding: 0, border: 0, outline: "none" }}
-              onClick={() => setShowViewModal(true)}
-              title="Ver máquina"
-            >
-              <Eye style={{ width: "20px", height: "20px", color: "#3b82f6" }} />
-            </Button>
-            <Button
-              variant="link"
-              style={{ padding: 0, border: 0, outline: "none" }}
-              onClick={() => setShowEditModal(true)}
-              title="Editar máquina"
-            >
-              <PencilIcon style={{ width: "20px", height: "20px", color: "#10b981" }} />
-            </Button>
-            <Button
-              variant="link"
-              style={{ padding: 0, border: 0, outline: "none" }}
-              onClick={handleDelete}
-            >
-              <TrashIcon style={{ width: "20px", height: "20px", color: "#b91c1c" }} />
-            </Button>
-          </div>
-        );
-      
-      case 'muestra':
-        return (
-          <div className="d-flex align-items-center gap-1">
-            <Button
-              variant="link"
-              style={{ padding: 0, border: 0, outline: "none" }}
-              onClick={() => setShowViewModal(true)}
-              title="Ver muestra"
-            >
-              <Eye style={{ width: "20px", height: "20px", color: "#3b82f6" }} />
-            </Button>
-            <Button
-              variant="link"
-              style={{ padding: 0, border: 0, outline: "none" }}
-              onClick={() => setShowEditModal(true)}
-              title="Editar muestra"
-            >
-              <PencilIcon style={{ width: "20px", height: "20px", color: "#10b981" }} />
-            </Button>
-            <Button
-              variant="link"
-              style={{ padding: 0, border: 0, outline: "none" }}
-              onClick={handleDelete}
-            >
-              <TrashIcon style={{ width: "20px", height: "20px", color: "#b91c1c" }} />
-            </Button>
-          </div>
-        );
-      
-      default:
-        return null;
-    }
-  };
-
-  // Determinar si se debe mostrar el botón de expandir
-  const shouldShowExpandButton = () => {
-    return folder.folders && folder.folders.length > 0;
+  const editMachine = () => {
+    window.location.href = `/machines/edit-machine?id=${node.machine.id}`;
   };
 
   return (
-    <li className="list-none my-3">
-      <div className="flex items-center gap-3 p-3 hover:bg-[#3a3a3a] rounded-lg transition duration-200 group">
-        {/* Botón para expandir/contraer */}
-        {shouldShowExpandButton() && (
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="p-1 hover:bg-[#4a4a4a] rounded transition"
-          >
-            <ChevronRightIcon
-              className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
-                isOpen ? "rotate-90" : ""
-              }`}
-            />
-          </button>
+    <li className="list-none">
+      <div className="flex min-h-12 items-center gap-2 rounded px-2 py-2 hover:bg-[#333]">
+        <button
+          type="button"
+          title={hasChildren ? 'Expandir' : 'Sin elementos internos'}
+          className="grid h-8 w-8 place-items-center rounded hover:bg-[#444] disabled:opacity-30"
+          disabled={!hasChildren}
+          onClick={() => setOpen((value) => !value)}
+        >
+          <ChevronRight className={`h-4 w-4 transition-transform ${open ? 'rotate-90' : ''}`} />
+        </button>
+
+        {node.type === 'machine' ? (
+          <Wrench className="h-5 w-5 text-emerald-400" />
+        ) : node.type === 'sampling-point' ? (
+          <MapPin className="h-5 w-5 text-amber-400" />
+        ) : (
+          <Folder className="h-5 w-5 text-sky-400" />
         )}
 
-        {/* Icono según tipo de carpeta */}
-        {getFolderIcon()}
+        <span className="min-w-0 flex-1 truncate text-sm text-white">{node.name}</span>
 
-        {/* Nombre de la carpeta */}
-        <span className={`${!shouldShowExpandButton() && folder.typeFolder !== 'muestra' ? "ml-[22px]" : ""}`}>
-          {folder.name}
-        </span>
-
-        {/* Botones de acción */}
-        {renderActionButtons()}
+        {canCreate && (
+          <button type="button" title="Crear carpeta o maquina" onClick={() => setCreateOpen(true)}>
+            <FolderPlus className="h-4 w-4 text-sky-400" />
+          </button>
+        )}
+        {node.type === 'machine' && (
+          <>
+            <button type="button" title="Ver lotes y muestras de esta maquina" onClick={openFilteredLots}>
+              <ListFilter className="h-4 w-4 text-amber-300" />
+            </button>
+            <button type="button" title="Crear punto de muestreo" onClick={() => setPointOpen(true)}>
+              <MapPin className="h-4 w-4 text-amber-400" />
+            </button>
+            <button type="button" title="Ver maquina" onClick={() => setDetailOpen(true)}>
+              <Eye className="h-4 w-4 text-blue-400" />
+            </button>
+            <button type="button" title="Editar maquina" onClick={editMachine}>
+              <Pencil className="h-4 w-4 text-emerald-400" />
+            </button>
+          </>
+        )}
+        {node.type === 'sampling-point' && (
+          <>
+            <button type="button" title="Ver lotes y muestras asociadas" onClick={openFilteredLots}>
+              <ListFilter className="h-4 w-4 text-sky-400" />
+            </button>
+            <button type="button" title="Organizar muestras en este punto" onClick={() => setOrganizeOpen(true)}>
+              <Link2 className="h-4 w-4 text-emerald-400" />
+            </button>
+            <button type="button" title="Editar punto de muestreo" onClick={() => setPointOpen(true)}>
+              <Pencil className="h-4 w-4 text-emerald-400" />
+            </button>
+          </>
+        )}
+        <button type="button" title="Eliminar" onClick={removeNode}>
+          <Trash2 className="h-4 w-4 text-red-500" />
+        </button>
       </div>
 
-      {/* Modal para crear carpeta/máquina */}
       <ModalCreationFile
-        show={showModal}
-        onHide={() => setShowModal(false)}
-        onCreate={(machineData, nombre, typeFolder, parentId) =>
-          handleCreateFile(
-            machineData,
-            nombre,
-            typeFolder,
-            folder.id_node,
-            folder.compania_id?.id || folder.compania_id
-          )
-        }
-        compania_id={folder.compania_id?.id || folder.compania_id}
+        show={createOpen}
+        onHide={() => setCreateOpen(false)}
+        onCreate={createChild}
+        compania_id={node.company?.id}
       />
 
-      {/* Modal para crear muestra - CON DATOS SEGUROS */}
-      <ModalMuestra
-        show={isOpenModalFolder}
-        onHide={() => setIsOpenModalFolder(false)}
-        onCreate={handleMuestraCreada}
-        machines={machines}
-        lubricants={lubricants}
-        equipmentReferences={equipmentReferences}
-        users={users}
-        currentUser={currentUser}
-        folder={folder}
-      />
-
-      {/* Modal de Vista (Ver) */}
-      <Modal
-        show={showViewModal}
-        onHide={() => setShowViewModal(false)}
-        centered
-        size="lg"
-      >
-        <Modal.Header closeButton className="bg-primary text-white">
-          <Modal.Title>
-            {folder.typeFolder === 'machine' ? 'Ver Máquina' : 'Ver Muestra'} - {folder.name}
-          </Modal.Title>
+      <Modal show={detailOpen} onHide={() => setDetailOpen(false)} centered>
+        <Modal.Header closeButton className="bg-[#292929] text-white">
+          <Modal.Title>{node.name}</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          <div className="mb-4">
-            {folder.typeFolder === 'machine' ? (
-              <div>
-                <h6>Información de la Máquina</h6>
-                <p><strong>Nombre:</strong> {folder.name}</p>
-                <p><strong>Empresa:</strong> {folder.compania_info?.nombre}</p>
-                <p><strong>ID:</strong> {folder.machines?.id}</p>
-              </div>
-            ) : (
-              <div>
-                <h6>Información de la Muestra</h6>
-                <p><strong>Nombre:</strong> {folder.name}</p>
-                <p><strong>ID Muestra:</strong> {folder.muestra}</p>
-                <p><strong>Máquina:</strong> {folder.machines?.nombre}</p>
-              </div>
-            )}
-          </div>
+        <Modal.Body className="bg-[#1a1a1a] text-white">
+          <p><strong>Empresa:</strong> {node.company?.nombre || 'No especificada'}</p>
+          <p><strong>Codigo:</strong> {node.machine?.codigo_equipo || 'No especificado'}</p>
+          <p><strong>Serie:</strong> {node.machine?.numero_serie || 'No especificada'}</p>
+          <p><strong>Componente:</strong> {node.machine?.componente || 'No especificado'}</p>
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowViewModal(false)}>
-            Cerrar
-          </Button>
-          <Button variant="primary" onClick={handleNavigateToFullView}>
-            Ir a Vista Completa
-          </Button>
+        <Modal.Footer className="bg-[#1a1a1a]">
+          <Button variant="secondary" onClick={() => setDetailOpen(false)}>Cerrar</Button>
         </Modal.Footer>
       </Modal>
 
-      {/* Modal de Edición */}
-      <Modal
-        show={showEditModal}
-        onHide={() => setShowEditModal(false)}
-        centered
-        size="lg"
-      >
-        <Modal.Header closeButton className="bg-warning text-dark">
-          <Modal.Title>
-            {folder.typeFolder === 'machine' ? 'Editar Máquina' : 'Editar Muestra'} - {folder.name}
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {folder.typeFolder === 'machine' ? (
-            <Form>
-              <Form.Group className="mb-3">
-                <Form.Label>Nombre de la Máquina</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="nombre"
-                  value={editFormData.nombre || ''}
-                  onChange={handleEditFormChange}
-                  placeholder="Nombre de la máquina"
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>Descripción</Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={3}
-                  name="descripcion"
-                  value={editFormData.descripcion || ''}
-                  onChange={handleEditFormChange}
-                  placeholder="Descripción de la máquina"
-                />
-              </Form.Group>
-            </Form>
-          ) : (
-            <Form>
-              <Form.Group className="mb-3">
-                <Form.Label>Observaciones</Form.Label>
-                <Form.Control
-                  as="textarea"
-                  rows={3}
-                  name="observaciones"
-                  value={editFormData.observaciones || ''}
-                  onChange={handleEditFormChange}
-                  placeholder="Observaciones de la muestra"
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>Contacto del Cliente</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="contacto_cliente"
-                  value={editFormData.contacto_cliente || ''}
-                  onChange={handleEditFormChange}
-                  placeholder="Contacto del cliente"
-                />
-              </Form.Group>
-            </Form>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowEditModal(false)}>
-            Cancelar
-          </Button>
-          <Button variant="outline-primary" onClick={handleNavigateToFullEdit}>
-            Edición Avanzada
-          </Button>
-          <Button variant="warning" onClick={handleSaveEdit}>
-            Guardar Cambios
-          </Button>
-        </Modal.Footer>
-      </Modal>
+      <SamplingPointModal
+        show={pointOpen}
+        machine={node.machine}
+        point={node.point}
+        onHide={() => setPointOpen(false)}
+        onSaved={() => { setPointOpen(false); reload(); }}
+      />
 
-      {/* Renderizar subcarpetas */}
-      {isOpen && folder.folders && (
-        <ul style={{ paddingLeft: "20px", marginTop: "10px" }}>
-          {folder.folders.map((subFolder) => (
-            <Folder
-              folder={subFolder}
-              key={subFolder.id_node}
-              reloadStructure={reloadStructure}
-              sharedData={sharedData}
-              currentUser={currentUser}
-            />
+      <OrganizePointModal
+        show={organizeOpen}
+        point={node.point}
+        machine={node.machine}
+        onHide={() => setOrganizeOpen(false)}
+        onSaved={() => { setOrganizeOpen(false); reload(); }}
+      />
+
+      {open && hasChildren && (
+        <ul className="ml-6 border-l border-[#444] pl-2">
+          {node.children.map((child) => (
+            <TreeNode key={child.id} node={child} reload={reload} />
           ))}
         </ul>
       )}
@@ -728,4 +224,164 @@ const Folder = ({ folder, reloadStructure, sharedData = {}, currentUser }) => {
   );
 };
 
-export default RecursiveFolderDocumentStructure;
+export default function RecursiveFolderDocumentStructure() {
+  const [tree, setTree] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const reload = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      setTree(await loadTree());
+    } catch (requestError) {
+      setError(requestError.message || 'No se pudo cargar la estructura');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    reload();
+  }, []);
+
+  const syncRoots = async () => {
+    try {
+      const response = await assetTreeService.syncCompanyRoots();
+      toast.success(response.message);
+      reload();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'No se pudieron sincronizar las empresas');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#1a1a1a] px-4 py-8 text-white">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">Estructura de activos</h1>
+            <p className="text-sm text-gray-400">Organizacion jerarquica de carpetas y maquinas.</p>
+          </div>
+          <Button variant="outline-warning" onClick={syncRoots}>
+            <FolderPlus className="mr-2 inline h-4 w-4" />
+            Sincronizar empresas
+          </Button>
+        </div>
+
+        <div className="rounded border border-[#333] bg-[#292929] p-4">
+          {loading && <TreeSkeleton />}
+          {!loading && error && <p className="p-4 text-red-400">{error}</p>}
+          {!loading && !error && tree.length === 0 && (
+            <p className="p-4 text-sm text-gray-400">No hay estructura registrada.</p>
+          )}
+          {!loading && !error && tree.length > 0 && (
+            <ul className="space-y-1">
+              {tree.map((node) => <TreeNode key={node.id} node={node} reload={reload} />)}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const SamplingPointModal = ({ show, machine, point, onHide, onSaved }) => {
+  const [form, setForm] = useState({ nombre: '', codigo: '', descripcion: '' });
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!show) return;
+    setForm(point ? {
+      nombre: point.nombre || '', codigo: point.codigo || '', descripcion: point.descripcion || '',
+    } : { nombre: '', codigo: '', descripcion: '' });
+  }, [show, point]);
+  const save = async () => {
+    if (!form.nombre.trim()) return toast.error('Escriba el nombre del punto');
+    setSaving(true);
+    try {
+      const payload = { ...form, nombre: form.nombre.trim(), maquina: machine.id };
+      if (point) await assetTreeService.updateSamplingPoint(point.id, payload);
+      else await assetTreeService.createSamplingPoint(payload);
+      toast.success(point ? 'Punto de muestreo actualizado' : 'Punto de muestreo creado');
+      setForm({ nombre: '', codigo: '', descripcion: '' });
+      onSaved();
+    } catch (error) {
+      toast.error(error.response?.data?.nombre?.[0] || error.response?.data?.detail || 'No se pudo crear el punto');
+    } finally { setSaving(false); }
+  };
+  return (
+    <Modal show={Boolean(show && machine)} onHide={onHide} centered>
+      <Modal.Header closeButton className="bg-[#292929] text-white"><Modal.Title>{point ? 'Editar punto de muestreo' : 'Nuevo punto de muestreo'}</Modal.Title></Modal.Header>
+      <Modal.Body className="space-y-3 bg-[#1a1a1a] text-white">
+        <p className="text-sm text-gray-400">Quedara dentro de <strong>{machine?.nombre}</strong> y sera un nodo terminal.</p>
+        <input className="form-control bg-dark text-white" placeholder="Nombre *" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+        <input className="form-control bg-dark text-white" placeholder="Codigo opcional" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} />
+        <textarea className="form-control bg-dark text-white" placeholder="Descripcion opcional" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
+      </Modal.Body>
+      <Modal.Footer className="bg-[#1a1a1a]"><Button variant="secondary" onClick={onHide}>Cancelar</Button><Button variant="danger" disabled={saving} onClick={save}>{saving ? 'Guardando...' : point ? 'Guardar cambios' : 'Crear punto'}</Button></Modal.Footer>
+    </Modal>
+  );
+};
+
+const OrganizePointModal = ({ show, point, machine, onHide, onSaved }) => {
+  const [batches, setBatches] = useState([]);
+  const [batchId, setBatchId] = useState('');
+  const [samples, setSamples] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!show || !machine?.id) return;
+    setLoading(true);
+    sampleBatchesService.list({ machine_id: machine.id, page_size: 200 })
+      .then(setBatches).catch(() => toast.error('No se pudieron cargar los lotes de la maquina'))
+      .finally(() => setLoading(false));
+  }, [show, machine?.id]);
+
+  const selectBatch = async (id) => {
+    setBatchId(id); setSamples([]); setSelected([]);
+    if (!id) return;
+    setLoading(true);
+    try {
+      const detail = await sampleBatchesService.getById(id);
+      const eligible = (detail.muestras || []).filter((sample) => Number(sample.referencia_equipo) === Number(machine.id));
+      setSamples(eligible);
+    } catch { toast.error('No se pudo cargar el lote'); }
+    finally { setLoading(false); }
+  };
+
+  const assign = async (wholeBatch) => {
+    if (!wholeBatch && !selected.length) return toast.error('Seleccione al menos una muestra');
+    setSaving(true);
+    try {
+      const result = await assetTreeService.organizeSamplingPoint(point.id, wholeBatch ? { lote_id: batchId } : { sample_ids: selected });
+      const skipped = result.resumen?.omitidas || 0;
+      toast.success(`${result.resumen?.asignadas || 0} muestra(s) asociadas${skipped ? `; ${skipped} omitidas por pertenecer a otra maquina` : ''}`);
+      onSaved();
+    } catch (error) { toast.error(error.response?.data?.detail || 'No se pudieron organizar las muestras'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Modal show={Boolean(show && point)} onHide={onHide} size="lg" centered>
+      <Modal.Header closeButton className="bg-[#292929] text-white"><Modal.Title>Organizar muestras · {point?.nombre}</Modal.Title></Modal.Header>
+      <Modal.Body className="bg-[#1a1a1a] text-white">
+        <p className="text-sm text-gray-400">Solo se asociaran muestras cuya maquina sea <strong>{machine?.nombre}</strong>. Esto no modifica el ingreso del lote.</p>
+        <select className="form-select bg-dark text-white" value={batchId} onChange={(e) => selectBatch(e.target.value)} disabled={loading}>
+          <option value="">Seleccione un lote de esta maquina</option>
+          {batches.map((batch) => <option key={batch.id} value={batch.id}>{batch.id} · {batch.cliente_nombre || 'Sin cliente'} ({batch.muestras_coincidentes ?? batch.total_muestras} coinciden)</option>)}
+        </select>
+        {loading && <p className="mt-3 text-gray-400">Cargando...</p>}
+        {!loading && batchId && <div className="mt-3 max-h-64 overflow-auto rounded border border-[#444] p-2">
+          {samples.map((sample) => <label key={sample.id} className="flex items-center gap-3 border-b border-[#333] p-2 last:border-0">
+            <input type="checkbox" checked={selected.includes(sample.id)} onChange={(e) => setSelected((items) => e.target.checked ? [...items, sample.id] : items.filter((id) => id !== sample.id))} />
+            <span><strong>{sample.id}</strong><small className="block text-gray-400">{sample.punto_muestreo ? `Actualmente: ${sample.punto_muestreo.nombre}` : 'Sin punto asignado'}</small></span>
+          </label>)}
+          {!samples.length && <p className="p-3 text-gray-400">Este lote no tiene muestras compatibles.</p>}
+        </div>}
+      </Modal.Body>
+      <Modal.Footer className="bg-[#1a1a1a]"><Button variant="secondary" onClick={onHide}>Cancelar</Button><Button variant="outline-warning" disabled={!batchId || saving} onClick={() => assign(true)}>Asignar lote compatible</Button><Button variant="danger" disabled={!selected.length || saving} onClick={() => assign(false)}>{saving ? 'Guardando...' : `Asignar seleccionadas (${selected.length})`}</Button></Modal.Footer>
+    </Modal>
+  );
+};

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../../shared/context/AuthContext';
 import { useRouter } from 'next/router';
 import { toast } from 'react-toastify';
+import { companiesService } from '@features/companies/infrastructure/companiesService';
+import RequirePermission from '@features/auth/presentation/RequirePermission';
 
 const EditCompany = () => {
-  const { api } = useAuth();
   const router = useRouter();
   const { id } = router.query;
   const [loading, setLoading] = useState(false);
@@ -12,10 +12,10 @@ const EditCompany = () => {
   
   // Estado del formulario
   const [formData, setFormData] = useState({
-    name: '',
+    nombre: '',
     nit: '',
-    address: '',
-    phone: '',
+    direccion: '',
+    telefono: '',
     email: '',
     is_active: true
   });
@@ -26,14 +26,14 @@ const EditCompany = () => {
 
     const fetchCompany = async () => {
       try {
-        const response = await api.get(`companies/${id}/`);
+        const company = await companiesService.getById(id);
         setFormData({
-          name: response.data.name,
-          nit: response.data.nit,
-          address: response.data.address || '',
-          phone: response.data.phone || '',
-          email: response.data.email || '',
-          is_active: response.data.is_active
+          nombre: company.nombre || company.name || '',
+          nit: company.nit || '',
+          direccion: company.direccion || company.address || '',
+          telefono: company.telefono || company.phone || '',
+          email: company.email || '',
+          is_active: company.is_active
         });
       } catch (error) {
         toast.error('Error al cargar compañía: ' + (error.response?.data?.message || error.message));
@@ -62,7 +62,7 @@ const EditCompany = () => {
 
     try {
       // Validaciones básicas
-      if (!formData.name.trim()) {
+      if (!formData.nombre.trim()) {
         throw new Error('El nombre es requerido');
       }
       if (!formData.nit.trim()) {
@@ -70,7 +70,7 @@ const EditCompany = () => {
       }
 
       // Enviar a la API
-      await api.put(`companies/${id}/`, formData);
+      await companiesService.patch(id, formData);
       
       toast.success('Compañía actualizada correctamente');
       router.push('/managment-companies');
@@ -121,14 +121,14 @@ const EditCompany = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Nombre */}
                 <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
+                  <label htmlFor="nombre" className="block text-sm font-medium text-gray-300 mb-2">
                     Nombre <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    id="name"
-                    name="name"
-                    value={formData.name}
+                    id="nombre"
+                    name="nombre"
+                    value={formData.nombre}
                     onChange={handleChange}
                     required
                     className="w-full px-3 py-2 border border-[#424242] rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors duration-200"
@@ -156,14 +156,14 @@ const EditCompany = () => {
 
               {/* Dirección */}
               <div>
-                <label htmlFor="address" className="block text-sm font-medium text-gray-300 mb-2">
+                <label htmlFor="direccion" className="block text-sm font-medium text-gray-300 mb-2">
                   Dirección
                 </label>
                 <input
                   type="text"
-                  id="address"
-                  name="address"
-                  value={formData.address}
+                  id="direccion"
+                  name="direccion"
+                  value={formData.direccion}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-[#424242] rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors duration-200"
                   placeholder="Ingrese la dirección de la compañía"
@@ -174,14 +174,14 @@ const EditCompany = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Teléfono */}
                 <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-300 mb-2">
+                  <label htmlFor="telefono" className="block text-sm font-medium text-gray-300 mb-2">
                     Teléfono
                   </label>
                   <input
                     type="tel"
-                    id="phone"
-                    name="phone"
-                    value={formData.phone}
+                    id="telefono"
+                    name="telefono"
+                    value={formData.telefono}
                     onChange={handleChange}
                     className="w-full px-3 py-2 border border-[#424242] rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors duration-200"
                     placeholder="Ingrese el teléfono de contacto"
@@ -281,4 +281,10 @@ const EditCompany = () => {
   );
 };
 
-export default EditCompany;
+export default function ProtectedEditCompany(props) {
+  return (
+    <RequirePermission permissionsAny={['empresas.editar']}>
+      <EditCompany {...props} />
+    </RequirePermission>
+  );
+}

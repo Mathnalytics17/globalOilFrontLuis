@@ -1,135 +1,242 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import Axios from 'axios';
+import { usersService } from '@features/auth/infrastructure/usersService';
+import { securityService } from '@features/security/infrastructure/securityService';
+
+const getErrorMessage = (error, fallback) => {
+  const data = error?.response?.data;
+  if (typeof data === 'string') return data;
+  if (data?.detail) return data.detail;
+  if (data?.error) return data.error;
+
+  try {
+    if (data) return JSON.stringify(data);
+  } catch {}
+
+  return fallback;
+};
 
 export default function ConfirmUser() {
   const router = useRouter();
-  const { token } = router.query;
-  const [status, setStatus] = useState('loading'); // loading, success, error
+  const { token, invite } = router.query;
+  const isInvite = invite === '1' || invite === 'true';
+
+  const [status, setStatus] = useState('loading');
   const [message, setMessage] = useState('');
+  const [invitation, setInvitation] = useState(null);
+  const [form, setForm] = useState({
+    first_name: '',
+    last_name: '',
+    password: '',
+    password2: '',
+  });
 
   useEffect(() => {
-    const verifyEmail = async () => {
-      if (!token) return;
+    if (!router.isReady) return;
+
+    if (!token) {
+      setStatus('error');
+      setMessage('El enlace no tiene token de confirmacion.');
+      return;
+    }
+
+    let mounted = true;
+
+    const run = async () => {
+      setStatus('loading');
+      setMessage('');
+
+      if (!isInvite) {
+        try {
+          await usersService.verifyEmail({ token });
+          if (!mounted) return;
+          setStatus('success');
+          setMessage('Email verificado exitosamente. Ya puedes iniciar sesion.');
+          setTimeout(() => router.push('/users/login'), 3000);
+        } catch (error) {
+          if (!mounted) return;
+          setStatus('error');
+          setMessage(getErrorMessage(error, 'Error al verificar el email.'));
+        }
+        return;
+      }
 
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL;
-        const response = await Axios.post(`${API_URL}/users/verify-email/`, {
-          token: token
-        });
+        const data = await securityService.invitations.validate(token);
+        if (!mounted) return;
 
-        if (response.status === 200) {
-          setStatus('success');
-          setMessage('¡Email verificado exitosamente! Ya puedes iniciar sesión.');
-          
-          // Redirigir al login después de 3 segundos
-          setTimeout(() => {
-            router.push('/users/login');
-          }, 3000);
-        }
+        setInvitation(data);
+        setForm((current) => ({
+          ...current,
+          first_name: data?.metadata?.first_name || current.first_name,
+          last_name: data?.metadata?.last_name || current.last_name,
+        }));
+        setStatus('form');
       } catch (error) {
-        console.error('Error verifying email:', error);
+        if (!mounted) return;
         setStatus('error');
-        
-        if (error.response?.data) {
-          setMessage(error.response.data.detail || 'Error al verificar el email.');
-        } else {
-          setMessage('Error de conexión. Por favor intenta nuevamente.');
-        }
+        setMessage(getErrorMessage(error, 'La invitacion no es valida o ya expiro.'));
       }
     };
 
-    verifyEmail();
-  }, [token, router]);
+    run();
+
+    return () => {
+      mounted = false;
+    };
+  }, [router.isReady, isInvite, token, router]);
+
+  const acceptInvitation = async (event) => {
+    event.preventDefault();
+
+    if (form.password !== form.password2) {
+      setStatus('form');
+      setMessage('Las contrasenas no coinciden.');
+      return;
+    }
+
+    try {
+      setStatus('submitting');
+      setMessage('');
+
+      await securityService.invitations.accept({
+        token,
+        first_name: form.first_name,
+        last_name: form.last_name,
+        password: form.password,
+        password2: form.password2,
+      });
+
+      setStatus('success');
+      setMessage('Cuenta activada exitosamente. Ya puedes iniciar sesion.');
+      setTimeout(() => router.push('/users/login'), 2500);
+    } catch (error) {
+      setStatus('form');
+      setMessage(getErrorMessage(error, 'No se pudo activar la invitacion.'));
+    }
+  };
 
   return (
-    <div className="flex min-h-screen bg-[#777777] flex-col">
-      <header className="p-4 flex justify-center md:justify-start">
-        <img 
-          src="/logo-global-oil.png" 
-          alt="Logo Global Oil" 
-          className="w-40 md:w-32"
-        />
+    <div className="flex min-h-screen flex-col bg-[#111] text-white">
+      <header className="flex justify-center p-6 md:justify-start">
+        <img src="/logo-global-oil.png" alt="Logo Global Oil" className="w-44 md:w-36" />
       </header>
 
-      <main className="flex flex-1 items-center justify-center px-8 py-12">
-        <div className="max-w-4xl w-full flex flex-col md:flex-row items-center gap-12">
-          {/* Imagen izquierda - Solo en desktop */}
-          <div className="hidden md:flex flex-1 items-center justify-center">
-            <img
-              src="/logo-global-oil.png"
-              alt="Global Oil"
-              className="max-w-md w-full opacity-90"
-            />
-          </div>
-
-          {/* Contenido de confirmación a la derecha */}
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <div className="bg-[#d9d9d9] p-8 rounded-lg shadow-lg w-full max-w-md">
-              {status === 'loading' && (
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#777777] mx-auto mb-4"></div>
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">Verificando email...</h2>
-                  <p className="text-gray-600">Por favor espera mientras confirmamos tu cuenta.</p>
-                </div>
-              )}
-
-              {status === 'success' && (
-                <div className="text-center">
-                  <div className="bg-green-100 rounded-full p-3 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                    <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                  </div>
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">¡Verificación Exitosa!</h2>
-                  <p className="text-gray-600 mb-4">{message}</p>
-                  <div className="bg-blue-100 p-3 rounded-lg">
-                    <p className="text-sm text-blue-800">Serás redirigido automáticamente al login...</p>
-                  </div>
-                </div>
-              )}
-
-              {status === 'error' && (
-                <div className="text-center">
-                  <div className="bg-red-100 rounded-full p-3 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                    <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                  </div>
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">Error de Verificación</h2>
-                  <p className="text-gray-600 mb-4">{message}</p>
-                  <div className="flex gap-4 justify-center">
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="bg-[#777777] text-white px-6 py-2 rounded hover:bg-gray-600 transition"
-                    >
-                      Reintentar
-                    </button>
-                    <button
-                      onClick={() => router.push('/users/login')}
-                      className="bg-gray-300 text-gray-800 px-6 py-2 rounded hover:bg-gray-400 transition"
-                    >
-                      Ir al Login
-                    </button>
-                  </div>
-                </div>
-              )}
+      <main className="flex flex-1 items-center justify-center px-6 py-12">
+        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#1b1b1b] p-8 shadow-2xl">
+          {status === 'loading' ? (
+            <div className="text-center">
+              <div className="mx-auto mb-4 h-14 w-14 animate-spin rounded-full border-4 border-white/20 border-b-[#ef232a]" />
+              <h2 className="mb-2 text-2xl font-bold">
+                {isInvite ? 'Validando invitacion...' : 'Verificando email...'}
+              </h2>
+              <p className="text-gray-400">Por favor espera mientras revisamos tu enlace.</p>
             </div>
+          ) : null}
 
-            {/* Información adicional */}
-            <div className="mt-8 text-center text-white">
-              <p className="text-sm">
-                ¿Necesitas ayuda?{' '}
-                <a href="/contact" className="underline hover:text-gray-300">
-                  Contáctanos
-                </a>
+          {status === 'form' || status === 'submitting' ? (
+            <>
+              <h1 className="mb-2 text-3xl font-bold">Activar cuenta</h1>
+              <p className="mb-6 text-gray-400">
+                Completa tus datos y crea tu contrasena para entrar a Global Oil.
               </p>
+
+              {invitation ? (
+                <div className="mb-5 rounded-lg border border-white/10 bg-black/30 p-4 text-sm text-gray-300">
+                  <div><span className="text-gray-500">Correo:</span> {invitation.email}</div>
+                  <div><span className="text-gray-500">Empresa:</span> {invitation.empresa_nombre || '-'}</div>
+                  {invitation.role_name ? (
+                    <div><span className="text-gray-500">Rol:</span> {invitation.role_name}</div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {message ? (
+                <div className="mb-4 rounded border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+                  {message}
+                </div>
+              ) : null}
+
+              <form className="grid gap-4" onSubmit={acceptInvitation}>
+                <label className="grid gap-2">
+                  <span>Nombre *</span>
+                  <input
+                    className="h-11 rounded border border-white/20 bg-black px-3 outline-none focus:border-[#ef232a] disabled:opacity-60"
+                    value={form.first_name}
+                    onChange={(e) => setForm((p) => ({ ...p, first_name: e.target.value }))}
+                    disabled={status === 'submitting'}
+                    required
+                  />
+                </label>
+
+                <label className="grid gap-2">
+                  <span>Apellido *</span>
+                  <input
+                    className="h-11 rounded border border-white/20 bg-black px-3 outline-none focus:border-[#ef232a] disabled:opacity-60"
+                    value={form.last_name}
+                    onChange={(e) => setForm((p) => ({ ...p, last_name: e.target.value }))}
+                    disabled={status === 'submitting'}
+                    required
+                  />
+                </label>
+
+                <label className="grid gap-2">
+                  <span>Contrasena *</span>
+                  <input
+                    type="password"
+                    className="h-11 rounded border border-white/20 bg-black px-3 outline-none focus:border-[#ef232a] disabled:opacity-60"
+                    value={form.password}
+                    onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+                    disabled={status === 'submitting'}
+                    required
+                    minLength={8}
+                  />
+                </label>
+
+                <label className="grid gap-2">
+                  <span>Confirmar contrasena *</span>
+                  <input
+                    type="password"
+                    className="h-11 rounded border border-white/20 bg-black px-3 outline-none focus:border-[#ef232a] disabled:opacity-60"
+                    value={form.password2}
+                    onChange={(e) => setForm((p) => ({ ...p, password2: e.target.value }))}
+                    disabled={status === 'submitting'}
+                    required
+                    minLength={8}
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  className="mt-2 h-12 rounded bg-[#ef232a] font-bold text-white hover:bg-[#d70d19] disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={status === 'submitting'}
+                >
+                  {status === 'submitting' ? 'Activando...' : 'Activar cuenta'}
+                </button>
+              </form>
+            </>
+          ) : null}
+
+          {status === 'success' ? (
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20 text-3xl text-green-300">OK</div>
+              <h2 className="mb-2 text-2xl font-bold">Listo</h2>
+              <p className="text-gray-300">{message}</p>
             </div>
-          </div>
+          ) : null}
+
+          {status === 'error' ? (
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20 text-3xl text-red-300">!</div>
+              <h2 className="mb-2 text-2xl font-bold">No se pudo verificar</h2>
+              <p className="mb-6 text-gray-300">{message}</p>
+              <button onClick={() => router.push('/users/login')} className="h-11 rounded border border-white/20 px-5">
+                Ir al login
+              </button>
+            </div>
+          ) : null}
         </div>
       </main>
-
-     
     </div>
   );
 }

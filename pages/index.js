@@ -1,13 +1,9 @@
-import { useEffect } from "react";
+import { useEffect } from 'react';
+import Router from 'next/router';
 
-import Router from "next/router";
-
-export default function RegisterPage() {
+export default function HomeRedirect() {
   useEffect(() => {
-    const { pathname } = Router;
-    if (pathname === "/") {
-      Router.push("/users/login");
-    }
-  });
-  return <></>;
+    Router.replace('/activesTree');
+  }, []);
+  return null;
 }

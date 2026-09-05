@@ -1,6 +1,6 @@
 // hooks/useSafeApi.js
-import { useState, useCallback } from 'react';
-import axios from 'axios';
+import { useCallback } from 'react';
+import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 
 export const useSafeApi = () => {
@@ -21,7 +21,6 @@ export const useSafeApi = () => {
       
       // Manejar diferentes tipos de errores
       if (error.response?.status === 401) {
-        console.log('🔐 Token expirado, cerrando sesión...');
         logout();
         return { data: null, error: 'Sesión expirada', response: null };
       }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../../shared/context/AuthContext';
 import { useRouter } from 'next/router';
 import { toast } from 'react-toastify';
+import { companiesService } from '@features/companies/infrastructure/companiesService';
+import RequirePermission from '@features/auth/presentation/RequirePermission';
 import {
   Box,
   Button,
@@ -18,7 +19,6 @@ import {
 } from '@mui/icons-material';
 
 const CompanyDetail = () => {
-  const { api } = useAuth();
   const router = useRouter();
   const { id } = router.query;
   const [loading, setLoading] = useState(true);
@@ -30,8 +30,8 @@ const CompanyDetail = () => {
 
     const fetchCompany = async () => {
       try {
-        const response = await api.get(`companies/${id}/`);
-        setCompany(response.data);
+        const data = await companiesService.getById(id);
+        setCompany(data);
       } catch (error) {
         toast.error('Error al cargar compañía: ' + (error.response?.data?.message || error.message));
         router.push('/managment-companies');
@@ -127,4 +127,10 @@ const CompanyDetail = () => {
   );
 };
 
-export default CompanyDetail;
+export default function ProtectedCompanyDetail(props) {
+  return (
+    <RequirePermission permissionsAny={['empresas.ver_todo_global', 'empresas.editar', 'empresas.crear']}>
+      <CompanyDetail {...props} />
+    </RequirePermission>
+  );
+}

@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '../../../shared/context/AuthContext';
 import { toast } from 'react-toastify';
-import Axios from 'axios';
-import { ArrowLeft, Save, Cpu, Trash2, Building, Folder, MapPin } from 'lucide-react';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+import { ArrowLeft, Save, Cpu, Trash2, MapPin } from 'lucide-react';
+import { companiesService } from '@features/companies/infrastructure/companiesService';
+import { foldersService } from '@features/asset-tree/infrastructure/foldersService';
+import { machinesService } from '@features/machines/infrastructure/machinesService';
 
 const EditMachine = () => {
   const router = useRouter();
@@ -27,7 +26,6 @@ const EditMachine = () => {
     descripcion: '',
     numero_serie: '',
     codigo_equipo: '',
-    estado: 'activo',
     empresa: '',
     carpeta: ''
   });
@@ -36,10 +34,9 @@ const EditMachine = () => {
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
-        const response = await Axios.get(`${API_URL}/companies/`);
-        setCompanies(response.data);
+        const data = await companiesService.list();
+        setCompanies(data);
       } catch (error) {
-        console.error('Error cargando empresas:', error);
         toast.error('Error al cargar empresas');
       }
     };
@@ -50,8 +47,7 @@ const EditMachine = () => {
   useEffect(() => {
     const fetchFolders = async () => {
       try {
-        const response = await Axios.get(`${API_URL}/folders/`);
-        const allFolders = response.data;
+        const allFolders = await foldersService.list();
         setFolders(allFolders);
         
         // Buscar la carpeta de la máquina
@@ -62,17 +58,14 @@ const EditMachine = () => {
           setCurrentMachineFolder(machineFolder);
           
           if (machineFolder) {
-            console.log('📂 Carpeta de la máquina:', machineFolder);
             
-            // Buscar la carpeta padre usando parentId o id_parent_node
-            const parentId = machineFolder.parentId || machineFolder.id_parent_node;
+            const parentId = machineFolder.id_parent_node;
             if (parentId) {
               const parentFolder = allFolders.find(folder => 
                 folder.id.toString() === parentId.toString() || 
                 folder.id_node === parentId.toString()
               );
               setCurrentParentFolder(parentFolder);
-              console.log('📁 Carpeta padre encontrada:', parentFolder);
               
               // Establecer la carpeta actual en el formulario
               setFormData(prev => ({
@@ -83,7 +76,7 @@ const EditMachine = () => {
           }
         }
       } catch (error) {
-        console.error('Error cargando carpetas:', error);
+        toast.error('Error al cargar carpetas');
       }
     };
     fetchFolders();
@@ -112,8 +105,7 @@ const EditMachine = () => {
         setLoading(true);
         setError(null);
 
-        const response = await Axios.get(`${API_URL}/machines/${id}/`);
-        const machineData = response.data;
+        const machineData = await machinesService.getById(id);
         
         setFormData(prev => ({
           ...prev,
@@ -121,13 +113,11 @@ const EditMachine = () => {
           descripcion: machineData.descripcion || '',
           numero_serie: machineData.numero_serie || '',
           codigo_equipo: machineData.codigo_equipo || '',
-          estado: machineData.estado || 'activo',
           empresa: machineData.empresa || ''
           // La carpeta se establece en el efecto de folders
         }));
 
       } catch (error) {
-        console.error('Error cargando máquina:', error);
         setError('No se pudo cargar la información de la máquina');
         toast.error('Error al cargar los datos de la máquina');
       } finally {
@@ -206,7 +196,7 @@ const EditMachine = () => {
     while (currentFolder) {
       path.unshift(currentFolder.nombre || currentFolder.name);
       
-      const parentId = currentFolder.parentId || currentFolder.id_parent_node;
+      const parentId = currentFolder.id_parent_node;
       if (!parentId || parentId === "-1") break;
       
       currentFolder = folders.find(f => 
@@ -242,14 +232,12 @@ const EditMachine = () => {
   // Función para actualizar la ubicación de la máquina en folders
   const updateMachineLocation = async (newParentFolderId) => {
     if (!currentMachineFolder) {
-      console.log('❌ No hay carpeta de máquina existente');
       return null;
     }
 
     try {
       const folderUpdateData = {
         nombre: formData.nombre,
-        parentId: newParentFolderId,
         id_parent_node: newParentFolderId,
         compania: parseInt(formData.empresa),
         typeFolder: 'machine',
@@ -257,17 +245,9 @@ const EditMachine = () => {
         machine: parseInt(id)
       };
 
-      console.log('🔄 Actualizando ubicación de carpeta:', folderUpdateData);
 
-      const response = await Axios.put(
-        `${API_URL}/folders/${currentMachineFolder.id}/`, 
-        folderUpdateData
-      );
-
-      console.log('✅ Ubicación actualizada:', response.data);
-      return response.data;
+      return await foldersService.update(currentMachineFolder.id, folderUpdateData);
     } catch (error) {
-      console.error('❌ Error actualizando ubicación:', error);
       throw error;
     }
   };
@@ -278,20 +258,15 @@ const EditMachine = () => {
       const folderData = {
         nombre: formData.nombre,
         typeFolder: 'machine',
-        parentId: parentFolderId,
         id_parent_node: parentFolderId,
         compania: parseInt(formData.empresa),
         isMachine: true,
         machine: parseInt(id)
       };
 
-      console.log('🆕 Creando nueva carpeta de máquina:', folderData);
 
-      const response = await Axios.post(`${API_URL}/folders/`, folderData);
-      console.log('✅ Carpeta creada:', response.data);
-      return response.data;
+      return await foldersService.create(folderData);
     } catch (error) {
-      console.error('❌ Error creando carpeta:', error);
       throw error;
     }
   };
@@ -319,11 +294,9 @@ const EditMachine = () => {
         empresa: parseInt(formData.empresa)
       };
 
-      console.log('📤 Enviando datos a machines:', machinePayload);
 
       // 1. Actualizar la máquina
-      const machineResponse = await Axios.put(`${API_URL}/machines/${id}/`, machinePayload);
-      console.log('✅ Máquina actualizada:', machineResponse.data);
+      await machinesService.update(id, machinePayload);
 
       // 2. Actualizar o crear la carpeta de la máquina si se seleccionó una carpeta
       if (formData.carpeta) {
@@ -346,7 +319,6 @@ const EditMachine = () => {
       }, 1000);
 
     } catch (error) {
-      console.error('❌ Error actualizando máquina:', error);
       const errorMessage = error.response?.data?.message || 
                           error.response?.data?.detail || 
                           error.message || 
@@ -366,17 +338,15 @@ const EditMachine = () => {
     try {
       // Primero eliminar la carpeta de la máquina si existe
       if (currentMachineFolder) {
-        await Axios.delete(`${API_URL}/folders/${currentMachineFolder.id}/`);
-        console.log('✅ Carpeta de máquina eliminada');
+        await foldersService.remove(currentMachineFolder.id);
       }
 
       // Luego eliminar la máquina
-      await Axios.delete(`${API_URL}/machines/${id}/`);
+      await machinesService.remove(id);
       
       toast.success('Máquina y carpeta eliminadas correctamente');
       router.push('/maquinas');
     } catch (error) {
-      console.error('Error eliminando máquina:', error);
       toast.error('Error al eliminar la máquina');
     }
   };
@@ -507,14 +477,11 @@ const EditMachine = () => {
               </div>
 
               {/* Estado */}
-              <div>
+              <div style={{ display: 'none' }}>
                 <label className="block text-sm font-medium text-white mb-2">
                   Estado
                 </label>
                 <select
-                  name="estado"
-                  value={formData.estado}
-                  onChange={handleChange}
                   className="w-full px-4 py-2 bg-[#1a1a1a] border border-[#444] rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 >
                   <option value="activo">Activo</option>
@@ -612,7 +579,7 @@ const EditMachine = () => {
                     <strong>Carpeta actual:</strong> {currentParentFolder.nombre || currentParentFolder.name}
                   </p>
                   <p className="text-xs text-blue-300 mt-1">
-                    <strong>Parent ID:</strong> {currentParentFolder.parentId || currentParentFolder.id_parent_node} | 
+                    <strong>Parent ID:</strong> {currentParentFolder.id_parent_node} |
                     <strong> ID:</strong> {currentParentFolder.id}
                   </p>
                 </div>
