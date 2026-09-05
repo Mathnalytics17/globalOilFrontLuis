@@ -127,8 +127,12 @@ function CreateCompany() {
 
     setLoading(true);
     try {
-      await companiesService.create(buildPayload());
-      toast.success('Empresa creada. Se envió la invitación al administrador inicial.');
+      const created = await companiesService.create(buildPayload());
+      if (created?.admin_invitation?.email_sent === false) {
+        toast.warning('Empresa creada. El correo no pudo enviarse y quedó pendiente para reenvío desde Seguridad > Invitaciones.');
+      } else {
+        toast.success('Empresa creada. Se envió la invitación al administrador inicial.');
+      }
       router.push('/managment-companies');
     } catch (error) {
       const data = error?.response?.data;
