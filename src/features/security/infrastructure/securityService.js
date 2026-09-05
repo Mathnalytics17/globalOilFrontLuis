@@ -46,6 +46,10 @@ export const securityService = {
       const { data } = await apiClient.delete(`/security/roles/${id}/`);
       return data;
     },
+    async reactivate(id) {
+      const { data } = await apiClient.post(`/security/roles/${id}/reactivate/`);
+      return data;
+    },
     async matrix() {
       const { data } = await apiClient.get('/security/roles/matrix/');
       return data;
@@ -71,6 +75,9 @@ export const securityService = {
     async update(id, payload) {
       const { data } = await apiClient.patch(`/security/user-profiles/${id}/`, payload);
       return data;
+    },
+    async remove(id, reason = '') {
+      await apiClient.delete(`/security/user-profiles/${id}/`, { data: { reason } });
     },
   },
 
@@ -135,6 +142,18 @@ export const securityService = {
     },
     async restoreWrite(id) {
       const { data } = await apiClient.post(`/security/users/${id}/restore-write/`);
+      return data;
+    },
+    async deactivate(id, reason = '') {
+      const { data } = await apiClient.post(`/security/users/${id}/deactivate/`, { reason });
+      return data;
+    },
+    async reactivate(id) {
+      const { data } = await apiClient.post(`/security/users/${id}/reactivate/`);
+      return data;
+    },
+    async reinvite(id, payload = {}) {
+      const { data } = await apiClient.post(`/security/users/${id}/reinvite/`, payload);
       return data;
     },
   },

@@ -17,11 +17,13 @@ import {
   RefreshCw,
   Search,
   X,
+  ShieldOff,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import { reviewInterpretationService } from '@features/samples/infrastructure/reviewInterpretationService';
 import { resultEntryService } from '@src/features/samples/infrastructure/resultEntryService';
+import { resultsService } from '@features/samples/infrastructure/resultsService';
 import { presentLimitBands } from '@utils/limitPresentation';
 
 const fmtDate = (value) => {
@@ -367,6 +369,26 @@ export default function ReviewResultsPage() {
     }
   };
 
+  const invalidateResult = async (row) => {
+    const resultId = row?.resultado?.id;
+    if (!resultId) {
+      toast.warning('Este ensayo todavía no tiene un resultado para invalidar.');
+      return;
+    }
+    const reason = window.prompt('Indique el motivo de invalidación. El resultado permanecerá en el historial:');
+    if (!reason?.trim()) return;
+    setSaving(true);
+    try {
+      await resultsService.invalidate(resultId, reason.trim());
+      toast.success('Resultado invalidado con trazabilidad.');
+      await loadBatch(selectedBatchId);
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || error?.response?.data?.reason?.[0] || 'No se pudo invalidar el resultado.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const completeBatch = async () => {
     if (!selectedBatchId) return;
     setSaving(true);
@@ -429,6 +451,15 @@ export default function ReviewResultsPage() {
 
   return (
     <div className="reviewPage">
+      {saving ? (
+        <div className="requestOverlay" role="status" aria-busy="true">
+          <div className="requestCard">
+            <RefreshCw className="requestSpinner" size={46} />
+            <strong>Guardando cambios...</strong>
+            <span>Espere un momento. No cierre ni actualice esta página.</span>
+          </div>
+        </div>
+      ) : null}
       <header className="reviewTop">
         <div className="titleBox">
           <button
@@ -601,6 +632,7 @@ export default function ReviewResultsPage() {
                     <button className="rulesButton" title="Ver reglas, límites y decisión" type="button" onClick={() => setLimitsModal(row)}><Eye size={15} /><span>Reglas</span></button>
                     <button title="Editar resultado" type="button" onClick={() => openEdit(row)}><Pencil size={15} /></button>
                     <button title="Ver historial" type="button" onClick={() => openHistory(row)}><History size={15} /></button>
+                    <button title="Invalidar resultado" type="button" onClick={() => invalidateResult(row)} disabled={!row?.resultado?.id || row?.resultado?.estatus === 'rechazado'}><ShieldOff size={15} /></button>
                     {row.is_revisada ? (
                       <span className="reviewedMini" title="Revisado"><Check size={14} /></span>
                     ) : (
@@ -766,6 +798,7 @@ export default function ReviewResultsPage() {
         .reviewContent{padding:18px 20px}.sampleHeader{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}.sampleHeader span{color:#aeb6c1}.sampleHeader h2{font-size:26px;margin:4px 0 12px}.sampleNav{display:flex;gap:8px;margin-bottom:12px}.sampleNav button{height:34px;border:1px solid #444;background:#111;color:#fff;border-radius:7px;padding:0 10px;cursor:pointer}.sampleNav button:disabled{opacity:.45;cursor:not-allowed}.sampleMeta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;border:1px solid #333;border-radius:9px;padding:12px;margin-bottom:12px}.info .value{font-size:14px;font-weight:800}
         .resultsTable{border:1px solid #333;border-radius:9px;overflow:auto;max-height:calc(100vh - 310px);scrollbar-gutter:stable}.resultsRow{display:grid;grid-template-columns:minmax(125px,.8fr) minmax(520px,3.6fr) minmax(145px,1fr) minmax(105px,.75fr) minmax(145px,1fr);align-items:stretch;border-top:1px solid #303030;min-width:1120px}.resultsRow:first-child{border-top:0}.resultsRow>div{padding:14px 12px;min-width:0}.resultsRow.head{position:sticky;top:0;z-index:5;background:#242424;color:#bdbdbd;text-transform:uppercase;font-size:11px;font-weight:800;letter-spacing:.04em}.resultsRow strong,.resultsRow small{display:block}.resultsRow small{color:#aaa;margin-top:3px}.testIdentity,.criterionCell,.technicalCell,.reviewAndActions{display:flex;flex-direction:column;justify-content:center}.testIdentity>strong{font-size:15px}.criterionCell{border-left:1px solid #292929}.criterionCell small{color:#929aa6;font-size:10px;text-transform:uppercase;letter-spacing:.07em;margin:0 0 5px}.criterionCell strong{color:#e5e7eb;font-size:13px;line-height:1.35}.technicalCell{align-items:flex-start;gap:5px}.reviewAndActions{align-items:stretch;gap:9px;border-left:1px solid #292929}.reviewAndActions>.pill{align-self:flex-start}.evaluationCell{padding:0!important;border-left:1px solid #292929}.resultGroup{padding:10px 12px;border-top:1px solid #31343a}.resultGroup:first-child{border-top:0}.resultGroupTitle{color:#f3f4f6;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px}.fieldEvaluation{display:grid;grid-template-columns:minmax(82px,.65fr) minmax(76px,.55fr) minmax(225px,2fr) minmax(105px,.8fr);gap:10px;align-items:center;padding:7px 0;border-top:1px solid #292c31}.fieldEvaluation.fieldHead{padding:0 0 5px;border-top:0;color:#7f8996;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}.fieldEvaluation.fieldHead+.fieldEvaluation{border-top:0}.fieldName{font-size:12px;color:#d9dee7;text-transform:uppercase}.measured{font-size:16px;color:#fff}.limitZones{display:flex;flex-wrap:wrap;gap:5px 10px}.zone{display:inline-flex;align-items:center;gap:4px;color:#9ca3af;font-size:10px;line-height:1.25}.zone i{width:7px;height:7px;border-radius:2px;background:#22c55e;flex:0 0 auto}.zone b{color:#e5e7eb}.zone.warning i{background:#eab308}.zone.critical i{background:#ef232a}.fieldStatus{display:inline-flex;align-items:center;border-radius:999px;border:1px solid #4a4a4a;padding:3px 7px;font-size:9px;font-weight:900;white-space:nowrap}.fieldStatus.ok{color:#86efac;border-color:rgba(34,197,94,.45);background:rgba(22,101,52,.25)}.fieldStatus.alert,.fieldStatus.critical{color:#fecaca;border-color:rgba(239,35,42,.55);background:rgba(127,29,29,.25)}.fieldStatus.warning{color:#fde047;border-color:rgba(234,179,8,.5);background:rgba(113,63,18,.25)}.fieldReason{font-size:10px!important;line-height:1.25;margin-top:4px!important}.evaluationFallback{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:70px;padding:12px}.evaluationFallback span{color:#aeb6c1;font-size:12px}.redText{color:#ff4b52;font-weight:900}.rowActions{display:flex!important;gap:6px;flex-wrap:wrap}.rowActions.compact{align-items:center}.rowActions button{min-height:30px;border:1px solid #3d3d3d;background:#141414;color:#fff;border-radius:7px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;cursor:pointer}.rowActions button:disabled{opacity:.45}.reviewedMini{min-height:30px;display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(34,197,94,.45);background:rgba(22,101,52,.25);color:#86efac;border-radius:7px;padding:0 8px;font-size:13px;font-weight:800}
         .empty{min-height:120px;display:grid;place-items:center;color:#a3a3a3;text-align:center}.empty.big{grid-column:1/-1}
+        .requestOverlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.8);backdrop-filter:blur(3px);display:grid;place-items:center;padding:20px;cursor:wait}.requestCard{width:min(430px,92vw);min-height:210px;border:1px solid #494949;background:linear-gradient(180deg,#202020,#121212);border-radius:14px;box-shadow:0 30px 90px rgba(0,0,0,.7);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;text-align:center;padding:26px}.requestCard strong{font-size:18px}.requestCard span{color:#b8b8b8;font-size:13px}.requestSpinner{color:#ef232a;animation:requestSpin .8s linear infinite}@keyframes requestSpin{to{transform:rotate(360deg)}}
         .modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;z-index:100;padding:24px}.historyModal,.editModal{width:min(900px,96vw);max-height:86vh;overflow:auto;border:1px solid #3d3d3d;background:linear-gradient(180deg,#1b1b1b,#101010);border-radius:10px;box-shadow:0 28px 80px rgba(0,0,0,.55);padding:16px}.editModal{width:min(620px,96vw)}.modalHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.modalHead h3{margin:0}.modalHead button{background:transparent;border:0;color:#fff;cursor:pointer}
         .historySummary{display:flex;align-items:baseline;gap:10px;border:1px solid #333;background:#111;border-radius:8px;padding:10px 12px;margin-bottom:10px}.historySummary span{color:#aaa;text-transform:uppercase;font-size:12px;letter-spacing:.08em}.historySummary strong{font-size:22px;color:#ff4b52}.historySummary small{color:#bbb}.historyTable{border:1px solid #333;border-radius:8px;overflow:auto}.historyRow{display:grid;grid-template-columns:.85fr 1fr 1fr 1.3fr 1.7fr;border-top:1px solid #303030}.historyRow:first-child{border-top:0}.historyRow>div{padding:11px}.historyRow.head{background:#242424;color:#bdbdbd;font-size:12px;text-transform:uppercase;font-weight:800}.historyType{display:inline-flex;border-radius:999px;border:1px solid #444;background:#222;padding:4px 8px;font-size:12px;font-weight:800}.historyType.correction{border-color:rgba(239,35,42,.45);color:#fecaca;background:rgba(127,29,29,.25)}.historyType.revision{border-color:rgba(34,197,94,.45);color:#86efac;background:rgba(22,101,52,.25)}
         .editFields{display:grid;gap:12px}.editFields label{display:grid;gap:6px}.editFields span{color:#d1d5db;font-weight:800}.unitInput{display:grid;grid-template-columns:1fr 80px}.unitInput input,.editFields textarea{min-height:40px;border:1px solid #454545;background:#080808;color:#fff;border-radius:8px 0 0 8px;padding:0 10px}.unitInput em{display:grid;place-items:center;border:1px solid #454545;border-left:0;border-radius:0 8px 8px 0;color:#ddd;font-style:normal}.editFields textarea{border-radius:8px;min-height:95px;padding:10px;resize:vertical}.modalActions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}

@@ -72,10 +72,13 @@ const CompanyTable = () => {
   const handleToggleCompanyStatus = async (company) => {
     if (window.confirm(`¿Estás seguro de ${company.is_active ? 'desactivar' : 'activar'} la compañía "${company.nombre}"?`)) {
       try {
-        // Usar PATCH en lugar de DELETE para actualizar solo el campo is_active
-        const updatedCompany = await companiesService.patch(company.id, {
-          is_active: !company.is_active
-        });
+        let updatedCompany;
+        if (company.is_active) {
+          await companiesService.remove(company.id);
+          updatedCompany = { ...company, is_active: false, status: 'INACTIVE' };
+        } else {
+          updatedCompany = await companiesService.restoreActive(company.id);
+        }
         
         // Actualizar el estado local con la respuesta del servidor
         setCompanies(prev => prev.map(comp => 
@@ -89,16 +92,24 @@ const CompanyTable = () => {
     }
   };
 
-  // CORREGIDO: Manejar eliminación real (si es necesario)
-  const handleDeleteCompany = async (company) => {
-    if (window.confirm(`¿Estás seguro de ELIMINAR permanentemente la compañía "${company.nombre}"? Esta acción no se puede deshacer.`)) {
-      try {
-        await companiesService.remove(company.id);
-        toast.success('Compañía eliminada permanentemente');
-        fetchCompanies(); // Recargar la lista
-      } catch (error) {
-        toast.error('Error al eliminar compañía: ' + (error.response?.data?.message || error.message));
+  const handleCompanyMode = async (company, mode) => {
+    try {
+      let updated;
+      if (mode === 'block') {
+        const reason = window.prompt(`Motivo para bloquear "${company.nombre}":`);
+        if (reason === null) return;
+        if (!reason.trim()) return toast.error('El motivo es obligatorio para auditoría.');
+        updated = await companiesService.block(company.id, reason.trim());
+      } else if (mode === 'readonly') {
+        if (!window.confirm(`¿Poner "${company.nombre}" en modo solo lectura?`)) return;
+        updated = await companiesService.readOnly(company.id);
+      } else {
+        updated = await companiesService.restoreActive(company.id);
       }
+      setCompanies((prev) => prev.map((item) => item.id === company.id ? updated : item));
+      toast.success('Estado de la compañía actualizado.');
+    } catch (error) {
+      toast.error('No se pudo cambiar el estado: ' + (error.response?.data?.detail || error.message));
     }
   };
 
@@ -327,11 +338,11 @@ const CompanyTable = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          company.is_active 
+                          company.status === 'ACTIVE' && company.is_active
                             ? 'bg-green-900 text-green-200' 
                             : 'bg-red-900 text-red-200'
                         }`}>
-                          {company.is_active ? 'Activo' : 'Inactivo'}
+                          {company.status === 'BLOCKED' ? 'Bloqueada' : company.status === 'READ_ONLY' ? 'Solo lectura' : company.is_active ? 'Activa' : 'Inactiva'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -357,8 +368,7 @@ const CompanyTable = () => {
                             </svg>
                           </button>
 
-                          {/* CORREGIDO: Usar handleToggleCompanyStatus en lugar de handleDeleteCompany */}
-                          {company.is_active ? (
+                          {company.status === 'ACTIVE' && company.is_active ? (
                             <button
                               onClick={() => handleToggleCompanyStatus(company)}
                               className="text-red-400 hover:text-red-300 transition-colors duration-200 p-1 rounded"
@@ -379,6 +389,9 @@ const CompanyTable = () => {
                               </svg>
                             </button>
                           )}
+                          {company.status === 'ACTIVE' ? <button onClick={() => handleCompanyMode(company, 'readonly')} className="text-blue-400 hover:text-blue-300 p-1" title="Modo solo lectura">Solo lectura</button> : null}
+                          {company.status === 'ACTIVE' ? <button onClick={() => handleCompanyMode(company, 'block')} className="text-orange-400 hover:text-orange-300 p-1" title="Bloquear con motivo">Bloquear</button> : null}
+                          {['BLOCKED', 'READ_ONLY'].includes(company.status) ? <button onClick={() => handleCompanyMode(company, 'restore')} className="text-green-400 hover:text-green-300 p-1" title="Restaurar estado activo">Restaurar</button> : null}
                         </div>
                       </td>
                     </tr>

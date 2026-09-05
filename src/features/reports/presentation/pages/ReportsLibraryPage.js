@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -269,6 +270,22 @@ export default function ReportsPage() {
     }
   };
 
+  const annulReport = async (report) => {
+    const reason = window.prompt(`Motivo para anular ${report.consecutivo} v${report.version}:`);
+    if (reason === null) return;
+    if (!reason.trim()) return toast.error('El motivo es obligatorio.');
+    try {
+      setActionBusy({ message: 'Anulando reporte...' });
+      await reportsService.annul(report.id, reason.trim());
+      toast.success('Reporte anulado. Su historial se conserva.');
+      await loadReports();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'No se pudo anular el reporte.');
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
   return (
     <div className="reportsPage">
       {actionBusy ? (
@@ -396,6 +413,7 @@ export default function ReportsPage() {
                                   </>
                                 ) : null}
                                 <button onClick={() => router.push(`/muestras/interpretacion?lote=${report.lote_id}&muestra=${report.muestra_id}&fromReport=${report.id}`)} title="Modificar desde interpretación"><Settings size={15} /></button>
+                                {!report.fecha_envio && !report.visible_cliente && report.estatus !== 'anulado' ? <button onClick={() => annulReport(report)} title="Anular reporte con motivo"><Trash2 size={15} /></button> : null}
                               </div>
                             </td>
                           </tr>

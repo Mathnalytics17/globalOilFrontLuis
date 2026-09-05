@@ -39,4 +39,14 @@ export const samplesService = {
     const { data } = await apiClient.get(`/lubrication/samples/${id}/history/`);
     return Array.isArray(data) ? data : data.results || [];
   },
+
+  async invalidate(id, reason) {
+    const { data } = await apiClient.post(`/lubrication/samples/${id}/invalidate/`, { reason });
+    return data;
+  },
+
+  async reactivate(id, reason) {
+    const { data } = await apiClient.post(`/lubrication/samples/${id}/reactivate/`, { reason });
+    return data;
+  },
 };

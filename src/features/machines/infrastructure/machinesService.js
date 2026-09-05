@@ -36,4 +36,8 @@ export const machinesService = {
     const { data } = await apiClient.delete(`/machines/${id}/`);
     return data;
   },
+  async reactivate(id) {
+    const { data } = await apiClient.post(`/machines/${id}/reactivate/`);
+    return data;
+  },
 };
