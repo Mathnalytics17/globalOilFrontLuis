@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -20,16 +24,58 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@components/*": ["./shared/components/*"],
-      "@context/*": ["./shared/context/*"],
-      "@formats/*": ["./shared/formats/*"],
-      "@hooks/*": ["./shared/hooks/*"],
-      "@lib/*": ["./shared/lib/*"],
-      "@schemas/*": ["./shared/schemas/*"],
-      "@styles/*": ["./styles/*"],
-      "@views/*": ["./views/*"]
+      "@app/*": [
+        "./src/app/*"
+      ],
+      "@entities/*": [
+        "./src/entities/*"
+      ],
+      "@features/*": [
+        "./src/features/*"
+      ],
+      "@infrastructure/*": [
+        "./src/infrastructure/*"
+      ],
+      "@src/*": [
+        "./src/*"
+      ],
+      "@shared/*": [
+        "./src/shared/*"
+      ],
+      "@components/*": [
+        "./shared/components/*"
+      ],
+      "@context/*": [
+        "./shared/context/*"
+      ],
+      "@formats/*": [
+        "./shared/formats/*"
+      ],
+      "@hooks/*": [
+        "./shared/hooks/*"
+      ],
+      "@lib/*": [
+        "./shared/lib/*"
+      ],
+      "@schemas/*": [
+        "./shared/schemas/*"
+      ],
+      "@styles/*": [
+        "./styles/*"
+      ],
+      "@utils/*": [
+        "./shared/utils/*"
+      ]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next-build/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

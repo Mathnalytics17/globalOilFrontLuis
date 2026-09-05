@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { 
-  Box, Typography, Table, TableBody, TableCell, TableRow, Paper, 
-  TextField, Button, Divider, Dialog, DialogActions, 
-  DialogContent, DialogTitle, CircularProgress, IconButton, Chip,
-  Select, MenuItem, FormControl, InputLabel, Grid, Tabs, Tab
-} from '@mui/material';
-import { Edit, Save, Close, PictureAsPdf, ArrowBack } from '@mui/icons-material';
 import { useAuth } from '../../../shared/context/AuthContext';
 import { toast } from 'react-toastify';
-import TextEditor from '../../../shared/components/blockAdvancedText';
+import dynamic from 'next/dynamic';
 
-const SignaturePad = ({ onSave }) => {
+// Importar ReactQuill de forma din?mica para evitar SSR
+const ReactQuill = dynamic(() => import('react-quill'), {
+  ssr: false,
+  loading: () => <div>Cargando editor...</div>
+});
+
+import 'react-quill/dist/quill.snow.css';
+
+// Componente SignaturePad
+const SignaturePad = ({ onSave, onClose }) => {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
 
@@ -47,1062 +49,831 @@ const SignaturePad = ({ onSave }) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 
+  const saveSignature = () => {
+    const canvas = canvasRef.current;
+    const signatureData = canvas.toDataURL();
+    onSave(signatureData);
+  };
+
   return (
-    <Box>
-      <canvas
-        ref={canvasRef}
-        width={500}
-        height={200}
-        style={{ border: '1px solid #000' }}
-        onMouseDown={startDrawing}
-        onMouseMove={draw}
-        onMouseUp={endDrawing}
-        onMouseLeave={endDrawing}
-      />
-      <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
-        <Button onClick={clearSignature}>Limpiar</Button>
-        <Button 
-          variant="contained" 
-          onClick={() => onSave(canvasRef.current.toDataURL())}
+    <div className="bg-white p-6 rounded-lg w-96 max-w-[90vw]">
+      <h3 className="text-lg font-bold mb-4">Firmar Documento</h3>
+      <div className="border-2 border-gray-300 rounded-lg mb-4 bg-white">
+        <canvas
+          ref={canvasRef}
+          width={350}
+          height={200}
+          className="w-full bg-white touch-none"
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={endDrawing}
+          onMouseLeave={endDrawing}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            startDrawing(e.touches[0]);
+          }}
+          onTouchMove={(e) => {
+            e.preventDefault();
+            draw(e.touches[0]);
+          }}
+          onTouchEnd={endDrawing}
+        />
+      </div>
+      <div className="flex flex-col sm:flex-row justify-between gap-2">
+        <button
+          onClick={clearSignature}
+          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 flex-1"
+        >
+          Limpiar
+        </button>
+        <button
+          onClick={onClose}
+          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 flex-1"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={saveSignature}
+          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 flex-1"
         >
           Guardar Firma
-        </Button>
-      </Box>
-    </Box>
+        </button>
+      </div>
+      <p className="text-xs text-gray-500 mt-2 text-center">
+        Firma en el ?rea arriba. Funciona con mouse y pantallas t?ctiles.
+      </p>
+    </div>
   );
 };
 
-const PartsPerMillionCalculator = ({ onViscositySelect }) => {
-  const [selectedViscosityType, setSelectedViscosityType] = useState('');
-  const [viscosityLimits, setViscosityLimits] = useState([]);
-  const { api } = useAuth();
+// Evalua el snapshot dinamico resuelto por backend.
+const evaluateResult = (valor, limites) => {
+  if (!limites || valor === null || valor === undefined || valor === '') {
+    return { status: 'pending', comment: 'PENDIENTE' };
+  }
 
-  useEffect(() => {
-    const fetchViscosityLimits = async () => {
-      try {
-        const response = await api.get('limites-viscosidad/');
-        setViscosityLimits(response.data);
-        if (response.data.length > 0) {
-          setSelectedViscosityType(response.data[0].tipo);
-          if (onViscositySelect) {
-            onViscositySelect(response.data[0]);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading viscosity limits:', error);
-        toast.error('Error al cargar límites de viscosidad');
-      }
-    };
+  const numericValue = Number(valor);
+  if (!Number.isFinite(numericValue)) {
+    return { status: 'normal', comment: 'NORMAL' };
+  }
 
-    fetchViscosityLimits();
-  }, [api]);
+  const minimum = limites.minimo === null || limites.minimo === undefined ? null : Number(limites.minimo);
+  const maximum = limites.maximo === null || limites.maximo === undefined ? null : Number(limites.maximo);
+  let complies = true;
 
-  const handleViscosityChange = (e) => {
-    const selectedType = e.target.value;
-    setSelectedViscosityType(selectedType);
-    const selectedLimit = viscosityLimits.find(l => l.tipo === selectedType);
-    if (selectedLimit && onViscositySelect) {
-      onViscositySelect(selectedLimit);
-    }
-  };
+  switch (limites.operador) {
+    case 'rango': complies = numericValue >= minimum && numericValue <= maximum; break;
+    case 'menor': complies = numericValue < maximum; break;
+    case 'menor_igual': complies = numericValue <= maximum; break;
+    case 'mayor': complies = numericValue > minimum; break;
+    case 'mayor_igual': complies = numericValue >= minimum; break;
+    case 'igual': complies = numericValue === minimum; break;
+    case 'texto': return { status: 'normal', comment: 'NORMAL' };
+    default: return { status: 'pending', comment: 'PENDIENTE' };
+  }
 
-  return (
-    <Box sx={{ p: 2, border: '1px solid #ddd', borderRadius: 1, mb: 3 }}>
-      <Typography variant="h6" sx={{ mb: 2 }}>Cálculo Partes por Millón</Typography>
-      
-      <FormControl fullWidth sx={{ mb: 2 }}>
-        <InputLabel>Tipo de Viscosidad</InputLabel>
-        <Select
-          value={selectedViscosityType}
-          onChange={handleViscosityChange}
-          label="Tipo de Viscosidad"
-        >
-          {viscosityLimits.map((limit) => (
-            <MenuItem key={limit.id} value={limit.tipo}>
-              {limit.tipo}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-
-      {selectedViscosityType && (
-        <Table sx={{ mt: 2 }}>
-          <TableBody>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>vmin</TableCell>
-              <TableCell>
-                {viscosityLimits.find(l => l.tipo === selectedViscosityType)?.vmin || 'N/A'}
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>vmax</TableCell>
-              <TableCell>
-                {viscosityLimits.find(l => l.tipo === selectedViscosityType)?.vmax || 'N/A'}
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>iv1</TableCell>
-              <TableCell>
-                {viscosityLimits.find(l => l.tipo === selectedViscosityType)?.iv1 || 'N/A'}
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>iv2</TableCell>
-              <TableCell>
-                {viscosityLimits.find(l => l.tipo === selectedViscosityType)?.iv2 || 'N/A'}
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      )}
-    </Box>
-  );
+  return complies
+    ? { status: 'normal', comment: 'NORMAL' }
+    : { status: 'warning', comment: 'NO DESEADO' };
 };
-
-const TestMetricsCalculator = ({ onQualitySelect }) => {
-  const [selectedQualityType, setSelectedQualityType] = useState('');
-  const [qualityLimits, setQualityLimits] = useState([]);
-  const { api } = useAuth();
-
-  useEffect(() => {
-    const fetchQualityLimits = async () => {
-      try {
-        const response = await api.get('limites-calidad/');
-        setQualityLimits(response.data);
-        if (response.data.length > 0) {
-          setSelectedQualityType(response.data[0].tipo);
-          if (onQualitySelect) {
-            onQualitySelect(response.data[0]);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading quality limits:', error);
-        toast.error('Error al cargar límites de calidad');
-      }
-    };
-
-    fetchQualityLimits();
-  }, [api]);
-
-  const handleQualityChange = (e) => {
-    const selectedType = e.target.value;
-    setSelectedQualityType(selectedType);
-    const selectedLimit = qualityLimits.find(l => l.tipo === selectedType);
-    if (selectedLimit && onQualitySelect) {
-      onQualitySelect(selectedLimit);
-    }
-  };
-
-  return (
-    <Box sx={{ p: 2, border: '1px solid #ddd', borderRadius: 1 }}>
-      <Typography variant="h6" sx={{ mb: 2 }}>Métricas de Prueba</Typography>
-      
-      <FormControl fullWidth sx={{ mb: 2 }}>
-        <InputLabel>Tipo de Calidad</InputLabel>
-        <Select
-          value={selectedQualityType}
-          onChange={handleQualityChange}
-          label="Tipo de Calidad"
-        >
-          {qualityLimits.map((limit) => (
-            <MenuItem key={limit.id} value={limit.tipo}>
-              {limit.tipo}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-
-      {selectedQualityType && (
-        <Table sx={{ mt: 2 }}>
-          <TableBody>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>Espuma 1</TableCell>
-              <TableCell>
-                {qualityLimits.find(l => l.tipo === selectedQualityType)?.espuma1 || 'N/A'}
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>Espuma 2</TableCell>
-              <TableCell>
-                {qualityLimits.find(l => l.tipo === selectedQualityType)?.espuma2 || 'N/A'}
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>Espuma 3</TableCell>
-              <TableCell>
-                {qualityLimits.find(l => l.tipo === selectedQualityType)?.espuma3 || 'N/A'}
-              </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>Chispa</TableCell>
-              <TableCell>
-                {qualityLimits.find(l => l.tipo === selectedQualityType)?.chispa || 'N/A'}
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      )}
-    </Box>
-  );
-};
-
-const ViscosityCalculator = () => {
-  const [pmccAceite, setPmccAceite] = useState(210);
-  const [pmccComb, setPmccComb] = useState(52);
-  const [bf, setBf] = useState(4.966665572);
-  const [combustible, setCombustible] = useState(35.65);
-  
-  const calculatePmccFinal = () => {
-    const term1 = pmccAceite * 0.8;
-    const term2 = pmccComb * 1.2;
-    return ((term1 * (1 - combustible/100)) + (term2 * (combustible/100))).toFixed(2);
-  };
-  
-  const calculateBfFormula = () => {
-    return (bf * 0.95).toFixed(6);
-  };
-
-  return (
-    <Box sx={{ p: 2, border: '1px solid #ddd', borderRadius: 1, mb: 3 }}>
-      <Typography variant="h6" sx={{ mb: 2 }}>Cálculo de Viscosidad</Typography>
-      <Grid container spacing={2}>
-        <Grid item xs={6}>
-          <TextField
-            label="PMCC Aceite"
-            type="number"
-            value={pmccAceite}
-            onChange={(e) => setPmccAceite(Number(e.target.value))}
-            fullWidth
-          />
-        </Grid>
-        <Grid item xs={6}>
-          <TextField
-            label="PMCC Comb"
-            type="number"
-            value={pmccComb}
-            onChange={(e) => setPmccComb(Number(e.target.value))}
-            fullWidth
-          />
-        </Grid>
-        <Grid item xs={6}>
-          <TextField
-            label="BF"
-            type="number"
-            value={bf}
-            onChange={(e) => setBf(Number(e.target.value))}
-            fullWidth
-          />
-        </Grid>
-        <Grid item xs={6}>
-          <TextField
-            label="% Combustible"
-            type="number"
-            value={combustible}
-            onChange={(e) => setCombustible(Number(e.target.value))}
-            fullWidth
-          />
-        </Grid>
-      </Grid>
-      
-      <Table sx={{ mt: 2 }}>
-        <TableBody>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 'bold' }}>PMCC Comb</TableCell>
-            <TableCell>{pmccComb}</TableCell>
-            <TableCell>{calculateBfFormula()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 'bold' }}>PMCC Aceite</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>PMCC Final</TableCell>
-            <TableCell>{pmccAceite}</TableCell>
-            <TableCell>{calculatePmccFinal()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 'bold' }}>% Combustible</TableCell>
-            <TableCell>{combustible}%</TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    </Box>
-  );
-};
-
-const PerformanceCalculator = () => {
-  const [selectedCode, setSelectedCode] = useState('23/21/17');
-  
-  const isoTableData = [
-    { 
-      code: '23/21/17', 
-      system: 'Sistemas de baja presión con márgenes grandes.', 
-      components: 'Bombas de pistón', 
-      sensitivity: 'Baja', 
-      um4: 23, 
-      um6: 21, 
-      um14: 17 
-    },
-    { 
-      code: '20/18/15', 
-      system: 'Pureza típica de aceite hidráulico nuevo directo del fabricante.', 
-      components: 'Válvulas de control de flujo. Cilindros', 
-      sensitivity: 'Promedio', 
-      um4: 20, 
-      um6: 18, 
-      um14: 15 
-    },
-  ];
-
-  const selectedData = isoTableData.find(item => item.code === selectedCode) || isoTableData[0];
-  const pistonPumpTable = [
-    { code: selectedCode, system: selectedData.system, sensitivity: selectedData.sensitivity },
-  ];
-
-  return (
-    <Box sx={{ p: 2, border: '1px solid #ddd', borderRadius: 1 }}>
-      <Typography variant="h6" sx={{ mb: 2 }}>Cálculo de Desempeño</Typography>
-      
-      <FormControl fullWidth sx={{ mb: 2 }}>
-        <InputLabel>Código ISO</InputLabel>
-        <Select
-          value={selectedCode}
-          onChange={(e) => setSelectedCode(e.target.value)}
-          label="Código ISO"
-        >
-          <MenuItem value="23/21/17">23/21/17</MenuItem>
-          <MenuItem value="20/18/15">20/18/15</MenuItem>
-          <MenuItem value="19/17/14">19/17/14</MenuItem>
-          <MenuItem value="18/16/13">18/16/13</MenuItem>
-          <MenuItem value="17/15/12">17/15/12</MenuItem>
-          <MenuItem value="16/14/11">16/14/11</MenuItem>
-          <MenuItem value="15/13/09">15/13/09</MenuItem>
-        </Select>
-      </FormControl>
-      
-      <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>Información del Código ISO</Typography>
-      <Table sx={{ mb: 3 }}>
-        <TableBody>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 'bold' }}>Tipo de sistema</TableCell>
-            <TableCell>{selectedData.system}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 'bold' }}>Componentes típicos</TableCell>
-            <TableCell>{selectedData.components}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 'bold' }}>Sensibilidad</TableCell>
-            <TableCell>{selectedData.sensitivity}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 'bold' }}>4um</TableCell>
-            <TableCell>{selectedData.um4}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 'bold' }}>6um</TableCell>
-            <TableCell>{selectedData.um6}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 'bold' }}>14um</TableCell>
-            <TableCell>{selectedData.um14}</TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-
-      <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>Bombas de pistón</Typography>
-      <Table>
-        <TableBody>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 'bold' }}>Código</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Sistema</TableCell>
-            <TableCell sx={{ fontWeight: 'bold' }}>Sensibilidad</TableCell>
-          </TableRow>
-          {pistonPumpTable.map((row, index) => (
-            <TableRow key={index}>
-              <TableCell>{row.code}</TableCell>
-              <TableCell>{row.system}</TableCell>
-              <TableCell>{row.sensitivity}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </Box>
-  );
-};
-
 const AnalysisReport = () => {
   const router = useRouter();
-  const sampleId = router.query.muestra;
-  const { api } = useAuth();
-  const [allResults, setAllResults] = useState([]);
-  const [allSamples, setAllSamples] = useState([]);
-  const [filteredResults, setFilteredResults] = useState([]);
+  const { muestra } = router.query;
+  const { api, user } = useAuth();
   const [sampleData, setSampleData] = useState(null);
+  const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showLimits, setShowLimits] = useState(false);
+  
+  // Estados para contenido editable
+  const [editedResults, setEditedResults] = useState({});
+  const [editedComments, setEditedComments] = useState({});
+  const [reportComments, setReportComments] = useState('');
+  const [reportConclusions, setReportConclusions] = useState('');
+  const [companyName, setCompanyName] = useState('Global Oil');
+  const [responsibleName, setResponsibleName] = useState('Ing. Santiago Quintero');
+  
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  
+  // Estados para firma - AHORA SOLO USAMOS BASE64
   const [signature, setSignature] = useState(null);
-  const [openSignatureDialog, setOpenSignatureDialog] = useState(false);
-  const [predefinedComments, setPredefinedComments] = useState([]);
-  const reportRef = useRef();
-  const [commentContent, setCommentContent] = useState([
-    { type: 'paragraph', text: 'Ingrese comentarios aquí...' }
-  ]);
-  const [showLimits, setShowLimits] = useState(true);
-  const [activeTab, setActiveTab] = useState(0);
-  const [activeToolTab, setActiveToolTab] = useState(0);
-  const [selectedViscosity, setSelectedViscosity] = useState(null);
-  const [selectedQuality, setSelectedQuality] = useState(null);
+  const [signaturePath, setSignaturePath] = useState(null);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
 
-  // Función para actualizar los límites en los resultados
-  const updateLimitsInResults = () => {
-    setFilteredResults(prevResults => 
-      prevResults.map(result => {
-        // Actualizar VIS100 con los límites de viscosidad
-        if (result.prueba_muestra.prueba?.codigo === 'VIS100' && selectedViscosity) {
-          return {
-            ...result,
-            prueba_muestra: {
-              ...result.prueba_muestra,
-              prueba: {
-                ...result.prueba_muestra.prueba,
-                relaciones: [{
-                  ...result.prueba_muestra.prueba.relaciones[0],
-                  limite_data: selectedViscosity
-                }]
-              }
-            }
-          };
-        }
-        // Actualizar IV con los límites de viscosidad
-        if (result.prueba_muestra.prueba?.codigo === 'IV' && selectedViscosity) {
-          return {
-            ...result,
-            prueba_muestra: {
-              ...result.prueba_muestra,
-              prueba: {
-                ...result.prueba_muestra.prueba,
-                relaciones: [{
-                  ...result.prueba_muestra.prueba.relaciones[0],
-                  limite_data: {
-                    ...result.prueba_muestra.prueba.relaciones[0]?.limite_data,
-                    vmin: selectedViscosity.iv2,
-                    vmax: selectedViscosity.iv2
-                  }
-                }]
-              }
-            }
-          };
-        }
-        // Actualizar ESP1, ESP2, ESP3 con los límites de calidad
-        if (['ESP1', 'ESP2', 'ESP3'].includes(result.prueba_muestra.prueba?.codigo) && selectedQuality) {
-          const field = result.prueba_muestra.prueba?.codigo.toLowerCase();
-          return {
-            ...result,
-            prueba_muestra: {
-              ...result.prueba_muestra,
-              prueba: {
-                ...result.prueba_muestra.prueba,
-                relaciones: [{
-                  ...result.prueba_muestra.prueba.relaciones[0],
-                  limite_data: {
-                    ...result.prueba_muestra.prueba.relaciones[0]?.limite_data,
-                    vmin: selectedQuality[field] || null,
-                    vmax: selectedQuality[field] || null
-                  }
-                }]
-              }
-            }
-          };
-        }
-        // Actualizar PCHISPA con los límites de calidad
-        if (result.prueba_muestra.prueba?.codigo === 'PCHISPA' && selectedQuality) {
-          return {
-            ...result,
-            prueba_muestra: {
-              ...result.prueba_muestra,
-              prueba: {
-                ...result.prueba_muestra.prueba,
-                relaciones: [{
-                  ...result.prueba_muestra.prueba.relaciones[0],
-                  limite_data: {
-                    ...result.prueba_muestra.prueba.relaciones[0]?.limite_data,
-                    vmin: selectedQuality.chispa || null,
-                    vmax: selectedQuality.chispa || null
-                  }
-                }]
-              }
-            }
-          };
-        }
-        return result;
-      })
-    );
+  // Estados para comentarios autom?ticos
+  const [autoComments, setAutoComments] = useState({});
+
+  // Configuraci?n de React Quill
+  const quillModules = {
+    toolbar: [
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      [{ 'indent': '-1'}, { 'indent': '+1' }],
+      ['link'],
+      ['clean']
+    ],
   };
 
-  // Efecto para actualizar los límites cuando cambian las selecciones
-  useEffect(() => {
-    if (selectedViscosity || selectedQuality) {
-      updateLimitsInResults();
-    }
-  }, [selectedViscosity, selectedQuality]);
+  const quillFormats = [
+    'header',
+    'bold', 'italic', 'underline', 'strike',
+    'list', 'bullet', 'indent',
+    'link'
+  ];
 
-  // Obtener comentarios predefinidos
-  useEffect(() => {
-    const fetchPredefinedComments = async () => {
-      try {
-        const response = await api.get('comentarios-predefinidos/');
-        setPredefinedComments(response.data);
-      } catch (error) {
-        console.error('Error loading predefined comments:', error);
-        toast.error('Error al cargar comentarios predefinidos');
-      }
-    };
+  // Opciones para el desplegable de comentarios
+  const commentOptions = [
+    { value: 'NORMAL', label: 'NORMAL', color: 'bg-green-100 text-green-800' },
+    { value: 'NO DESEADO', label: 'NO DESEADO', color: 'bg-red-100 text-red-800' },
+    { value: 'PENDIENTE', label: 'PENDIENTE', color: 'bg-yellow-100 text-yellow-800' },
+    { value: 'REVISAR', label: 'REVISAR', color: 'bg-orange-100 text-orange-800' },
+    { value: 'CR?TICO', label: 'CR?TICO', color: 'bg-purple-100 text-purple-800' }
+  ];
 
-    fetchPredefinedComments();
-  }, [api]);
+  // NUEVA: Funci?n para cargar firma en base64
 
-  // Obtener todas las muestras
-  useEffect(() => {
-    const fetchSamples = async () => {
-      try {
-        const response = await api.get('lubrication/samples/');
-        setAllSamples(response.data);
-      } catch (error) {
-        console.error('Error loading samples:', error);
-      }
-    };
-    
-    fetchSamples();
-  }, [api]);
 
-  // Actualizar observaciones cuando cambia el contenido del editor
-  useEffect(() => {
-    const text = commentContent.map(block => block.text).join('\n');
-    handleFieldChange('observaciones', text);
-  }, [commentContent]);
-
-  // Obtener todos los resultados y filtrar por muestra
   useEffect(() => {
     const fetchData = async () => {
+      if (!muestra) return;
+      
       try {
-        setLoading(true);
-        const response = await api.get('lubrication/results/');
-        setAllResults(response.data);
+        // Obtener datos de la muestra
+        const sampleResponse = await api.get(`lubrication/samples/${muestra}/`);
+        setSampleData(sampleResponse.data);
         
-        // Filtrar resultados para esta muestra
-        const filtered = response.data.filter(
-          result => result.prueba_muestra.muestra?.id === sampleId
-        );
-        
-        setFilteredResults(filtered);
-        
-        // Obtener datos de la muestra del primer resultado (si existe)
-        if (filtered.length > 0) {
-          setSampleData(filtered[0].prueba_muestra.muestra);
+        // Intentar obtener el reporte existente
+        try {
+          const reportResponse = await api.get(`lubrication/reports/?muestra=${muestra}`);
+          if (reportResponse.data.length > 0) {
+            const report = reportResponse.data[0];
+            setReportData(report);
+            setReportComments(report.comentarios || '');
+            setReportConclusions(report.conclusiones || '');
+            
+            // Cargar el estado de l?mites desde el reporte
+            setShowLimits(report.with_limites || false);
+            
+            // Cargar firma en base64 si existe
+            if (report.firma_ruta) {
+              // Intentar cargar desde el endpoint espec?fico
+          
+              if  (report.firma_base64) {
+                // Usar el base64 que viene en el reporte
+                setSignature(report.firma_base64);
+                setSignaturePath(report.firma_ruta);
+              } else {
+                // Fallback: usar la ruta normal
+                setSignature(report.firma_ruta);
+                setSignaturePath(report.firma_ruta);
+              }
+            } else {
+              setSignature(null);
+              setSignaturePath(null);
+            }
+          }
+        } catch (error) {
         }
+
+        // Inicializar resultados editados y comentarios
+        const initialResults = {};
+        const initialComments = {};
+        
+        const allTests = [
+          ...(sampleResponse.data.pruebas_estructuradas || []),
+          ...(sampleResponse.data.resultados || [])
+        ];
+
+        allTests.forEach(test => {
+          initialResults[test.id] = test.valor || '';
+          initialComments[test.id] = test.observaciones || '';
+        });
+
+        setEditedResults(initialResults);
+        setEditedComments(initialComments);
+
+        // Calcular comentarios autom?ticos
+        calculateAutoComments(sampleResponse.data, initialResults);
+        
       } catch (error) {
-        console.error('Error loading results:', error);
-        toast.error('Error al cargar los resultados');
+        console.error('Error loading data:', error);
+        toast.error('Error al cargar datos');
       } finally {
         setLoading(false);
       }
     };
 
-    if (sampleId) {
-      fetchData();
-    }
-  }, [sampleId, api]);
+    fetchData();
+  }, [muestra, api]);
 
-  // Manejar edición de campos
-  const handleFieldChange = (field, value) => {
-    setSampleData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
+  const formatLimits = (limites) => {
+    if (!showLimits || !limites) return '-';
 
-  // Guardar cambios
-  const handleSave = async () => {
-    try {
-      const sampleDataToSend = {
-        ...sampleData,
-        lubricante: sampleData.lubricante?.id || null,
-        referencia_equipo: sampleData.referencia_equipo?.id || null
-      };
-
-      await api.patch(`lubrication/samples/${sampleId}/`, sampleDataToSend);
-      
-      const updatePromises = filteredResults.map(result => {
-        return api.patch(`lubrication/results/${result.id}/`, {
-          resultado: result.resultado,
-          observaciones: result.comentario
-        });
-      });
-      
-      await Promise.all(updatePromises);
-      
-      setEditing(false);
-      toast.success('Reporte actualizado correctamente');
-    } catch (error) {
-      toast.error('Error al guardar reporte: ' + (error.response?.data?.message || error.message));
+    switch (limites.operador) {
+      case 'rango': return `${limites.minimo ?? '-'} - ${limites.maximo ?? '-'}`;
+      case 'menor': return `< ${limites.maximo ?? '-'}`;
+      case 'menor_igual': return `<= ${limites.maximo ?? '-'}`;
+      case 'mayor': return `> ${limites.minimo ?? '-'}`;
+      case 'mayor_igual': return `>= ${limites.minimo ?? '-'}`;
+      case 'igual': return `= ${limites.minimo ?? '-'}`;
+      case 'texto': return limites.texto || '-';
+      default: return '-';
     }
   };
 
-  // Actualizar un resultado específico
-  const updateResult = (resultId, field, value) => {
-    setFilteredResults(prev => 
-      prev.map(result => 
-        result.id === resultId ? { ...result, [field]: value } : result
-      )
-    );
+  // Funciones para manejar la firma
+  const handleOpenSignatureModal = () => {
+    setShowSignatureModal(true);
   };
 
-  // Generar PDF
-  const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Reporte de Análisis - ${sampleId}</title>
-          <style>
-            body { font-family: Arial; line-height: 1.5; }
-            table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-            th, td { border: 1px solid #000; padding: 8px; text-align: left; }
-            .header { text-align: center; margin-bottom: 20px; }
-            .signature-line { border-top: 1px solid #000; width: 200px; margin-top: 50px; }
-            .completed { background-color: #e8f5e9; }
-            .pending { background-color: #fff8e1; }
-          </style>
-        </head>
-        <body>
-          ${reportRef.current.innerHTML}
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    setTimeout(() => {
-      printWindow.print();
-    }, 500);
+  const handleCloseSignatureModal = () => {
+    setShowSignatureModal(false);
+  };
+
+  const handleRemoveSignature = () => {
+    setSignature(null);
+    setSignaturePath(null);
+    toast.info('Firma eliminada');
   };
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center items-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
     );
   }
 
-  if (!sampleData || filteredResults.length === 0) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
-        <Typography>No se encontraron resultados para esta muestra</Typography>
-      </Box>
-    );
-  }
+  // Funci?n para ver/generar PDF
+  const handleViewPDF = async () => {
+    try {
+      setGeneratingPDF(true);
+      
+      const response = await api.get('lubrication/reports/imprimir_reporte/', {
+        params: { pdf: muestra },
+        responseType: 'blob',
+      });
+      const blob = response.data;
+      
+      // Crear URL para el PDF
+      const url = URL.createObjectURL(blob);
+      setPdfUrl(url);
+      
+      // Abrir en nueva pesta?a
+      window.open(url, '_blank');
+      
+      toast.success('PDF generado exitosamente');
+      
+    } catch (error) {
+      console.error('Error generando PDF:', error);
+      toast.error('Error al generar el PDF');
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
 
   return (
-    <>
-      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between' }}>
-        <IconButton onClick={() => router.back()}>
-          <ArrowBack />
-        </IconButton>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button 
-            variant="contained" 
-            startIcon={<PictureAsPdf />}
-            onClick={handlePrint}
+    <div className="w-full max-w-[8.5in] mx-auto p-8 border border-black text-[11px] font-sans bg-white">
+      {/* Modal para firma */}
+      {showSignatureModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <SignaturePad 
+            onSave={handleSaveSignature}
+            onClose={handleCloseSignatureModal}
+          />
+        </div>
+      )}
+
+      {/* Header con controles de edici?n */}
+      <div className="flex justify-between items-center mb-4 p-3 bg-gray-50 rounded-lg border">
+        <h2 className="text-lg font-bold text-gray-800">
+          Reporte de An?lisis - Muestra {muestra}
+        </h2>
+        
+        <div className="flex gap-2 items-center">
+          {/* Bot?n para activar/desactivar l?mites */}
+          <button
+            onClick={toggleLimits}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+              showLimits 
+                ? 'bg-red-600 text-white hover:bg-red-700' 
+                : 'bg-green-600 text-white hover:bg-green-700'
+            }`}
           >
-            Generar PDF
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={() => setShowLimits(!showLimits)}
-            sx={{ ml: 1 }}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            {showLimits ? 'Desactivar L?mites' : 'Activar L?mites'}
+          </button>
+          
+          <button
+            onClick={() => saveReportMetadata()}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
           >
-            {showLimits ? 'Ocultar Límites' : 'Mostrar Límites'}
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={editing ? <Save /> : <Edit />}
-            onClick={editing ? handleSave : () => setEditing(true)}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Guardar Reporte
+          </button>
+
+          <button
+            onClick={handleViewPDF}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
           >
-            {editing ? 'Guardar' : 'Editar'}
-          </Button>
-          {editing && (
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<Close />}
-              onClick={() => setEditing(false)}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Ver PDF
+          </button>
+          
+          {!editing ? (
+            <button
+              onClick={() => setEditing(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Cancelar
-            </Button>
-          )}
-        </Box>
-      </Box>
-
-      <Grid container spacing={3}>
-        {/* Columna izquierda - Reporte principal */}
-        <Grid item xs={12} md={8}>
-          <Paper 
-            ref={reportRef}
-            sx={{ 
-              padding: '20px', 
-              fontFamily: 'Arial', 
-              maxWidth: '210mm', 
-              margin: 'auto',
-              lineHeight: '1.5',
-              '@media print': {
-                padding: 0,
-                boxShadow: 'none',
-                backgroundColor: 'transparent'
-              }
-            }}
-          >
-            {/* Logo y título */}
-            <Box sx={{ mr: 2 }}>
-              <img 
-                src="https://keeplubricants.com/wp-content/uploads/2019/09/logo-globaloil.jpg" 
-                alt="Escudo" 
-                style={{ height: '40px', width: '40px', objectFit: 'contain' }} 
-              />
-            </Box>
-
-            <Box sx={{ textAlign: 'center', mb: 3 }}>
-              <Typography variant="h5" component="h1" sx={{ fontWeight: 'bold', color: '#333' }}>
-                {editing ? (
-                  <TextField
-                    value={sampleData.companyName || 'GLOABALOIL'}
-                    onChange={(e) => handleFieldChange('companyName', e.target.value)}
-                    sx={{ width: '300px' }}
-                  />
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Modo Edici?n
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveAll}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {saving ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                 ) : (
-                  sampleData.companyName || 'GIOBALOIL'
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
                 )}
-              </Typography>
-              <Typography variant="h6" component="h2" sx={{ fontWeight: 'bold', mt: 1 }}>
-                ORDEN DE ANÁLISIS
-              </Typography>
-            </Box>
+                Guardar Todo
+              </button>
 
-            {/* Información principal */}
-            <Table sx={{ mb: 3, borderCollapse: 'separate', borderSpacing: '0 8px' }}>
-              <TableBody>
-                <TableRow>
-                  <TableCell sx={{ border: 'none', padding: '4px 16px 4px 0', fontWeight: 'bold' }}>
-                    Fecha de Toma de Muestra:
-                  </TableCell>
-                  <TableCell sx={{ border: 'none', padding: '4px 16px' }}>
-                    {editing ? (
-                      <TextField
-                        type="date"
-                        value={sampleData.fecha_toma || ''}
-                        onChange={(e) => handleFieldChange('fecha_toma', e.target.value)}
-                        sx={{ width: '150px' }}
-                      />
-                    ) : (
-                      new Date(sampleData.fecha_toma).toLocaleDateString() || 'No especificada'
-                    )}
-                  </TableCell>
-                  <TableCell sx={{ border: 'none', padding: '4px 16px 4px 0', fontWeight: 'bold' }}>
-                    Período de Servicio:
-                  </TableCell>
-                  <TableCell sx={{ border: 'none', padding: '4px 0' }}>
-                    {editing ? (
-                      <TextField
-                        value={sampleData.periodo_servicio_aceite || ''}
-                        onChange={(e) => handleFieldChange('periodo_servicio_aceite', e.target.value)}
-                        sx={{ width: '100px' }}
-                      />
-                    ) : (
-                      `${sampleData.periodo_servicio_aceite || 'DESCONOCIDO'} ${sampleData.unidad_periodo_aceite || ''}`
-                    )}
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell sx={{ border: 'none', padding: '4px 16px 4px 0', fontWeight: 'bold' }}>
-                    Lubricante:
-                  </TableCell>
-                  <TableCell sx={{ border: 'none', padding: '4px 16px' }}>
+              <button
+                onClick={handleCancel}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Cancelar
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Encabezado del reporte */}
+      <div className="grid grid-cols-[250px_1fr_110px_190px] h-[110px] border border-black">
+        {/* Columna izquierda (logo y texto) */}
+        <div className="border-r border-black grid grid-rows-2 h-full">
+          <div className="flex items-center justify-center border-b border-black">
+            <img src="/logo-globaloil.jpg" alt="Logo Global Oil" className="h-[45px] object-contain" />
+          </div>
+          <div className="flex flex-col justify-center text-center leading-[0.9] px-1 space-y-0">
+            <p className="text-[9px]">NIT: 830135980-4</p>
+            <p className="text-[9px]">Parque Industrial Ciem Oikos de Occidente</p>
+            <p className="text-[9px]">Autopista Bogot? - Medell?n</p>
+            <p className="text-[9px]">KM 2.5 V?a a Parcelas 900 Mts - Bodega K172</p>
+          </div>
+        </div>
+
+        {/* Columna central (T?tulo) */}
+        <div className="border-r border-black flex items-center justify-center">
+          <h1 className="text-[16px] font-semibold underline">ORDEN DE AN?LISIS</h1>
+        </div>
+
+        {/* Columna con ?cono */}
+        <div className="border-r border-black flex items-center justify-center">
+          <img src="/icon-report.png" alt="Icono" className="h-[70px] object-contain" />
+        </div>
+
+        {/* Columna derecha (cuadro de orden y fecha) */}
+        <div className="grid grid-rows-[1fr_1fr] h-full">
+          <div className="flex flex-col border-b border-black">
+            <div className="border-b border-black text-center text-[10px] font-semibold py-1">
+              Orden de An?lisis N?
+            </div>
+            <div className="flex-1 flex items-center justify-center text-[13px] font-bold">
+              {reportData?.consecutivo || '091-2025'}
+            </div>
+          </div>
+          <div className="flex flex-col">
+            <div className="border-b border-black text-center text-[10px] font-semibold py-1">
+              Fecha:
+            </div>
+            <div className="flex-1 flex items-center justify-center text-[13px] font-bold">
+              {new Date().toLocaleDateString()}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Informaci?n de la muestra */}
+      <div className="w-full mt-4">
+        <table className="w-full border-collapse border border-black text-[11px]">
+          <tbody>
+            <tr>
+              <td className="border border-black p-1 font-semibold bg-gray-100 w-[180px]">Fecha de Toma de Muestra:</td>
+              <td className="border border-black p-1 w-[200px]">
+                {sampleData?.fecha_toma ? new Date(sampleData.fecha_toma).toLocaleDateString() : '03/05/2025'}
+              </td>
+              <td className="border border-black p-1 font-semibold bg-gray-100 w-[150px]">Periodo de Servicio:</td>
+              <td className="border border-black p-1">{sampleData?.periodo_servicio_aceite || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td className="border border-black p-1 font-semibold bg-gray-100">Lubricante:</td>
+              <td className="border border-black p-1">{sampleData?.referencia_marca || 'N/A'}</td>
+              <td className="border border-black p-1 font-semibold bg-gray-100">Equipo:</td>
+              <td className="border border-black p-1">{sampleData?.referencia_equipo_info?.nombre || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td className="border border-black p-1 font-semibold bg-gray-100">Cliente:</td>
+              <td className="border border-black p-1">N/A</td>
+              <td className="border border-black p-1 font-semibold bg-gray-100">Placa:</td>
+              <td className="border border-black p-1">{sampleData?.equipo_placa || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td className="border border-black p-1 font-semibold bg-gray-100">Contacto:</td>
+              <td className="border border-black p-1">{sampleData?.contacto_cliente || 'N/A'}</td>
+              <td className="border border-black p-1 font-semibold bg-gray-100">Periodo de Servicio Equipo:</td>
+              <td className="border border-black p-1">{sampleData?.periodo_servicio_equipo || 'N/A'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Tabla de resultados */}
+      <div className="w-full mt-4">
+        <table className="w-full border-collapse border border-black text-[10px]">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="border border-black p-1 font-semibold text-left w-[220px]">AN?LISIS</th>
+              <th className="border border-black p-1 font-semibold text-center w-[110px]">MÉTODO</th>
+              <th className="border border-black p-1 font-semibold text-center w-[80px]">RESULTADO</th>
+              <th className="border border-black p-1 font-semibold text-center w-[70px]">UNIDADES</th>
+              <th className="border border-black p-1 font-semibold text-center w-[100px]">L?MITE</th>
+              <th className="border border-black p-1 font-semibold text-center w-[100px]">COMENTARIO</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sampleData?.pruebas_estructuradas.map((prueba) => (
+              <React.Fragment key={prueba.id}>
+                {/* Pruebas individuales (sin subpruebas) */}
+                {prueba.subpruebas.length === 0 ? (
+                  <tr>
+                    <td className="border border-black p-1">
+                      {prueba.prueba.nombre}
+                    </td>
+                    <td className="border border-black p-1 text-center">
+                      {prueba.prueba.metodo_referencia || '-'}
+                    </td>
+                    <td className="border border-black p-1 text-center">
+                     {editing ? (
+  <input
+    type="text"
+    value={editedResults[prueba.id] ?? ''}
+    onChange={(e) => handleResultChange(prueba.id, e.target.value)}
+    className="w-16 px-1 py-0.5 border border-gray-300 rounded text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+    placeholder="-"
+  />
+) : (
+  <span>{prueba.valor || '-'}</span>
+)}
+                    </td>
+                    <td className="border border-black p-1 text-center">
+                      {prueba.prueba.unidad_medida || '-'}
+                    </td>
+                    <td className="border border-black p-1 text-center">
+                      {formatLimits(prueba.prueba.limites)}
+                    </td>
+                    <td className="border border-black p-1 text-center">
                       {editing ? (
-                        <TextField
-                          value={sampleData.lubricante?.nombre_comercial || ''}
-                          onChange={(e) => {
-                            handleFieldChange('lubricante', {
-                              ...sampleData.lubricante,
-                              nombre_comercial: e.target.value
-                            });
-                          }}
-                          sx={{ width: '300px' }}
-                        />
+                        <select
+                          value={editedComments[prueba.id] || autoComments[prueba.id] || (prueba.completada ? 'NORMAL' : 'PENDIENTE')}
+                          onChange={(e) => handleCommentChange(prueba.id, e.target.value)}
+                          className={`w-full text-center p-1 rounded border ${
+                            commentOptions.find(opt => opt.value === (editedComments[prueba.id] || autoComments[prueba.id] || (prueba.completada ? 'NORMAL' : 'PENDIENTE')))?.color || 'bg-gray-100'
+                          }`}
+                        >
+                          {commentOptions.map(option => (
+                            <option key={option.value} value={option.value} className={option.color}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
                       ) : (
-                        sampleData.lubricante?.nombre_comercial || 'No especificado'
+                        <span className={`inline-block px-2 py-1 rounded ${
+                          commentOptions.find(opt => opt.value === (editedComments[prueba.id] || autoComments[prueba.id] || (prueba.completada ? 'NORMAL' : 'PENDIENTE')))?.color || 'bg-gray-100'
+                        }`}>
+                          {editedComments[prueba.id] || autoComments[prueba.id] || (prueba.completada ? 'NORMAL' : 'PENDIENTE')}
+                        </span>
                       )}
-                    </TableCell>
-                  <TableCell sx={{ border: 'none', padding: '4px 16px 4px 0', fontWeight: 'bold' }}>
-                    Equipo:
-                  </TableCell>
-                  <TableCell sx={{ border: 'none', padding: '4px 0' }}>
-                    {sampleData.referencia_equipo?.codigo || 'No especificado'}
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell sx={{ border: 'none', padding: '4px 16px 4px 0', fontWeight: 'bold' }}>
-                    Cliente:
-                  </TableCell>
-                  <TableCell sx={{ border: 'none', padding: '4px 16px' }}>
-                    {sampleData.contacto_cliente || 'No especificado'}
-                  </TableCell>
-                  <TableCell sx={{ border: 'none', padding: '4px 16px 4px 0', fontWeight: 'bold' }}>
-                    Placa:
-                  </TableCell>
-                  <TableCell sx={{ border: 'none', padding: '4px 0' }}>
-                    {sampleData.equipo_placa || 'No especificado'}
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell sx={{ border: 'none', padding: '4px 16px 4px 0', fontWeight: 'bold' }}>
-                    Estado:
-                  </TableCell>
-                  <TableCell sx={{ border: 'none', padding: '4px 16px' }}>
-                    <Chip 
-                      label={sampleData.is_aprobado ? 'Aprobado' : 'Pendiente'} 
-                      color={sampleData.is_aprobado ? 'success' : 'warning'} 
-                    />
-                  </TableCell>
-                  <TableCell sx={{ border: 'none', padding: '4px 16px 4px 0', fontWeight: 'bold' }}>
-                    Período Servicio Equipo:
-                  </TableCell>
-                  <TableCell sx={{ border: 'none', padding: '4px 0' }}>
-                    {`${sampleData.periodo_servicio_equipo || 'DESCONOCIDO'} ${sampleData.unidad_periodo_equipo || ''}`}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+                    </td>
+                  </tr>
+                ) : (
+                  // Prueba padre con subpruebas
+                  <tr>
+                    <td className="border border-black p-1 font-semibold align-top">
+                      {prueba.prueba.nombre}
+                    </td>
+                    
+                    <td className="border border-black p-1 text-center align-top">
+                      {prueba.prueba.metodo_referencia || '-'}
+                    </td>
+                    
+                    {/* COLUMNA DE RESULTADOS - Subpruebas */}
+                    <td className="border border-black p-0 align-top">
+                      <div className="flex flex-col">
+                        {prueba.subpruebas.map((subprueba, index) => (
+                          <div key={subprueba.id} className={`flex items-center justify-center p-1 ${index < prueba.subpruebas.length - 1 ? 'border-b border-gray-300' : ''}`}>
+                           {editing ? (
+  <input
+    type="text"
+    value={editedResults[subprueba.id] ?? ''}
+    onChange={(e) => handleResultChange(subprueba.id, e.target.value)}
+    className="w-14 px-1 py-0.5 border border-gray-300 rounded text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+    placeholder="-"
+  />
+) : (
+  <span>{subprueba.valor || '-'}</span>
+)}
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                    
+                    {/* COLUMNA DE UNIDADES - Subpruebas */}
+                    <td className="border border-black p-0 align-top">
+                      <div className="flex flex-col">
+                        {prueba.subpruebas.map((subprueba, index) => (
+                          <div key={subprueba.id} className={`p-1 text-center ${index < prueba.subpruebas.length - 1 ? 'border-b border-gray-300' : ''}`}>
+                            {subprueba.prueba.unidad_medida || '-'}
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                    
+                    {/* COLUMNA DE L?MITES - Subpruebas */}
+                    <td className="border border-black p-0 align-top">
+                      <div className="flex flex-col">
+                        {prueba.subpruebas.map((subprueba, index) => (
+                          <div key={subprueba.id} className={`p-1 text-center ${index < prueba.subpruebas.length - 1 ? 'border-b border-gray-300' : ''}`}>
+                            {formatLimits(subprueba.prueba.limites)}
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                    
+                    {/* COLUMNA DE COMENTARIOS - Subpruebas */}
+                    <td className="border border-black p-0 align-top">
+                      <div className="flex flex-col">
+                        {prueba.subpruebas.map((subprueba, index) => (
+                          <div key={subprueba.id} className={`p-1 text-center ${index < prueba.subpruebas.length - 1 ? 'border-b border-gray-300' : ''}`}>
+                            {editing ? (
+                              <select
+                                value={editedComments[subprueba.id] || autoComments[subprueba.id] || (subprueba.completada ? 'NORMAL' : 'PENDIENTE')}
+                                onChange={(e) => handleCommentChange(subprueba.id, e.target.value)}
+                                className={`w-full text-center p-1 rounded border ${
+                                  commentOptions.find(opt => opt.value === (editedComments[subprueba.id] || autoComments[subprueba.id] || (subprueba.completada ? 'NORMAL' : 'PENDIENTE')))?.color || 'bg-gray-100'
+                                }`}
+                              >
+                                {commentOptions.map(option => (
+                                  <option key={option.value} value={option.value} className={option.color}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className={`inline-block px-2 py-1 rounded ${
+                                commentOptions.find(opt => opt.value === (editedComments[subprueba.id] || autoComments[subprueba.id] || (subprueba.completada ? 'NORMAL' : 'PENDIENTE')))?.color || 'bg-gray-100'
+                              }`}>
+                                {editedComments[subprueba.id] || autoComments[subprueba.id] || (subprueba.completada ? 'NORMAL' : 'PENDIENTE')}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+            
+            {/* Pruebas individuales adicionales */}
+            {sampleData?.resultados
+              .filter(resultado => 
+                !sampleData.pruebas_estructuradas.some(p => 
+                  p.id === resultado.id || 
+                  (p.subpruebas && p.subpruebas.some(sp => sp.id === resultado.id))
+                )
+              )
+              .map((resultado) => (
+                <tr key={resultado.id}>
+                  <td className="border border-black p-1">
+                    {resultado.prueba.nombre}
+                  </td>
+                  <td className="border border-black p-1 text-center">
+                    {resultado.prueba.metodo_referencia || '-'}
+                  </td>
+                  <td className="border border-black p-1 text-center">
+                    {editing ? (
+                      <input
+                        type="text"
+                        value={editedResults[resultado.id] || resultado.valor || ''}
+                        onChange={(e) => handleResultChange(resultado.id, e.target.value)}
+                        className="w-16 px-1 py-0.5 border border-gray-300 rounded text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    ) : (
+                      resultado.valor || '-'
+                    )}
+                  </td>
+                  <td className="border border-black p-1 text-center">
+                    {resultado.prueba.unidad_medida || '-'}
+                  </td>
+                  <td className="border border-black p-1 text-center">
+                    {formatLimits(resultado.prueba.limites)}
+                  </td>
+                  <td className="border border-black p-1 text-center">
+                    {editing ? (
+                      <select
+                        value={editedComments[resultado.id] || autoComments[resultado.id] || (resultado.completada ? 'NORMAL' : 'PENDIENTE')}
+                        onChange={(e) => handleCommentChange(resultado.id, e.target.value)}
+                        className={`w-full text-center p-1 rounded border ${
+                          commentOptions.find(opt => opt.value === (editedComments[resultado.id] || autoComments[resultado.id] || (resultado.completada ? 'NORMAL' : 'PENDIENTE')))?.color || 'bg-gray-100'
+                        }`}
+                      >
+                        {commentOptions.map(option => (
+                          <option key={option.value} value={option.value} className={option.color}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={`inline-block px-2 py-1 rounded ${
+                        commentOptions.find(opt => opt.value === (editedComments[resultado.id] || autoComments[resultado.id] || (resultado.completada ? 'NORMAL' : 'PENDIENTE')))?.color || 'bg-gray-100'
+                      }`}>
+                        {editedComments[resultado.id] || autoComments[resultado.id] || (resultado.completada ? 'NORMAL' : 'PENDIENTE')}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
 
-            <Divider sx={{ my: 2 }} />
+      {/* Secciones editables: Comentarios y Conclusiones */}
+      <div className="w-full mt-6">
+        {/* Comentarios */}
+        <div className="mb-4">
+          <div className="font-semibold text-center mb-1">Comentarios del Reporte</div>
+          {editing ? (
+            <ReactQuill
+              value={reportComments}
+              onChange={setReportComments}
+              modules={quillModules}
+              formats={quillFormats}
+              theme="snow"
+              style={{ 
+                height: '120px',
+                fontSize: '11px'
+              }}
+            />
+          ) : (
+            <div 
+              className="border border-black min-h-[120px] p-3 text-[11px] rounded"
+              dangerouslySetInnerHTML={{ __html: reportComments || 'No hay comentarios registrados' }}
+            />
+          )}
+        </div>
 
-            {/* Tabla de análisis */}
-            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>ANÁLISIS</Typography>
-            <Table sx={{ border: '1px solid #000', mb: 3 , color: 'black'}}>
-              <TableBody>
-                <TableRow sx={{ backgroundColor: '#f0f0f0' }}>
-                  <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold' , color: 'black'}}>Análisis</TableCell>
-                  <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', color: 'black' }}>Método</TableCell>
-                  <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', color: 'black' }}>Resultado</TableCell>
-                  <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', color: 'black'}}>Unidades</TableCell>
-                  <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', color: 'black' }}>Límite</TableCell>
-                  <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', color: 'black' }}>Operacion limite</TableCell>
-                  <TableCell sx={{ border: '1px solid #000', fontWeight: 'bold', color: 'black' }}>Comentario</TableCell>
-                </TableRow>
+        {/* Conclusiones y Firma */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* Conclusiones */}
+          <div>
+            <div className="font-semibold text-center mb-1">Conclusiones del Reporte</div>
+            {editing ? (
+              <ReactQuill
+                value={reportConclusions}
+                onChange={setReportConclusions}
+                modules={quillModules}
+                formats={quillFormats}
+                theme="snow"
+                style={{ 
+                  height: '150px',
+                  fontSize: '11px'
+                }}
+              />
+            ) : (
+              <div 
+                className="border border-black min-h-[150px] p-3 text-[11px] rounded"
+                dangerouslySetInnerHTML={{ __html: reportConclusions || 'No hay conclusiones registradas' }}
+              />
+            )}
+          </div>
+
+          {/* Firma */}
+          <div>
+     
+     <div className="font-semibold text-center mb-1">Firma</div>
+        <div className="border border-black min-h-[150px] p-3 text-[11px] flex flex-col items-center justify-end rounded">
+          {editing ? (
+            <div className="w-full space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Nombre del Responsable
+                </label>
+                <input
+                  type="text"
+                  value={responsibleName}
+                  onChange={(e) => setResponsibleName(e.target.value)}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Empresa
+                </label>
+                <input
+                  type="text"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              
+              {/* Controles de firma digital */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenSignatureModal}
+                  className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs flex items-center justify-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                  {signature ? 'Cambiar Firma' : 'Agregar Firma'}
+                </button>
                 
-                {filteredResults.map((result) => (
-                  <TableRow key={result.id}>
-                    <TableCell sx={{ border: '1px solid #000' }}>
-                      {result.prueba_muestra.prueba?.codigo|| 'Prueba no especificada'}
-                    </TableCell>
-                    <TableCell sx={{ border: '1px solid #000' }}>
-                      {result.prueba_muestra.prueba?.metodo_referencia || ''}
-                    </TableCell>
-                    <TableCell sx={{ border: '1px solid #000', color: 'black' }}>
-                      {editing ? (
-                        <TextField
-                          value={result.resultado || ''}
-                          onChange={(e) => updateResult(result.id, 'resultado', e.target.value)}
-                          type="number"
-                          sx={{ width: '100px' , color: 'black'}}
-                        />
-                      ) : (
-                        result.resultado || 'N/A'
-                      )}
-                    </TableCell>
-                    <TableCell sx={{ border: '1px solid #000'}}>
-                      {result.prueba_muestra.prueba?.unidad_medida || ''}
-                    </TableCell>
-                    <TableCell sx={{ border: '1px solid #000', color: 'black' }}>
-                    {showLimits ? (
-                      result.prueba_muestra.prueba?.relaciones[0]?.limite_data?.vmin 
-                        ? `${result.prueba_muestra.prueba?.relaciones[0]?.limite_data?.vmin}-${result.prueba_muestra.prueba?.relaciones[0]?.limite_data?.vmax}`
-                        : 'N/A'
-                    ) : '---'}
-                  </TableCell>
-                  <TableCell sx={{ border: '1px solid #000'}}>
-                        {result.prueba_muestra.prueba?.relaciones[0]?.symbol_operation || '---'}
-                      </TableCell>
-                    <TableCell sx={{ border: '1px solid #000', color: 'black' }}>
-                      {editing ? (
-                        <FormControl fullWidth size="small">
-                          <Select
-                            value={result.comentario || ''}
-                            onChange={(e) => updateResult(result.id, 'comentario', e.target.value)}
-                            displayEmpty
-                          >
-                            <MenuItem value="">
-                              <em>Seleccione un comentario</em>
-                            </MenuItem>
-                            {predefinedComments.map((comment) => (
-                              <MenuItem key={comment.id} value={comment.texto}>
-                                {comment.texto}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      ) : (
-                        result.observaciones || 'Sin comentario'
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-
-            <Divider sx={{ my: 2 }} />
-
-            {/* Comentarios */}
-            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>COMENTARIOS</Typography>
-            <Box sx={{ mb: 3 }}>
-              {/* Editor de texto */}
-              {editing ? (
-                <Box sx={{ p: 1 }}>
-                  <TextEditor 
-                    content={commentContent}
-                    setContent={setCommentContent}
-                    sx={{ 
-                      '& .MuiTypography-root': { color: '#000 !important' },
-                      '& .MuiListItemText-primary': { color: '#000 !important' }
+                {signature && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveSignature}
+                    className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-xs flex items-center justify-center gap-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Eliminar
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center w-full">
+              <div className="mb-4">
+                <div className="font-semibold mb-1">RESPONSABLE</div>
+                <div>{responsibleName}</div>
+                <div className="text-xs text-gray-600">{companyName}</div>
+              </div>
+              
+              {/* Mostrar firma digital si existe - AHORA USA BASE64 DIRECTAMENTE */}
+              {signature ? (
+                <div className="mb-2">
+                  <img 
+                    src={signature}  // Esto ya es base64, se renderiza directamente
+                    alt="Firma digital" 
+                    className="h-16 mx-auto border-b-2 border-gray-400"
+                    onError={(e) => {
+                      console.error('Error loading signature from base64');
+                      
                     }}
                   />
-                </Box>
+                  <div className="text-xs text-gray-500 mt-1">Firma digital</div>
+                </div>
               ) : (
-                <Box sx={{ p: 2, whiteSpace: 'pre-line', color: '#000' }}>
-                  {sampleData.observaciones || 'No hay comentarios'}
-                </Box>
+                <div className="w-full border-t border-black mt-2 pt-8 text-center text-gray-500">
+                  Firma
+                </div>
               )}
-            </Box>
-
-            <Divider sx={{ my: 2 }} />
-
-            {/* Conclusiones */}
-            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>CONCLUSIONES</Typography>
-            <Box sx={{ mb: 3 }}>
-              {editing ? (
-                <TextField
-                  multiline
-                  fullWidth
-                  rows={3}
-                  value={sampleData.conclusiones || ''}
-                  onChange={(e) => handleFieldChange('conclusiones', e.target.value)}
-                />
-              ) : (
-                <Typography sx={{ whiteSpace: 'pre-line' }}>
-                  {sampleData.conclusiones || 'No hay conclusiones'}
-                </Typography>
-              )}
-            </Box>
-
-            {/* Nota final */}
-            <Typography variant="body2" sx={{ fontStyle: 'italic', mb: 3 }}>
-              La propiedad descrita en este reporte corresponde a los de la muestra suministrada.
-            </Typography>
-
-            {/* Firma */}
-            <Box sx={{ textAlign: 'right', mt: 4 }}>
-              <Box sx={{ borderTop: '1px solid #000', display: 'inline-block', pt: 1, minWidth: '200px' }}>
-                <Typography>
-                  <strong>RESPONSABLE:</strong>
-                </Typography>
-                {signature ? (
-                  <Box sx={{ height: '80px', mb: 1 }}>
-                    <img src={signature} alt="Firma" style={{ height: '100%' }} />
-                  </Box>
-                ) : (
-                  <Button 
-                    variant="outlined" 
-                    onClick={() => setOpenSignatureDialog(true)}
-                    sx={{ mt: 1 }}
-                  >
-                    Agregar Firma
-                  </Button>
-                )}
-                <Typography>
-                  {sampleData.usuario_registro?.email || 'Ing. Responsable'}
-                </Typography>
-              </Box>
-            </Box>
-          </Paper>
-        </Grid>
-
-         {/* Columna derecha - Herramientas */}
-         <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 2, mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>Seleccionar Muestra</Typography>
-            <FormControl fullWidth>
-              <InputLabel>Muestra</InputLabel>
-              <Select
-                value={sampleId}
-                onChange={(e) => router.push(`/documents-list/template-report?muestra=${e.target.value}`)}
-                label="Muestra"
-              >
-                {allSamples.map(sample => (
-                  <MenuItem key={sample.id} value={sample.id}>
-                    {sample.codigo} - {sample.equipo_placa}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Paper>
-
-          <Paper sx={{ p: 2, mb: 3 }}>
-            <Tabs 
-              value={activeToolTab} 
-              onChange={(e, newValue) => setActiveToolTab(newValue)}
-              sx={{ mb: 2 }}
-            >
-              <Tab label="Herramientas 1" />
-              <Tab label="Herramientas 2" />
-            </Tabs>
-            
-            {activeToolTab === 0 && (
-              <>
-                <PartsPerMillionCalculator 
-                  onViscositySelect={setSelectedViscosity}
-                />
-                <TestMetricsCalculator 
-                  onQualitySelect={setSelectedQuality}
-                />
-              </>
-            )}
-            
-            {activeToolTab === 1 && (
-              <>
-                <ViscosityCalculator />
-                <PerformanceCalculator />
-              </>
-            )}
-          </Paper>
-        </Grid>
-      </Grid>
-
-      {/* Diálogo de firma */}
-      <Dialog 
-        open={openSignatureDialog} 
-        onClose={() => setOpenSignatureDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Agregar Firma</DialogTitle>
-        <DialogContent>
-          <SignaturePad 
-            onSave={(sig) => {
-              setSignature(sig);
-              setOpenSignatureDialog(false);
-            }} 
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenSignatureDialog(false)}>Cancelar</Button>
-        </DialogActions>
-      </Dialog>
-    </>
+            </div>
+          )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

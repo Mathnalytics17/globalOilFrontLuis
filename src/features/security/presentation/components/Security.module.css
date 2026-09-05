@@ -1,0 +1,935 @@
+
+.page {
+  margin: -36px -44px;
+  min-height: calc(100vh - 64px);
+  background:
+    radial-gradient(circle at 9% 0%, rgba(255,255,255,.08), transparent 25%),
+    radial-gradient(circle at 88% 42%, rgba(239,35,42,.14), transparent 35%),
+    linear-gradient(135deg, #171717 0%, #101010 48%, #090909 100%);
+  color: #f5f5f5;
+}
+
+.scroll {
+  min-height: calc(100vh - 64px);
+  overflow: auto;
+  padding: 42px 56px 48px;
+}
+
+.shell {
+  width: min(1440px, 94vw);
+  margin: 0 auto;
+}
+
+.centerShell {
+  width: min(1160px, 88vw);
+  margin: 0 auto;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #cfcfcf;
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 15px;
+  margin-bottom: 24px;
+}
+
+.back:hover { color: #fff; }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 26px;
+  margin-bottom: 28px;
+}
+
+.kicker {
+  color: #ff2d36;
+  text-transform: uppercase;
+  letter-spacing: .35em;
+  font-weight: 900;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(38px, 4vw, 54px);
+  line-height: 1.02;
+  font-weight: 600;
+  letter-spacing: -.04em;
+}
+
+.subtitle {
+  color: #b9b9b9;
+  font-size: 17px;
+  margin: 10px 0 0;
+  line-height: 1.45;
+}
+
+.settingsList {
+  margin-top: 34px;
+  border-top: 1px solid rgba(255,255,255,.12);
+}
+
+.settingsRow {
+  position: relative;
+  display: grid;
+  grid-template-columns: 76px 1fr 40px;
+  align-items: center;
+  min-height: 82px;
+  color: #f1f1f1;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,.11);
+  transition: background .16s ease;
+}
+
+.settingsRow:hover {
+  background: linear-gradient(90deg, rgba(255,255,255,.06), rgba(239,35,42,.13));
+}
+
+.settingsRow:hover::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 16px;
+  bottom: 16px;
+  width: 4px;
+  border-radius: 999px;
+  background: #ef232a;
+  box-shadow: 0 0 18px rgba(239,35,42,.65);
+}
+
+.iconBox {
+  display: grid;
+  place-items: center;
+  color: #cfcfcf;
+}
+
+.rowText {
+  display: grid;
+  gap: 6px;
+}
+
+.rowText strong {
+  font-size: 21px;
+  font-weight: 600;
+}
+
+.rowText span {
+  font-size: 15px;
+  color: #a8a8a8;
+}
+
+.chevron {
+  justify-self: end;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  margin: 24px 0 18px;
+}
+
+.search {
+  position: relative;
+  width: min(460px, 100%);
+}
+
+.search svg {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9b9b9b;
+}
+
+.input,
+.select,
+.textarea,
+.searchInput {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid rgba(255,255,255,.17);
+  background: rgba(5,5,5,.55);
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 13px;
+  outline: none;
+  font-size: 15px;
+}
+
+.searchInput {
+  padding-left: 46px;
+}
+
+.textarea {
+  min-height: 110px;
+  padding-top: 12px;
+  resize: vertical;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus,
+.searchInput:focus {
+  border-color: #ef232a;
+  box-shadow: 0 0 0 3px rgba(239,35,42,.13);
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filters .select,
+.filters .input {
+  width: 190px;
+}
+
+.buttonPrimary,
+.buttonSecondary,
+.buttonDanger,
+.buttonGhost {
+  min-height: 46px;
+  border-radius: 8px;
+  padding: 0 18px;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.buttonPrimary {
+  background: linear-gradient(180deg, #ff2838, #d70d19);
+  color: #fff;
+  border-color: #ef232a;
+  box-shadow: 0 16px 32px rgba(239,35,42,.18);
+}
+
+.buttonSecondary {
+  background: rgba(255,255,255,.03);
+  color: #fff;
+  border-color: rgba(255,255,255,.2);
+}
+
+.buttonDanger {
+  background: rgba(239,35,42,.12);
+  color: #ffb9bd;
+  border-color: rgba(239,35,42,.48);
+}
+
+.buttonGhost {
+  background: transparent;
+  color: #e7e7e7;
+  border-color: transparent;
+}
+
+.buttonPrimary:disabled,
+.buttonSecondary:disabled,
+.buttonDanger:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.tableWrap {
+  overflow: auto;
+  border-top: 1px solid rgba(255,255,255,.13);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.table th {
+  text-align: left;
+  color: #b8b8b8;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 17px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.13);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.table td {
+  padding: 17px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+  color: #f2f2f2;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.table tr:hover td {
+  background: rgba(255,255,255,.035);
+}
+
+.muted {
+  color: #9e9e9e;
+}
+
+.small {
+  display: block;
+  color: #9f9f9f;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  color: #f3f3f3;
+  font-size: 13px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #aaa;
+}
+
+.green { background: #22c55e; }
+.red { background: #ef232a; }
+.yellow { background: #f6c343; }
+.gray { background: #777; }
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.iconButton {
+  min-height: 36px;
+  min-width: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.03);
+  color: #fff;
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+}
+
+.iconButton:hover {
+  border-color: rgba(239,35,42,.75);
+}
+
+.drawer {
+  position: fixed;
+  top: 64px;
+  right: 0;
+  bottom: 0;
+  width: min(460px, 94vw);
+  z-index: 80;
+  background:
+    radial-gradient(circle at 90% 34%, rgba(239,35,42,.13), transparent 42%),
+    linear-gradient(180deg, #181818, #0c0c0d);
+  border-left: 1px solid rgba(255,255,255,.14);
+  box-shadow: -30px 0 70px rgba(0,0,0,.45);
+  padding: 34px 30px;
+  display: flex;
+  flex-direction: column;
+}
+
+.drawerHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid rgba(255,255,255,.13);
+  padding-bottom: 22px;
+  margin-bottom: 24px;
+}
+
+.drawerTitle {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -.03em;
+}
+
+.close {
+  background: transparent;
+  border: 0;
+  color: #fff;
+  cursor: pointer;
+}
+
+.form {
+  display: grid;
+  gap: 18px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field label {
+  color: #f4f4f4;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.field b {
+  color: #ef232a;
+}
+
+.help {
+  color: #8f8f8f;
+  font-size: 12px;
+}
+
+.drawerFooter {
+  margin-top: auto;
+  border-top: 1px solid rgba(255,255,255,.13);
+  padding-top: 22px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.gridTwo {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) 1fr;
+  gap: 24px;
+}
+
+.roleMatrixLayout {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+  max-width: 100%;
+}
+
+.rolePanel,
+.permissionsPanel {
+  min-width: 0;
+}
+
+.panelTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.panelTitleRow h2,
+.matrixSummary h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.panelTitleRow span,
+.summaryPills span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 999px;
+  padding: 0 11px;
+  color: #d7d7d7;
+  background: rgba(255,255,255,.04);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.matrixSummary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid rgba(255,255,255,.13);
+  background: rgba(0,0,0,.13);
+  border-radius: 10px;
+  padding: 18px;
+  min-width: 0;
+}
+
+.matrixSummary p {
+  margin: 8px 0 0;
+  color: #9e9e9e;
+  line-height: 1.4;
+}
+
+.summaryPills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.matrixToolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.matrixToolbar select,
+.matrixSearch {
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid rgba(255,255,255,.17);
+  background: rgba(5,5,5,.55);
+  color: #fff;
+  border-radius: 8px;
+}
+
+.matrixToolbar select {
+  padding: 0 12px;
+}
+
+.matrixSearch {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  padding: 0 10px;
+}
+
+.matrixSearch svg {
+  color: #aaa;
+}
+
+.matrixSearch input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+}
+
+.sideList {
+  border-top: 1px solid rgba(255,255,255,.13);
+}
+
+.sideRow {
+  width: 100%;
+  min-height: 58px;
+  border: 0;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+  background: transparent;
+  color: #e8e8e8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+  padding: 0 14px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.sideRow > span {
+  min-width: 0;
+}
+
+.sideRow strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.sideRowActive,
+.sideRow:hover {
+  background: linear-gradient(90deg, rgba(239,35,42,.18), rgba(255,255,255,.035));
+  border-left: 4px solid #ef232a;
+}
+
+.matrix {
+  border-top: 1px solid rgba(255,255,255,.13);
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.moduleGroup {
+  border-bottom: 1px solid rgba(255,255,255,.1);
+  padding: 18px 0;
+}
+
+.moduleTitle {
+  margin: 0 0 14px;
+  font-size: 18px;
+}
+
+.permissionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
+  gap: 10px;
+}
+
+.checkLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.025);
+  border-radius: 8px;
+  padding: 0 12px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.checkLabel span {
+  min-width: 0;
+}
+
+.checkLabel strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.checkLabel input {
+  accent-color: #ef232a;
+}
+
+.detailPanel {
+  border: 1px solid rgba(255,255,255,.13);
+  background: rgba(0,0,0,.13);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.detailItem {
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.detailItem span {
+  display: block;
+  color: #999;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 6px;
+}
+
+.message {
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 10px;
+  padding: 18px;
+  color: #bcbcbc;
+  text-align: center;
+}
+
+@media (max-width: 1050px) {
+  .scroll { padding: 28px 22px; }
+  .shell, .centerShell { width: 100%; }
+  .header, .toolbar { flex-direction: column; align-items: stretch; }
+  .gridTwo, .detailGrid, .roleMatrixLayout, .matrixToolbar { grid-template-columns: 1fr; }
+  .matrixSummary { flex-direction: column; }
+  .summaryPills { justify-content: flex-start; }
+  .drawer { top: 0; width: 100vw; }
+}
+
+
+/* Ajustes finales roles/permisos: sin scroll horizontal y panel de roles ocultable */
+.page,
+.scroll,
+.shell,
+.permissionsPanel,
+.roleMatrixLayout,
+.matrix,
+.matrixSummary,
+.matrixToolbar,
+.permissionGrid,
+.checkLabel {
+  box-sizing: border-box;
+}
+
+.page {
+  overflow-x: hidden;
+}
+
+.scroll {
+  overflow-x: hidden;
+  padding-left: clamp(20px, 3vw, 42px);
+  padding-right: clamp(20px, 3vw, 42px);
+}
+
+.shell {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.header {
+  min-width: 0;
+}
+
+.header > div:first-child {
+  min-width: 0;
+}
+
+.header .actions,
+.actions {
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.title {
+  font-size: clamp(34px, 3.6vw, 50px);
+  overflow-wrap: anywhere;
+}
+
+.subtitle {
+  max-width: 920px;
+}
+
+.roleMatrixLayout {
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 18px;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+.roleMatrixLayoutCollapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.rolePanel {
+  min-width: 0;
+  max-width: 300px;
+}
+
+.permissionsPanel {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.panelTitleActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collapseButton,
+.showRolesButton {
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.04);
+  color: #f4f4f4;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.collapseButton {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.showRolesButton {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  margin-bottom: 10px;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.collapseButton:hover,
+.showRolesButton:hover {
+  border-color: rgba(239,35,42,.72);
+}
+
+.sideRow {
+  min-width: 0;
+  padding-right: 10px;
+}
+
+.sideRow span {
+  min-width: 0;
+}
+
+.sideRow strong,
+.sideRow .small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matrixSummary {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.matrixSummaryText {
+  min-width: 0;
+}
+
+.matrixSummary h2,
+.matrixSummary p {
+  overflow-wrap: anywhere;
+}
+
+.summaryPills {
+  min-width: 0;
+  max-width: min(420px, 100%);
+}
+
+.matrixToolbar {
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 230px) auto;
+  width: 100%;
+  max-width: 100%;
+}
+
+.matrixToolbar select,
+.matrixSearch,
+.matrixSearch input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.matrix {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.moduleGroup {
+  min-width: 0;
+}
+
+.moduleHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.moduleHeading .moduleTitle {
+  margin: 0;
+}
+
+.moduleToggle {
+  border: 0;
+  background: transparent;
+  color: #ff6268;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.moduleToggle:disabled {
+  color: #777;
+  cursor: not-allowed;
+}
+
+.permissionGrid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  width: 100%;
+  max-width: 100%;
+}
+
+.checkLabel {
+  min-width: 0;
+  padding: 10px 12px;
+  align-items: flex-start;
+}
+
+.checkLabel input {
+  flex: 0 0 auto;
+  margin-top: 4px;
+}
+
+.checkLabel span {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.checkLabel strong {
+  font-size: 14px;
+  line-height: 1.2;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.checkLabel .small,
+.small {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) {
+  .roleMatrixLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .rolePanel {
+    max-width: none;
+  }
+
+  .matrixSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .summaryPills {
+    justify-content: flex-start;
+    max-width: 100%;
+  }
+
+  .matrixToolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .permissionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .header .actions,
+  .actions {
+    justify-content: stretch;
+  }
+
+  .buttonPrimary,
+  .buttonSecondary {
+    width: 100%;
+  }
+}

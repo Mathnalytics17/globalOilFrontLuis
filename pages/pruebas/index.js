@@ -1,314 +1,545 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../shared/context/AuthContext';
-import { useRouter } from 'next/router';
-import { toast } from 'react-toastify';
-import { 
-  Box, 
-  Typography, 
-  Button, 
-  TextField, 
-  Chip, 
-  Stack, 
-  IconButton,
-  Paper,
-  InputAdornment
-} from '@mui/material';
-import { 
-  Search, 
-  FilterList, 
-  Add, 
-  Refresh, 
-  Edit, 
-  Visibility,
-  Clear 
-} from '@mui/icons-material';
-import DataTable from '../../shared/components/dataTableGen';
+import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
+import {
+  ArrowLeft,
+  Beaker,
+  GitBranch,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+} from "lucide-react";
+import { testsService } from '@features/technical-config/infrastructure/testsService';
+import PaginationBar from "../../src/components/pagination/PaginationBar";
+import SortableTableHeader from "../../shared/components/SortableTableHeader";
+import useTableSort from "../../shared/hooks/useTableSort";
+import { globalStyles } from "../../shared/features/metodosPrueba/MetodoPruebaForm";
 
-const ListadoPruebas = () => {
-  const { api } = useAuth();
+function parsePythonDictString(value) {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+    return null;
+  }
+
+  try {
+    // Convierte strings tipo Python:
+    // "{'id': 1, 'nombre': 'Equipo'}"
+    // a JSON válido:
+    // {"id": 1, "nombre": "Equipo"}
+    const jsonLike = trimmed
+      .replace(/'/g, '"')
+      .replace(/\bNone\b/g, "null")
+      .replace(/\bTrue\b/g, "true")
+      .replace(/\bFalse\b/g, "false");
+
+    return JSON.parse(jsonLike);
+  } catch {
+    return null;
+  }
+}
+
+function getEquipoNombre(prueba) {
+  if (!prueba) return "-";
+
+  // Caso ideal: viene desde metodo_detalle.equipo_prueba_info
+  if (prueba.metodo_detalle?.equipo_prueba_info?.nombre) {
+    return prueba.metodo_detalle.equipo_prueba_info.nombre;
+  }
+
+  // Otros posibles nombres desde backend
+  if (prueba.metodo_detalle?.equipo_prueba?.nombre) {
+    return prueba.metodo_detalle.equipo_prueba.nombre;
+  }
+
+  if (prueba.equipo_medicion_info?.nombre) {
+    return prueba.equipo_medicion_info.nombre;
+  }
+
+  if (prueba.equipo_medicion?.nombre) {
+    return prueba.equipo_medicion.nombre;
+  }
+
+  // Si equipo viene como objeto
+  if (typeof prueba.equipo === "object" && prueba.equipo !== null) {
+    return prueba.equipo.nombre || prueba.equipo.name || "-";
+  }
+
+  // Si equipo viene como string tipo "{'id': 1, 'nombre': 'Equipo'}"
+  const parsedEquipo = parsePythonDictString(prueba.equipo);
+  if (parsedEquipo?.nombre) return parsedEquipo.nombre;
+  if (parsedEquipo?.name) return parsedEquipo.name;
+
+  // Si equipo viene como texto limpio
+  if (typeof prueba.equipo === "string" && prueba.equipo.trim()) {
+    return prueba.equipo;
+  }
+
+  return "-";
+}
+
+function getMetodoNombre(prueba) {
+  if (!prueba) return "-";
+
+  const codigo =
+    prueba.metodo_detalle?.codigo ||
+    prueba.metodo_codigo ||
+    prueba.metodo?.codigo ||
+    "";
+
+  const nombre =
+    prueba.metodo_detalle?.nombre ||
+    prueba.metodo_nombre ||
+    prueba.metodo?.nombre ||
+    "";
+
+  if (codigo && nombre) {
+    return (
+      <>
+        <b>{codigo}</b>
+        <br />
+        <span>{nombre}</span>
+      </>
+    );
+  }
+
+  if (nombre) return nombre;
+  if (codigo) return codigo;
+
+  return "-";
+}
+
+const TEST_SORT_COLUMNS = {
+  prueba: (row) => row.nombre_variable || row.acronimo,
+  metodo: (row) => row.metodo_detalle?.codigo || row.metodo_codigo || row.metodo_detalle?.nombre,
+  equipo: getEquipoNombre,
+  unidad: (row) => row.unidad_medida,
+  resultados: (row) => row.total_resultados,
+  estado: (row) => row.activo,
+};
+
+export default function PruebasPage() {
   const router = useRouter();
-  const [pruebas, setPruebas] = useState([]);
+
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState({
-    activo: null,
-    unidad: null
-  });
-  const [showFilters, setShowFilters] = useState(false);
+  const [search, setSearch] = useState("");
+  const [includeInactive, setIncludeInactive] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalCount, setTotalCount] = useState(0);
 
-  // Columnas de la tabla
-  const columns = [
-    { 
-      id: 'codigo', 
-      label: 'Código', 
-      minWidth: 100,
-      filterable: true,
-      render: (row) => <strong>{row.codigo}</strong>
-    },
-    { 
-      id: 'nombre', 
-      label: 'Nombre', 
-      minWidth: 200,
-      filterable: true,
-      render: (row) => row.nombre
-    },
-    { 
-      id: 'unidad_medida', 
-      label: 'Unidad', 
-      minWidth: 100,
-      filterable: true,
-      render: (row) => row.unidad_medida || '-'
-    },
-    { 
-      id: 'metodo_referencia', 
-      label: 'Método', 
-      minWidth: 150,
-      filterable: true,
-      render: (row) => row.metodo_referencia || '-'
-    },
-    { 
-      id: 'activo', 
-      label: 'Estado', 
-      minWidth: 100,
-      align: 'center',
-      render: (row) => (
-        <Chip 
-          label={row.activo ? 'Activo' : 'Inactivo'} 
-          color={row.activo ? 'success' : 'error'} 
-          size="small" 
-          variant="outlined"
-        />
-      )
-    }
-  ];
-
-  // Acciones para cada fila
-  const actions = [
-    {
-      id: 'view',
-      icon: <Visibility fontSize="small" />,
-      tooltip: 'Ver detalle',
-      handler: (row) => router.push(`/pruebas/detalle-prueba?id=${row.id}`)
-    },
-    {
-      id: 'edit',
-      icon: <Edit fontSize="small" />,
-      tooltip: 'Editar',
-      handler: (row) => router.push(`/pruebas/edit-pruebas?id=${row.id}`)
-    }
-  ];
-
-  // Obtener pruebas
-  const fetchPruebas = async () => {
+  const load = async () => {
     setLoading(true);
+
     try {
-      const response = await api.get('lubrication/tests/');
-      setPruebas(response.data);
+      const data = await testsService.page({
+        include_inactive: includeInactive ? "true" : "false",
+        page,
+        page_size: pageSize,
+        search,
+      });
+
+      setItems(Array.isArray(data.results) ? data.results : []);
+      setTotalCount(data.count || 0);
     } catch (error) {
-      toast.error('Error al cargar pruebas: ' + (error.response?.data?.message || error.message));
+      console.error("Error cargando pruebas:", error);
+      setItems([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchPruebas();
-  }, []);
+    load();
+  }, [includeInactive, page, pageSize]);
 
-  // Aplicar filtros
-  const filteredData = pruebas.filter(prueba => {
-    // Filtro de búsqueda general
-    const matchesSearch = 
-      !searchTerm ||
-      prueba.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      prueba.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (prueba.metodo_referencia && prueba.metodo_referencia.toLowerCase().includes(searchTerm.toLowerCase()));
+  useEffect(() => {
+    const id = setTimeout(() => { setPage(1); load(); }, 350);
+    return () => clearTimeout(id);
+  }, [search]);
 
-    // Filtros adicionales
-    const matchesFilters = 
-      (filters.activo === null || prueba.activo === filters.activo) &&
-      (!filters.unidad || prueba.unidad_medida === filters.unidad);
+  const filtered = items;
+  const { sortedRows, sort, requestSort } = useTableSort(
+    filtered,
+    TEST_SORT_COLUMNS,
+    { key: "prueba", direction: "asc" }
+  );
 
-    return matchesSearch && matchesFilters;
-  });
+  const totals = useMemo(() => {
+    return items.reduce(
+      (acc, p) => {
+        acc.resultados += p.total_resultados || 0;
+        acc.componentes += p.total_componentes || 0;
+        return acc;
+      },
+      {
+        resultados: 0,
+        componentes: 0,
+      }
+    );
+  }, [items]);
 
-  // Obtener unidades únicas para filtro
-  const unidadesUnicas = [...new Set(pruebas.map(p => p.unidad_medida).filter(Boolean))];
+  const remove = async (p) => {
+    const label = p.acronimo || p.nombre_variable || "esta prueba";
 
-  // Limpiar filtros
-  const clearFilters = () => {
-    setSearchTerm('');
-    setFilters({
-      activo: null,
-      unidad: null
-    });
+    if (!confirm(`¿Eliminar prueba ${label}?`)) return;
+
+    try {
+      await testsService.remove(p.id);
+      await load();
+    } catch (error) {
+      console.error("Error eliminando prueba:", error);
+      alert("No se pudo eliminar la prueba.");
+    }
+  };
+
+  const restore = async (p) => {
+    try {
+      await testsService.restore(p.id);
+      await load();
+    } catch (error) {
+      console.error("Error restaurando prueba:", error);
+      alert("No se pudo restaurar la prueba.");
+    }
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Box 
-          display="flex" 
-          justifyContent="space-between" 
-          alignItems="center" 
-          mb={3}
-        >
-          <Typography variant="h4">Gestión de Pruebas</Typography>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => router.push('/pruebas/create-pruebas')}
-          >
-            Nueva Prueba
-          </Button>
-        </Box>
-
-        {/* Barra de búsqueda y filtros */}
-        <Box sx={{ mb: 3 }}>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <TextField
-              fullWidth
-              variant="outlined"
-              placeholder="Buscar pruebas..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search />
-                  </InputAdornment>
-                ),
-                endAdornment: searchTerm && (
-                  <IconButton size="small" onClick={() => setSearchTerm('')}>
-                    <Clear fontSize="small" />
-                  </IconButton>
-                )
-              }}
-              size="small"
-            />
-            <Button
-              variant={showFilters ? "contained" : "outlined"}
-              startIcon={<FilterList />}
-              onClick={() => setShowFilters(!showFilters)}
+    <div className="go-page">
+      <div className="go-shell">
+        <div className="go-header">
+          <div>
+            <button
+              type="button"
+              className="go-back"
+              onClick={() => router.push("/configuracion-tecnica")}
             >
-              Filtros
-            </Button>
-            <IconButton onClick={fetchPruebas} title="Recargar">
-              <Refresh />
-            </IconButton>
-          </Stack>
+              <ArrowLeft size={18} />
+              Volver a configuración
+            </button>
+            <p className="go-kicker">Laboratorio</p>
+            <h1>Catálogo de pruebas</h1>
+            <p>
+              Variables, método técnico seleccionado y estructura de resultados
+              flexible.
+            </p>
+          </div>
 
-          {/* Panel de filtros avanzados */}
-          {showFilters && (
-            <Paper sx={{ p: 2, mt: 2 }}>
-              <Stack direction="row" spacing={3} alignItems="center">
-                <Typography variant="subtitle2">Filtros Avanzados:</Typography>
-                
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography variant="body2">Estado:</Typography>
-                  <Chip
-                    label="Todos"
-                    variant={filters.activo === null ? "filled" : "outlined"}
-                    onClick={() => setFilters({...filters, activo: null})}
-                  />
-                  <Chip
-                    label="Activas"
-                    variant={filters.activo === true ? "filled" : "outlined"}
-                    color="success"
-                    onClick={() => setFilters({...filters, activo: true})}
-                  />
-                  <Chip
-                    label="Inactivas"
-                    variant={filters.activo === false ? "filled" : "outlined"}
-                    color="error"
-                    onClick={() => setFilters({...filters, activo: false})}
-                  />
-                </Stack>
+          <button
+            className="go-primary"
+            onClick={() => router.push("/configuracion-tecnica/pruebas/crear-prueba")}
+          >
+            <Plus size={18} />
+            Crear prueba
+          </button>
+        </div>
 
-                {unidadesUnicas.length > 0 && (
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="body2">Unidad:</Typography>
-                    <Chip
-                      label="Todas"
-                      variant={!filters.unidad ? "filled" : "outlined"}
-                      onClick={() => setFilters({...filters, unidad: null})}
-                    />
-                    {unidadesUnicas.map(unidad => (
-                      <Chip
-                        key={unidad}
-                        label={unidad}
-                        variant={filters.unidad === unidad ? "filled" : "outlined"}
-                        onClick={() => setFilters({...filters, unidad})}
-                      />
-                    ))}
-                  </Stack>
+        <section className="stats-row">
+          <div className="stat-card">
+            <Beaker />
+            <span>Total pruebas</span>
+            <b>{items.length}</b>
+          </div>
+
+          <div className="stat-card">
+            <GitBranch />
+            <span>Resultados</span>
+            <b>{totals.resultados}</b>
+          </div>
+
+          <div className="stat-card">
+            <GitBranch />
+            <span>Componentes</span>
+            <b>{totals.componentes}</b>
+          </div>
+        </section>
+
+        <section className="go-card search-card">
+          <div className="go-form-grid search-grid">
+            <label>
+              <span>Buscar</span>
+
+              <div className="search-input-wrap">
+                <Search size={17} className="search-icon" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Nombre, acrónimo, método, equipo..."
+                />
+              </div>
+            </label>
+
+            <label className="check-inline include-inactive">
+              <input
+                type="checkbox"
+                checked={includeInactive}
+                onChange={(e) => setIncludeInactive(e.target.checked)}
+              />
+              Ver eliminadas
+            </label>
+
+            <button className="go-ghost refresh-btn" onClick={load}>
+              <RefreshCw size={16} />
+              Actualizar
+            </button>
+          </div>
+        </section>
+
+        <section className="go-card">
+          <div className="go-table-wrap">
+            <table className="go-table">
+              <thead>
+                <tr>
+                  <SortableTableHeader columnKey="prueba" label="Prueba" sort={sort} onSort={requestSort} />
+                  <SortableTableHeader columnKey="metodo" label="Método técnico" sort={sort} onSort={requestSort} />
+                  <SortableTableHeader columnKey="equipo" label="Equipo" sort={sort} onSort={requestSort} />
+                  <SortableTableHeader columnKey="unidad" label="Unidad" sort={sort} onSort={requestSort} />
+                  <SortableTableHeader columnKey="resultados" label="Estructura" sort={sort} onSort={requestSort} />
+                  <SortableTableHeader columnKey="estado" label="Estado" sort={sort} onSort={requestSort} />
+                  <th style={{ textAlign: "right" }}>Acciones</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan="7">Cargando...</td>
+                  </tr>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan="7">No hay pruebas registradas.</td>
+                  </tr>
+                ) : (
+                  sortedRows.map((p) => (
+                    <tr key={p.id}>
+                      <td>
+                        <b>{p.nombre_variable}</b>
+                        <br />
+                        <span className="test-acronym">{p.acronimo}</span>
+
+                        {p.condicion && (
+                          <small className="test-condition">
+                            {p.condicion}
+                          </small>
+                        )}
+                      </td>
+
+                      <td>{getMetodoNombre(p)}</td>
+
+                      <td>
+                        <span className="equipment-name">
+                          {getEquipoNombre(p)}
+                        </span>
+                      </td>
+
+                      <td>{p.unidad_medida || "-"}</td>
+
+                      <td>
+                        <div className="structure-pills">
+                          <span className="go-pill">
+                            {p.total_resultados || 0} resultados
+                          </span>
+                          <span className="go-pill">
+                            {p.total_componentes || 0} componentes
+                          </span>
+                        </div>
+                      </td>
+
+                      <td>
+                        {p.activo ? (
+                          <span className="go-status-on">Activa</span>
+                        ) : (
+                          <span className="go-status-off">Eliminada</span>
+                        )}
+                      </td>
+
+                      <td>
+                        <div className="go-actions">
+                          <button
+                            className="go-mini"
+                            onClick={() =>
+                              router.push(`/configuracion-tecnica/pruebas/editar-prueba/${p.id}`)
+                            }
+                          >
+                            <Pencil size={15} />
+                            Editar
+                          </button>
+
+                          {p.activo ? (
+                            <button
+                              className="go-danger-icon"
+                              onClick={() => remove(p)}
+                              title="Eliminar"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          ) : (
+                            <button
+                              className="go-mini"
+                              onClick={() => restore(p)}
+                            >
+                              Restaurar
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
                 )}
+              </tbody>
+            </table>
+            <PaginationBar count={totalCount} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPage(1); setPageSize(size); }} />
+          </div>
+        </section>
+      </div>
 
-                <Button 
-                  size="small" 
-                  onClick={clearFilters}
-                  startIcon={<Clear />}
-                >
-                  Limpiar
-                </Button>
-              </Stack>
-            </Paper>
-          )}
-        </Box>
+      <style jsx global>{`
+        ${globalStyles}
 
-        {/* Tabla de resultados */}
-        <DataTable
-          columns={columns}
-          data={filteredData}
-          actions={actions}
-          loading={loading}
-          emptyMessage="No se encontraron pruebas"
-          sx={{
-            '& .MuiDataGrid-root': {
-              border: 'none',
-              minHeight: '400px'
-            }
-          }}
-        />
-      </Paper>
+        .stats-row {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 14px;
+          margin-bottom: 18px;
+        }
 
-      {/* Resumen de resultados */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-        <Typography variant="body2" color="text.secondary">
-          Mostrando {filteredData.length} de {pruebas.length} pruebas
-        </Typography>
-        {filters.activo !== null || filters.unidad || searchTerm ? (
-          <Typography variant="body2" color="text.secondary">
-            Filtros aplicados: 
-            {filters.activo !== null && (
-              <Chip 
-                label={`Estado: ${filters.activo ? 'Activo' : 'Inactivo'}`} 
-                size="small" 
-                sx={{ ml: 1 }}
-                onDelete={() => setFilters({...filters, activo: null})}
-              />
-            )}
-            {filters.unidad && (
-              <Chip 
-                label={`Unidad: ${filters.unidad}`} 
-                size="small" 
-                sx={{ ml: 1 }}
-                onDelete={() => setFilters({...filters, unidad: null})}
-              />
-            )}
-            {searchTerm && (
-              <Chip 
-                label={`Búsqueda: "${searchTerm}"`} 
-                size="small" 
-                sx={{ ml: 1 }}
-                onDelete={() => setSearchTerm('')}
-              />
-            )}
-          </Typography>
-        ) : null}
-      </Box>
-    </Box>
+        .stat-card {
+          background: linear-gradient(180deg, #18181b, #121214);
+          border: 1px solid #2a2a31;
+          border-radius: 20px;
+          padding: 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+        }
+
+        .stat-card svg {
+          color: #ef4444;
+        }
+
+        .stat-card span {
+          color: #9ca3af;
+          font-size: 13px;
+        }
+
+        .stat-card b {
+          font-size: 28px;
+        }
+
+        .search-card {
+          margin-bottom: 18px;
+        }
+
+        .go-back {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 14px;
+          border: 1px solid #3a3a42;
+          background: #111216;
+          color: #d1d5db;
+          border-radius: 12px;
+          padding: 10px 13px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .go-back:hover {
+          color: #fff;
+          border-color: #ef4444;
+        }
+
+        .search-grid {
+          grid-template-columns: 1fr auto auto;
+          align-items: end;
+        }
+
+        .search-input-wrap {
+          position: relative;
+        }
+
+        .search-icon {
+          position: absolute;
+          left: 12px;
+          top: 13px;
+          color: #777;
+        }
+
+        .search-input-wrap input {
+          padding-left: 38px;
+        }
+
+        .include-inactive {
+          padding-top: 28px;
+          white-space: nowrap;
+        }
+
+        .refresh-btn {
+          align-self: end;
+        }
+
+        .test-acronym {
+          color: #ef4444;
+          font-weight: 900;
+        }
+
+        .test-condition {
+          display: block;
+          color: #aaa;
+          margin-top: 4px;
+        }
+
+        .equipment-name {
+          display: inline-block;
+          max-width: 240px;
+          line-height: 1.4;
+          word-break: normal;
+        }
+
+        .structure-pills {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+
+        @media (max-width: 1100px) {
+          .stats-row {
+            grid-template-columns: 1fr 1fr;
+          }
+
+          .search-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          .include-inactive {
+            padding-top: 0;
+          }
+
+          .refresh-btn {
+            width: 100%;
+            justify-content: center;
+          }
+        }
+
+        @media (max-width: 560px) {
+          .stats-row {
+            grid-template-columns: 1fr;
+          }
+
+          .go-header {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .go-primary {
+            width: 100%;
+            justify-content: center;
+          }
+        }
+      `}</style>
+    </div>
   );
-};
-
-export default ListadoPruebas;
+}

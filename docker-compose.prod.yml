@@ -1,0 +1,14 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://muestraslubricantesglobal.com/api
+        NEXT_PUBLIC_FRONTEND_URL: https://muestraslubricantesglobal.com/
+    container_name: frontend
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
