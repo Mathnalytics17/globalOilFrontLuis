@@ -173,6 +173,19 @@ const LaboratorioLotesPage = () => {
 
   const isReceptionMode = Boolean(selectedLote);
 
+  const revertEntry = async (row) => {
+    const reason = window.prompt(`Motivo para revertir el ingreso del lote ${row.lote}:`);
+    if (reason === null) return;
+    if (!reason.trim()) return toast.error('El motivo es obligatorio.');
+    try {
+      await labBatchEntriesService.remove(row.id, reason.trim());
+      toast.success('Ingreso revertido. El lote volvió a estado registrado.');
+      await fetchData();
+    } catch (error) {
+      toast.error(getApiError(error, 'No se pudo revertir el ingreso.'));
+    }
+  };
+
   const availableColumns = [
     { id: 'id', label: 'LOTE', minWidth: 130, render: (row) => <span className="font-mono font-bold text-red-400">{row.id}</span> },
     { id: 'cliente_nombre', label: 'CLIENTE', minWidth: 220, render: (row) => (
@@ -200,7 +213,7 @@ const LaboratorioLotesPage = () => {
     { id: 'fecha_recepcion', label: 'FECHA RECEPCIÓN', minWidth: 180, render: (row) => <span>{formatDate(row.fecha_recepcion)}</span> },
     { id: 'usuario', label: 'RECIBIDO POR', minWidth: 180, render: (row) => <span>{row.usuario_recepcion_nombre || '-'}</span> },
     { id: 'total', label: 'MUESTRAS', minWidth: 120, align: 'center', render: (row) => <span>{row.lote_info?.total_muestras || 0}</span> },
-    { id: 'acciones', label: 'ACCIONES', minWidth: 100, align: 'center', render: (row) => <button onClick={() => router.push(`/muestras/lotes/${row.lote}`)} className="action-btn bg-blue-700 hover:bg-blue-600"><Eye size={15} /></button> },
+    { id: 'acciones', label: 'ACCIONES', minWidth: 160, align: 'center', render: (row) => <div className="flex justify-center gap-2"><button onClick={() => router.push(`/muestras/lotes/${row.lote}`)} className="action-btn bg-blue-700 hover:bg-blue-600" title="Ver lote"><Eye size={15} /></button><button onClick={() => revertEntry(row)} className="action-btn bg-red-700 hover:bg-red-600" title="Revertir ingreso con motivo">↶</button></div> },
   ];
 
   return (

@@ -145,18 +145,22 @@ export default function SecurityInvitationsPage() {
                 {sortedRows.map((item) => {
                   const company = item.empresa_info || item.company_info || item.empresa || item.company;
                   const role = item.role_info || item.security_role_info || item.role || {};
+                  const rawStatus = String(item.status || item.estado || '').toUpperCase();
+                  const effectiveStatus = rawStatus === 'PENDING' && item.expires_at && new Date(item.expires_at) < new Date() ? 'EXPIRED' : rawStatus;
+                  const delivery = item.metadata?.email_delivery || {};
                   return (
                     <tr key={item.id}>
-                      <td><strong>{item.email}</strong><span className={s.small}>{item.created_at ? new Date(item.created_at).toLocaleString() : ''}</span></td>
+                      <td><strong>{item.email}</strong><span className={s.small}>{item.created_at ? new Date(item.created_at).toLocaleString() : ''}</span><span className={s.small}>Correo: {delivery.status === 'sent' ? 'enviado' : delivery.status === 'failed' ? 'fallido' : 'pendiente'}</span></td>
                       <td>{getName(company)}</td>
                       <td>{getName(role, item.role_name || '-')}</td>
-                      <td><StatusPill status={item.status || item.estado} /></td>
+                      <td><StatusPill status={effectiveStatus} /></td>
                       <td>{item.expires_at || item.fecha_expiracion ? new Date(item.expires_at || item.fecha_expiracion).toLocaleString() : <span className={s.muted}>-</span>}</td>
                       <td>{getName(item.invited_by || item.enviado_por || item.created_by, '-')}</td>
                       <td>
                         <div className={s.actions}>
-                          <button className={s.iconButton} title="Reenviar" type="button" onClick={() => resend(item.id)}><Send fontSize="small" /></button>
-                          <button className={s.iconButton} title="Revocar" type="button" onClick={() => revoke(item.id)}><Cancel fontSize="small" /></button>
+                          {['PENDING', 'EXPIRED', 'REVOKED'].includes(effectiveStatus) ? <button className={s.iconButton} title="Reenviar" type="button" onClick={() => resend(item.id)}><Send fontSize="small" /></button> : null}
+                          {effectiveStatus === 'PENDING' ? <button className={s.iconButton} title="Revocar" type="button" onClick={() => revoke(item.id)}><Cancel fontSize="small" /></button> : null}
+                          {effectiveStatus === 'ACCEPTED' ? <span className={s.muted}>Solo consulta</span> : null}
                         </div>
                       </td>
                     </tr>

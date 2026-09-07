@@ -3,12 +3,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import {
   Block,
+  DeleteOutline,
   Edit,
   LockOpen,
   Mail,
   RemoveRedEye,
   Security,
   VisibilityOff,
+  PersonAddAlt,
 } from '@mui/icons-material';
 import { securityService } from '../../infrastructure/securityService';
 import { companiesService } from '@features/companies/infrastructure/companiesService';
@@ -35,6 +37,7 @@ const emptyInvite = {
   role: '',
   first_name: '',
   last_name: '',
+  transfer_existing: false,
 };
 
 const getNumericId = (...values) => {
@@ -59,11 +62,15 @@ export default function SecurityUsersPage() {
   const [drawer, setDrawer] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [reason, setReason] = useState('');
+  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', phone: '', empresa: '', role: '' });
   const [loading, setLoading] = useState(false);
   const companyId = getNumericId(user?.empresa_id, user?.profile?.empresa_id, user?.profile?.empresa, user?.empresa);
   const canInvite = global || hasPermission('usuarios.invitar');
   const canBlock = global || hasPermission('usuarios.bloquear');
   const canUnblock = global || hasPermission('usuarios.desbloquear');
+  const canEdit = global || hasPermission('usuarios.editar');
+  const canDeactivate = global || hasPermission('usuarios.eliminar');
+  const canReinvite = global || hasPermission('usuarios.reenviar_invitacion');
 
   const load = async () => {
     setLoading(true);
@@ -131,6 +138,7 @@ export default function SecurityUsersPage() {
         security_role: inviteForm.role,
         first_name: inviteForm.first_name,
         last_name: inviteForm.last_name,
+        transfer_existing: Boolean(global && inviteForm.transfer_existing),
       };
       if (inviteForm.empresa && !Number.isNaN(Number(inviteForm.empresa))) {
         payload.empresa = inviteForm.empresa;
@@ -152,6 +160,15 @@ export default function SecurityUsersPage() {
       if (action === 'unblock') await securityService.users.unblock(selectedUser.id);
       if (action === 'readonly') await securityService.users.readOnly(selectedUser.id, reason);
       if (action === 'restore') await securityService.users.restoreWrite(selectedUser.id);
+      if (action === 'deactivate') await securityService.users.deactivate(selectedUser.id, reason);
+      if (action === 'reactivate') await securityService.users.reactivate(selectedUser.id);
+      if (action === 'reinvite') {
+        await securityService.users.reinvite(selectedUser.id, {
+          empresa: getNumericId(selectedUser.empresa, selectedUser.profile?.empresa),
+          role: getNumericId(selectedUser.profile?.role, selectedUser.security_role),
+          is_company_admin: Boolean(selectedUser.profile?.is_company_admin),
+        });
+      }
       toast.success('Acción aplicada.');
       setDrawer(null);
       setSelectedUser(null);
@@ -171,6 +188,48 @@ export default function SecurityUsersPage() {
   const isBlocked = (item) => String(item?.accessStatus || '').toUpperCase() === 'BLOCKED';
   const isReadOnly = (item) => Boolean(item?.is_read_only) || String(item?.accessStatus || '').toUpperCase() === 'READ_ONLY';
   const isPending = (item) => ['PENDING_INVITATION', 'PENDING_ACTIVATION', 'PENDING'].includes(String(item?.accessStatus || '').toUpperCase());
+  const isDisabled = (item) => String(item?.accessStatus || '').toUpperCase() === 'DISABLED';
+
+  const openEdit = (item) => {
+    setSelectedUser(item);
+    setEditForm({
+      first_name: item.first_name || '',
+      last_name: item.last_name || '',
+      phone: item.phone || '',
+      empresa: getNumericId(item.empresa, item.company, item.profile?.empresa),
+      role: getNumericId(item.profile?.role, item.security_role),
+    });
+    setDrawer('edit');
+  };
+
+  const submitEdit = async (event) => {
+    event.preventDefault();
+    if (!selectedUser) return;
+    try {
+      await securityService.users.update(selectedUser.id, {
+        first_name: editForm.first_name,
+        last_name: editForm.last_name,
+        phone: editForm.phone,
+      });
+      const previousCompany = getNumericId(selectedUser.empresa, selectedUser.company, selectedUser.profile?.empresa);
+      if (global && editForm.empresa && editForm.empresa !== previousCompany) {
+        await securityService.users.reinvite(selectedUser.id, {
+          empresa: editForm.empresa,
+          role: editForm.role,
+          is_company_admin: Boolean(selectedUser.profile?.is_company_admin),
+        });
+        toast.success('Datos actualizados. El cambio de empresa quedará activo cuando el usuario acepte la invitación.');
+      } else {
+        const profileId = getNumericId(selectedUser.profile?.id, selectedUser.company_profile?.id);
+        if (profileId && editForm.role) await securityService.userProfiles.update(profileId, { role: editForm.role });
+        toast.success('Usuario actualizado.');
+      }
+      setDrawer(null);
+      await load();
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'No se pudo actualizar el usuario.'));
+    }
+  };
 
   return (
     <main className={s.page}>
@@ -247,6 +306,10 @@ export default function SecurityUsersPage() {
                     <td>
                       <div className={s.actions}>
                         <button className={s.iconButton} title="Ver detalle" type="button" onClick={() => { setSelectedUser(item); setDrawer('detail'); }}><RemoveRedEye fontSize="small" /></button>
+                        {canEdit ? <button className={s.iconButton} title="Editar usuario" type="button" onClick={() => openEdit(item)}><Edit fontSize="small" /></button> : null}
+                        {canReinvite && (isPending(item) || isDisabled(item)) ? <button className={s.iconButton} title="Reinvitar usuario" type="button" onClick={() => openAction(item, 'reinvite')}><PersonAddAlt fontSize="small" /></button> : null}
+                        {canDeactivate && !isDisabled(item) && item.id !== user?.id ? <button className={s.iconButton} title="Desactivar cuenta" type="button" onClick={() => openAction(item, 'deactivate')}><DeleteOutline fontSize="small" /></button> : null}
+                        {canUnblock && isDisabled(item) ? <button className={s.iconButton} title="Reactivar cuenta" type="button" onClick={() => openAction(item, 'reactivate')}><LockOpen fontSize="small" /></button> : null}
                         {canBlock && !isBlocked(item) && !isPending(item) ? <button className={s.iconButton} title="Bloquear acceso" type="button" onClick={() => openAction(item, 'block')}><Block fontSize="small" /></button> : null}
                         {canUnblock && isBlocked(item) ? <button className={s.iconButton} title="Desbloquear acceso" type="button" onClick={() => openAction(item, 'unblock')}><LockOpen fontSize="small" /></button> : null}
                         {canBlock && !isReadOnly(item) && !isBlocked(item) && !isPending(item) ? <button className={s.iconButton} title="Pasar a solo lectura" type="button" onClick={() => openAction(item, 'readonly')}><VisibilityOff fontSize="small" /></button> : null}
@@ -282,13 +345,19 @@ export default function SecurityUsersPage() {
               <span className={s.help}>El usuario recibirá un enlace de activación.</span>
             </div>
             {global ? (
-              <div className={s.field}>
-                <label>Empresa <b>*</b></label>
-                <select className={s.select} value={inviteForm.empresa} onChange={(e) => setInviteForm((p) => ({ ...p, empresa: e.target.value }))} required>
-                  <option value="">Seleccione empresa</option>
-                  {companies.map((company) => <option key={company.id} value={company.id}>{getName(company)}</option>)}
-                </select>
-              </div>
+              <>
+                <div className={s.field}>
+                  <label>Empresa <b>*</b></label>
+                  <select className={s.select} value={inviteForm.empresa} onChange={(e) => setInviteForm((p) => ({ ...p, empresa: e.target.value }))} required>
+                    <option value="">Seleccione empresa</option>
+                    {companies.map((company) => <option key={company.id} value={company.id}>{getName(company)}</option>)}
+                  </select>
+                </div>
+                <label className={s.field}>
+                  <span><input type="checkbox" checked={inviteForm.transfer_existing} onChange={(e) => setInviteForm((p) => ({ ...p, transfer_existing: e.target.checked }))} /> Reinvitar y transferir si ya existe</span>
+                  <span className={s.help}>El cambio de empresa solo se aplicará cuando la persona acepte la invitación.</span>
+                </label>
+              </>
             ) : null}
             <div className={s.field}>
               <label>Rol <b>*</b></label>
@@ -309,9 +378,30 @@ export default function SecurityUsersPage() {
         </Drawer>
       ) : null}
 
-      {['block', 'readonly'].includes(drawer) ? (
+      {drawer === 'edit' ? (
         <Drawer
-          title={drawer === 'block' ? 'Bloquear usuario' : 'Pasar a solo lectura'}
+          title="Editar usuario"
+          onClose={() => setDrawer(null)}
+          footer={(
+            <>
+              <button className={s.buttonSecondary} type="button" onClick={() => setDrawer(null)}>Cancelar</button>
+              <button className={s.buttonPrimary} type="submit" form="edit-user-form">Guardar cambios</button>
+            </>
+          )}
+        >
+          <form id="edit-user-form" className={s.form} onSubmit={submitEdit}>
+            <div className={s.field}><label>Nombre</label><input className={s.input} value={editForm.first_name} onChange={(e) => setEditForm((p) => ({ ...p, first_name: e.target.value }))} /></div>
+            <div className={s.field}><label>Apellido</label><input className={s.input} value={editForm.last_name} onChange={(e) => setEditForm((p) => ({ ...p, last_name: e.target.value }))} /></div>
+            <div className={s.field}><label>Teléfono</label><input className={s.input} value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} /></div>
+            {global ? <div className={s.field}><label>Empresa</label><select className={s.select} value={editForm.empresa} onChange={(e) => setEditForm((p) => ({ ...p, empresa: e.target.value }))}>{companies.map((company) => <option key={company.id} value={company.id}>{getName(company)}</option>)}</select><span className={s.help}>Cambiar la empresa genera una invitación y solo se aplica cuando el usuario la acepta.</span></div> : null}
+            <div className={s.field}><label>Rol</label><select className={s.select} value={editForm.role} onChange={(e) => setEditForm((p) => ({ ...p, role: e.target.value }))}><option value="">Seleccione rol</option>{visibleRoles.map((role) => <option key={role.id} value={role.id}>{role.nombre || role.name || role.code}</option>)}</select></div>
+          </form>
+        </Drawer>
+      ) : null}
+
+      {['block', 'readonly', 'deactivate'].includes(drawer) ? (
+        <Drawer
+          title={drawer === 'block' ? 'Bloquear usuario' : drawer === 'readonly' ? 'Pasar a solo lectura' : 'Desactivar cuenta'}
           onClose={() => setDrawer(null)}
           footer={(
             <>
@@ -330,9 +420,9 @@ export default function SecurityUsersPage() {
         </Drawer>
       ) : null}
 
-      {['unblock', 'restore'].includes(drawer) ? (
+      {['unblock', 'restore', 'reactivate', 'reinvite'].includes(drawer) ? (
         <Drawer
-          title={drawer === 'unblock' ? 'Desbloquear usuario' : 'Restaurar escritura'}
+          title={drawer === 'unblock' ? 'Desbloquear usuario' : drawer === 'restore' ? 'Restaurar escritura' : drawer === 'reactivate' ? 'Reactivar cuenta' : 'Reinvitar usuario'}
           onClose={() => setDrawer(null)}
           footer={(
             <>

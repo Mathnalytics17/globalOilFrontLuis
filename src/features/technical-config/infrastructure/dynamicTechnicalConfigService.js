@@ -26,6 +26,7 @@ const resourceService = (path) => {
     remove: async (id) => unwrap(await apiClient.delete(`${base}${id}/`)),
     delete: async (id) => unwrap(await apiClient.delete(`${base}${id}/`)),
     restore: async (id) => unwrap(await apiClient.post(`${base}${id}/restore/`)),
+    reactivate: async (id) => unwrap(await apiClient.post(`${base}${id}/reactivate/`)),
   };
 };
 

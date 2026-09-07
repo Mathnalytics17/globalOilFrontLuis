@@ -26,6 +26,10 @@ export const assetTreeService = {
   async removeSamplingPoint(id) {
     await apiClient.delete(`/sampling-points/${id}/`);
   },
+  async reactivateSamplingPoint(id) {
+    const { data } = await apiClient.post(`/sampling-points/${id}/reactivate/`);
+    return data;
+  },
 
   async organizeSamplingPoint(id, payload) {
     const { data } = await apiClient.post(`/sampling-points/${id}/organize/`, payload);

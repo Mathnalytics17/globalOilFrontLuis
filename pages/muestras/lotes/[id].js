@@ -8,11 +8,13 @@ import {
   ClipboardCheck,
   FileSpreadsheet,
   RefreshCw,
+  ShieldOff,
 } from "lucide-react";
 import { toast } from "react-toastify";
 
 import DataTable from "@components/dataTableGen";
 import { sampleBatchesService } from "@features/samples/infrastructure/sampleBatchesService";
+import { samplesService } from "@features/samples/infrastructure/samplesService";
 
 const estadoLoteLabels = {
   borrador: "Borrador",
@@ -28,6 +30,7 @@ const estadoLoteLabels = {
 };
 
 const estadoMuestraLabels = {
+  invalidada: "Invalidada",
   registrada: "Registrada",
   en_laboratorio: "En laboratorio",
   en_analisis: "En análisis",
@@ -37,6 +40,7 @@ const estadoMuestraLabels = {
 };
 
 const getMuestraEstado = (muestra) => {
+  if (muestra.estado_operativo === "invalidada") return "invalidada";
   if (muestra.is_revisado) return "revisada";
   if (muestra.is_resultado_ingresado) return "resultados_ingresados";
   if (muestra.is_ingresado) return "en_laboratorio";
@@ -137,6 +141,7 @@ const DetalleLoteMuestrasPage = () => {
   const { id } = router.query;
   const [lote, setLote] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const [search, setSearch] = useState("");
   const [estadoFilter, setEstadoFilter] = useState("todos");
@@ -160,6 +165,23 @@ const DetalleLoteMuestrasPage = () => {
     }
   };
 
+  const toggleSampleValidity = async (sample) => {
+    const invalid = sample.estado_operativo === "invalidada";
+    const reason = window.prompt(`Indique el motivo para ${invalid ? "reactivar" : "invalidar"} la muestra ${sample.id}:`);
+    if (!reason?.trim()) return;
+    setActionLoading(true);
+    try {
+      if (invalid) await samplesService.reactivate(sample.id, reason.trim());
+      else await samplesService.invalidate(sample.id, reason.trim());
+      toast.success(invalid ? "Muestra reactivada." : "Muestra invalidada sin borrar su historial.");
+      await fetchLote();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || error?.response?.data?.reason?.[0] || "No se pudo cambiar el estado de la muestra.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const muestras = lote?.muestras || [];
 
   const resumen = useMemo(() => {
@@ -167,7 +189,9 @@ const DetalleLoteMuestrasPage = () => {
       (acc, muestra) => {
         acc.total += 1;
 
-        if (muestra.is_revisado) {
+        if (muestra.estado_operativo === "invalidada") {
+          acc.invalidadas += 1;
+        } else if (muestra.is_revisado) {
           acc.revisadas += 1;
         } else if (muestra.is_resultado_ingresado) {
           acc.resultados += 1;
@@ -188,6 +212,7 @@ const DetalleLoteMuestrasPage = () => {
         enLaboratorio: 0,
         resultados: 0,
         revisadas: 0,
+        invalidadas: 0,
         aceites: 0,
         grasas: 0,
       }
@@ -328,6 +353,13 @@ const DetalleLoteMuestrasPage = () => {
       handler: (row) => router.push(`/muestras/lotes/${lote.id}/muestras/${row.id}`),
       color: "text-yellow-300 hover:text-yellow-200",
     },
+    {
+      id: "toggle-sample-validity",
+      icon: <ShieldOff size={16} />,
+      tooltip: "Invalidar o reactivar muestra",
+      handler: toggleSampleValidity,
+      color: "text-red-300 hover:text-red-200",
+    },
   ];
 
   if (loading) {
@@ -368,6 +400,15 @@ const DetalleLoteMuestrasPage = () => {
 
   return (
     <div className="min-h-screen text-white p-4 md:p-5">
+      {actionLoading ? (
+        <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm grid place-items-center cursor-wait" role="status" aria-busy="true">
+          <div className="bg-[#181818] border border-[#444] rounded-xl px-10 py-8 text-center shadow-2xl">
+            <RefreshCw className="animate-spin mx-auto mb-4 text-red-500" size={42} />
+            <strong>Actualizando la muestra...</strong>
+            <p className="text-gray-400 text-sm mt-2">Espere un momento. No cierre esta página.</p>
+          </div>
+        </div>
+      ) : null}
       <div className="max-w-[1500px] mx-auto space-y-4">
         <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
@@ -518,12 +559,13 @@ const DetalleLoteMuestrasPage = () => {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-6 gap-4">
+        <section className="grid grid-cols-1 md:grid-cols-7 gap-4">
           <SummaryCard title="Total muestras" value={resumen.total} />
           <SummaryCard title="Pendientes" value={resumen.pendientes} />
           <SummaryCard title="En laboratorio" value={resumen.enLaboratorio} />
           <SummaryCard title="Resultados" value={resumen.resultados} />
           <SummaryCard title="Revisadas" value={resumen.revisadas} />
+          <SummaryCard title="Invalidadas" value={resumen.invalidadas} />
           <SummaryCard
             title="Tipos"
             value={`${resumen.aceites} A / ${resumen.grasas} G`}
@@ -559,6 +601,7 @@ const DetalleLoteMuestrasPage = () => {
                   Resultados ingresados
                 </option>
                 <option value="revisada">Revisada</option>
+                <option value="invalidada">Invalidada</option>
               </select>
             </div>
           </div>

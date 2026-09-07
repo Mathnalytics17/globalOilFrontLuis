@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
-import { Add, Edit, KeyboardArrowLeft, KeyboardArrowRight, Refresh, RestartAlt, Save, Search } from '@mui/icons-material';
+import { Add, DeleteOutline, Edit, KeyboardArrowLeft, KeyboardArrowRight, Refresh, RestartAlt, Save, Search } from '@mui/icons-material';
 import RequirePermission from '@features/auth/presentation/RequirePermission';
 import { securityService } from '../../infrastructure/securityService';
 import s from '../components/Security.module.css';
@@ -33,6 +33,7 @@ function SecurityRolesPermissionsContent() {
   const [rolesCollapsed, setRolesCollapsed] = useState(false);
   const [roleEditor, setRoleEditor] = useState(null);
   const [roleSaving, setRoleSaving] = useState(false);
+  const [showInactiveRoles, setShowInactiveRoles] = useState(false);
 
   const selectedRole = useMemo(
     () => roles.find((role) => String(role.id) === String(selectedRoleId)),
@@ -198,6 +199,20 @@ function SecurityRolesPermissionsContent() {
     }
   };
 
+  const toggleRole = async (role) => {
+    if (roleIsLocked(role)) return;
+    try {
+      if (role.active === false) await securityService.roles.reactivate(role.id);
+      else await securityService.roles.remove(role.id);
+      toast.success(role.active === false ? 'Rol reactivado.' : 'Rol desactivado.');
+      await load();
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'No se pudo cambiar el estado del rol.'));
+    }
+  };
+
+  const visibleRoles = showInactiveRoles ? roles : roles.filter((role) => role.active !== false);
+
   return (
     <main className={s.page}>
       <div className={s.scroll}>
@@ -232,7 +247,7 @@ function SecurityRolesPermissionsContent() {
                 <div className={s.panelTitleRow}>
                   <h2>Roles</h2>
                   <div className={s.panelTitleActions}>
-                    <span>{roles.length}</span>
+                    <span>{visibleRoles.length}</span>
                     {selectedRole && !locked ? (
                       <button type="button" className={s.collapseButton} onClick={() => openRoleEditor(selectedRole)} title="Editar rol">
                         <Edit fontSize="small" />
@@ -249,7 +264,8 @@ function SecurityRolesPermissionsContent() {
                   </div>
                 </div>
                 <div className={s.sideList}>
-                  {roles.map((role) => (
+                  <label className={s.small}><input type="checkbox" checked={showInactiveRoles} onChange={(event) => setShowInactiveRoles(event.target.checked)} /> Mostrar inactivos</label>
+                  {visibleRoles.map((role) => (
                     <button
                       key={role.id}
                       className={`${s.sideRow} ${String(selectedRoleId) === String(role.id) ? s.sideRowActive : ''}`}
@@ -260,6 +276,7 @@ function SecurityRolesPermissionsContent() {
                         <strong>{role.nombre || role.name || role.code}</strong>
                         <span className={s.small}>{role.scope || role.tipo || 'COMPANY'} - {roleIsLocked(role) ? 'Protegido' : 'Editable'}</span>
                       </span>
+                      {!roleIsLocked(role) ? <span role="button" tabIndex={0} title={role.active === false ? 'Reactivar rol' : 'Desactivar rol'} onClick={(event) => { event.stopPropagation(); toggleRole(role); }} onKeyDown={() => {}}><DeleteOutline fontSize="small" /></span> : null}
                     </button>
                   ))}
                 </div>

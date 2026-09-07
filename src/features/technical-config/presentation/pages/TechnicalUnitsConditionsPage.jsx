@@ -37,12 +37,13 @@ export default function TechnicalUnitsConditionsPage() {
   const [drawer, setDrawer] = useState(null);
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
 
   const load = async () => {
     try {
       const [unitList, conditionList] = await Promise.all([
-        technicalConfigService.listUnits({}),
-        technicalConfigService.listConditions({}),
+        technicalConfigService.listUnits(showInactive ? {} : { activo: true }),
+        technicalConfigService.listConditions(showInactive ? {} : { activo: true }),
       ]);
       setUnits(unitList || []);
       setConditions(conditionList || []);
@@ -51,7 +52,7 @@ export default function TechnicalUnitsConditionsPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [showInactive]);
 
   const filteredUnits = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -136,13 +137,29 @@ export default function TechnicalUnitsConditionsPage() {
   };
 
   const removeUnit = async (unit) => {
-    if (!window.confirm(`¿Eliminar la unidad ${unit.simbolo} - ${unit.nombre}?`)) return;
+    if (!window.confirm(`¿Desactivar la unidad ${unit.simbolo} - ${unit.nombre}?`)) return;
     try {
       await dynamicTechnicalConfigService.units.remove(unit.id);
-      toast.success('Unidad eliminada.');
+      toast.success('Unidad desactivada.');
       await load();
     } catch (err) {
       toast.error(stringifyError(err, 'No se pudo eliminar la unidad.'));
+    }
+  };
+
+  const toggleRecord = async (row) => {
+    try {
+      if (tab === 'units') {
+        if (row.activo === false) await technicalConfigService.restoreUnit(row.id);
+        else await technicalConfigService.deleteUnit(row.id);
+      } else if (tab === 'conditions') {
+        if (row.activo === false) await technicalConfigService.restoreCondition(row.id);
+        else await technicalConfigService.deleteCondition(row.id);
+      }
+      toast.success(row.activo === false ? 'Registro reactivado.' : 'Registro desactivado.');
+      await load();
+    } catch (err) {
+      toast.error(stringifyError(err, 'No se pudo cambiar el estado.'));
     }
   };
 
@@ -190,6 +207,7 @@ export default function TechnicalUnitsConditionsPage() {
                 placeholder={tab === 'units' ? 'Buscar unidades...' : tab === 'conditions' ? 'Buscar condiciones...' : 'Buscar operadores...'}
               />
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#bbb' }}><input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} /> Mostrar inactivos</label>
             {tab === 'units' ? (
               <button type="button" className={ps.buttonPrimary} onClick={() => openUnit()}>
                 <Plus size={22} /> Nueva unidad
@@ -221,9 +239,9 @@ export default function TechnicalUnitsConditionsPage() {
                   <td><span className={ps.statusPill}><span className={`${ps.statusDot} ${ps.greenDot}`} />{row.activo === false ? 'Inactivo' : 'Activo'}</span></td>
                   <td>
                     {tab === 'units' ? (
-                      <button type="button" className={ps.tableAction} onClick={() => openUnit(row)}><MoreHorizontal size={24} /></button>
+                      <><button type="button" className={ps.tableAction} title="Editar" onClick={() => openUnit(row)}><MoreHorizontal size={24} /></button><button type="button" className={ps.tableAction} onClick={() => toggleRecord(row)}>{row.activo === false ? 'Reactivar' : 'Desactivar'}</button></>
                     ) : tab === 'conditions' ? (
-                      <button type="button" className={ps.tableAction} onClick={() => openCondition(row)}><MoreHorizontal size={24} /></button>
+                      <><button type="button" className={ps.tableAction} title="Editar" onClick={() => openCondition(row)}><MoreHorizontal size={24} /></button><button type="button" className={ps.tableAction} onClick={() => toggleRecord(row)}>{row.activo === false ? 'Reactivar' : 'Desactivar'}</button></>
                     ) : <span style={{ color: '#777' }}>—</span>}
                   </td>
                 </tr>
