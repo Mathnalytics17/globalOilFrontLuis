@@ -263,11 +263,19 @@ const LotesMuestrasPage = () => {
   const updateFilter = (field, value) => { setPage(1); setFilters((prev) => ({ ...prev, [field]: value })); };
 
   const handleDelete = async (lote) => {
-    const confirmed = window.confirm(`¿Eliminar el lote ${lote.id}? Esta acción eliminará también sus muestras si el backend lo permite.`);
-    if (!confirmed) return;
     try {
-      await sampleBatchesService.remove(lote.id);
-      toast.success('Lote eliminado');
+      const total = Number(lote.total_muestras ?? lote.progreso?.total ?? 0);
+      if (lote.estado === 'borrador' && total === 0) {
+        if (!window.confirm(`¿Eliminar el borrador vacío ${lote.id}?`)) return;
+        await sampleBatchesService.remove(lote.id);
+        toast.success('Borrador vacío eliminado.');
+      } else {
+        const reason = window.prompt(`Motivo para cancelar el lote ${lote.id}:`);
+        if (reason === null) return;
+        if (!reason.trim()) return toast.error('El motivo es obligatorio para conservar la trazabilidad.');
+        await sampleBatchesService.cancel(lote.id, reason.trim());
+        toast.success('Lote cancelado; su historial fue conservado.');
+      }
       fetchData();
     } catch (error) {
       console.error(error);
@@ -438,7 +446,7 @@ const LotesMuestrasPage = () => {
                               </button>
                             );
                           })}
-                          <button disabled={locked} onClick={() => handleDelete(row)} className="mini-action danger" title={locked ? 'Eliminación bloqueada por estado' : 'Eliminar lote'}><Trash2 size={15} /></button>
+                          <button disabled={locked || row.estado === 'cancelado'} onClick={() => handleDelete(row)} className="mini-action danger" title={locked ? 'Cancelación bloqueada por estado' : row.estado === 'borrador' && Number(row.total_muestras || 0) === 0 ? 'Eliminar borrador vacío' : 'Cancelar lote con motivo'}><Trash2 size={15} /></button>
                         </div>
                       </span>
                     </div>

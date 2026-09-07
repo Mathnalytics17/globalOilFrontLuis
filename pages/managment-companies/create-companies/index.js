@@ -23,6 +23,7 @@ const emptyForm = {
   is_active: true,
   admin_email: '',
   admin_role: '',
+  transfer_existing_admin: false,
 };
 
 const getList = (payload) => {
@@ -107,6 +108,7 @@ function CreateCompany() {
       email: formData.email.trim(),
       is_active: formData.is_active,
       admin_email: formData.admin_email.trim(),
+      transfer_existing_admin: formData.transfer_existing_admin,
     };
 
     if (formData.admin_role) {
@@ -310,6 +312,21 @@ function CreateCompany() {
                 </p>
               </div>
             </div>
+
+            <label className="toggleLine transferToggle">
+              <input
+                type="checkbox"
+                name="transfer_existing_admin"
+                checked={formData.transfer_existing_admin}
+                onChange={handleChange}
+              />
+              <span>
+                Reinvitar y transferir si el correo ya existe
+                <small>
+                  La cuenta conservará su identidad e historial. Solo cambiará a esta empresa cuando acepte la nueva invitación.
+                </small>
+              </span>
+            </label>
           </section>
 
           <section className="footerBar">
@@ -498,6 +515,13 @@ function CreateCompany() {
           gap: 12px;
           color: #fff;
           cursor: pointer;
+        }
+
+        .transferToggle {
+          padding: 14px 16px;
+          border: 1px solid rgba(255,255,255,.12);
+          border-radius: 10px;
+          background: rgba(255,255,255,.025);
         }
 
         .toggleLine input {

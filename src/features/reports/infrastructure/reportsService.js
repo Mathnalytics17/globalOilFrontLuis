@@ -38,6 +38,10 @@ export const reportsService = {
     const { data } = await apiClient.delete(`${BASE_URL}${id}/`);
     return data;
   },
+  async annul(id, reason) {
+    const { data } = await apiClient.post(`${BASE_URL}${id}/annul/`, { reason });
+    return data;
+  },
 
   async print(sampleId) {
     return apiClient.get(`${BASE_URL}imprimir_reporte/`, {

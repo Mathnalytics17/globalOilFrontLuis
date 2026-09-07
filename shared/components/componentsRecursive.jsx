@@ -85,7 +85,7 @@ const TreeNode = ({ node, reload }) => {
   };
 
   const removeNode = async () => {
-    const verb = node.type === 'sampling-point' ? 'Desactivar' : 'Eliminar';
+    const verb = ['sampling-point', 'machine'].includes(node.type) ? 'Desactivar' : 'Eliminar';
     if (!window.confirm(`${verb} "${node.name}"?`)) return;
     try {
       if (node.type === 'sampling-point') {
@@ -95,10 +95,22 @@ const TreeNode = ({ node, reload }) => {
       } else {
         await foldersService.remove(node.id);
       }
-      toast.success('Registro eliminado');
+      toast.success(['sampling-point', 'machine'].includes(node.type) ? 'Registro desactivado' : 'Carpeta eliminada');
       reload();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'No se pudo eliminar el registro');
+    }
+  };
+
+  const renameFolder = async () => {
+    const name = window.prompt('Nuevo nombre de la carpeta:', node.name);
+    if (name === null || !name.trim() || name.trim() === node.name) return;
+    try {
+      await foldersService.patch(node.id, { nombre: name.trim() });
+      toast.success('Carpeta renombrada.');
+      reload();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'No se pudo renombrar la carpeta');
     }
   };
 
@@ -141,6 +153,7 @@ const TreeNode = ({ node, reload }) => {
             <FolderPlus className="h-4 w-4 text-sky-400" />
           </button>
         )}
+        {node.type === 'folder' ? <button type="button" title="Renombrar carpeta" onClick={renameFolder}><Pencil className="h-4 w-4 text-emerald-400" /></button> : null}
         {node.type === 'machine' && (
           <>
             <button type="button" title="Ver lotes y muestras de esta maquina" onClick={openFilteredLots}>
@@ -170,9 +183,7 @@ const TreeNode = ({ node, reload }) => {
             </button>
           </>
         )}
-        <button type="button" title="Eliminar" onClick={removeNode}>
-          <Trash2 className="h-4 w-4 text-red-500" />
-        </button>
+        {node.type !== 'root' ? <button type="button" title={['sampling-point', 'machine'].includes(node.type) ? 'Desactivar' : 'Eliminar carpeta vacía'} onClick={removeNode}><Trash2 className="h-4 w-4 text-red-500" /></button> : null}
       </div>
 
       <ModalCreationFile

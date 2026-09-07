@@ -85,6 +85,8 @@ export const listEquipment = (params = {}) => callList(dynamicTechnicalConfigSer
 export const createEquipment = (payload) => dynamicTechnicalConfigService.testEquipment.create(payload);
 export const updateEquipment = (id, payload) => dynamicTechnicalConfigService.testEquipment.update(id, payload);
 export const patchEquipment = (id, payload) => dynamicTechnicalConfigService.testEquipment.patch(id, payload);
+export const deleteEquipment = (id) => dynamicTechnicalConfigService.testEquipment.remove(id);
+export const restoreEquipment = (id) => dynamicTechnicalConfigService.testEquipment.reactivate(id);
 export const listTestEquipment = listEquipment;
 export const createTestEquipment = createEquipment;
 export const updateTestEquipment = updateEquipment;
@@ -93,6 +95,8 @@ export const listMethods = (params = {}) => callList(dynamicTechnicalConfigServi
 export const createMethod = (payload) => dynamicTechnicalConfigService.equipmentMethods.create(payload);
 export const updateMethod = (id, payload) => dynamicTechnicalConfigService.equipmentMethods.update(id, payload);
 export const patchMethod = (id, payload) => dynamicTechnicalConfigService.equipmentMethods.patch(id, payload);
+export const deleteMethod = (id) => dynamicTechnicalConfigService.equipmentMethods.remove(id);
+export const restoreMethod = (id) => dynamicTechnicalConfigService.equipmentMethods.reactivate(id);
 export const listEquipmentMethods = listMethods;
 export const createEquipmentMethod = createMethod;
 export const updateEquipmentMethod = updateMethod;
@@ -101,11 +105,15 @@ export const listUnits = (params = {}) => callList(dynamicTechnicalConfigService
 export const createUnit = (payload) => dynamicTechnicalConfigService.units.create(payload);
 export const updateUnit = (id, payload) => dynamicTechnicalConfigService.units.update(id, payload);
 export const patchUnit = (id, payload) => dynamicTechnicalConfigService.units.patch(id, payload);
+export const deleteUnit = (id) => dynamicTechnicalConfigService.units.remove(id);
+export const restoreUnit = (id) => dynamicTechnicalConfigService.units.reactivate(id);
 
 export const listConditions = (params = {}) => callList(dynamicTechnicalConfigService.conditions, params);
 export const createCondition = (payload) => dynamicTechnicalConfigService.conditions.create(payload);
 export const updateCondition = (id, payload) => dynamicTechnicalConfigService.conditions.update(id, payload);
 export const patchCondition = (id, payload) => dynamicTechnicalConfigService.conditions.patch(id, payload);
+export const deleteCondition = (id) => dynamicTechnicalConfigService.conditions.remove(id);
+export const restoreCondition = (id) => dynamicTechnicalConfigService.conditions.reactivate(id);
 
 export const getDashboard = async () => {
   const [catalogs, items, fields, limitSources, tests] = await Promise.all([
@@ -190,6 +198,8 @@ export const technicalConfigService = {
   updateEquipment,
   updateTestEquipment,
   patchEquipment,
+  deleteEquipment,
+  restoreEquipment,
   listMethods,
   listEquipmentMethods,
   createMethod,
@@ -197,14 +207,20 @@ export const technicalConfigService = {
   updateMethod,
   updateEquipmentMethod,
   patchMethod,
+  deleteMethod,
+  restoreMethod,
   listUnits,
   createUnit,
   updateUnit,
   patchUnit,
+  deleteUnit,
+  restoreUnit,
   listConditions,
   createCondition,
   updateCondition,
   patchCondition,
+  deleteCondition,
+  restoreCondition,
 };
 
 export default technicalConfigService;

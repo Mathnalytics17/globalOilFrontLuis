@@ -43,6 +43,14 @@ export const sampleBatchesService = {
     const { data } = await apiClient.post(`${BASE_URL}${id}/recalcular-estado/`);
     return data;
   },
+  async cancel(id, reason) {
+    const { data } = await apiClient.post(`${BASE_URL}${id}/cancel/`, { reason });
+    return data;
+  },
+  async reopen(id) {
+    const { data } = await apiClient.post(`${BASE_URL}${id}/reopen/`);
+    return data;
+  },
 
   async addSamples(id, muestras) {
     const { data } = await apiClient.post(`${BASE_URL}${id}/samples/`, {

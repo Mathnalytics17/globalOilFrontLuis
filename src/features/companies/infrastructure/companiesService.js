@@ -30,4 +30,20 @@ export const companiesService = {
     const { data } = await apiClient.delete(`/companies/${id}/`);
     return data;
   },
+  async block(id, reason) {
+    const { data } = await apiClient.post(`/companies/${id}/block/`, { reason });
+    return data;
+  },
+  async readOnly(id, payload = {}) {
+    const { data } = await apiClient.post(`/companies/${id}/read-only/`, payload);
+    return data;
+  },
+  async restoreActive(id) {
+    const { data } = await apiClient.post(`/companies/${id}/restore-active/`);
+    return data;
+  },
+  async inviteAdmin(id, payload) {
+    const { data } = await apiClient.post(`/companies/${id}/invite-admin/`, payload);
+    return data;
+  },
 };

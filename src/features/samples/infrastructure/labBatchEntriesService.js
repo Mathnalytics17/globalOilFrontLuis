@@ -28,8 +28,8 @@ export const labBatchEntriesService = {
     return data;
   },
 
-  async remove(id) {
-    const { data } = await api.delete(`${BASE_URL}${id}/`);
+  async remove(id, reason = '') {
+    const { data } = await api.delete(`${BASE_URL}${id}/`, { data: { reason } });
     return data;
   },
 };
