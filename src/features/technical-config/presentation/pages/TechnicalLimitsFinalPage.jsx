@@ -1,8 +1,8 @@
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Pencil, Plus, Save, Search } from 'lucide-react';
+import { ArrowDownToLine, ArrowLeft, Check, ChevronLeft, ChevronRight, FileUp, Pencil, Plus, Save, Search } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { dynamicTechnicalConfigService as api } from '../../infrastructure/dynamicTechnicalConfigService';
 import { normalizeList, slugify, buildErrorMessage } from '../components/technicalConfigUtils';
@@ -10,7 +10,7 @@ import styles from './TechnicalLimitsFinalPage.module.css';
 
 const STEPS = ['Prueba', 'Estructura', 'Origen', 'Matriz y semaforo', 'Resumen'];
 const OPERATORS = [
-  ['max', 'Maximo (<=)'], ['min', 'Minimo (>=)'], ['between', 'Rango'], ['eq', 'Igual'], ['neq', 'Diferente'],
+  ['max', 'Maximo (<=)'], ['min', 'Minimo (>=)'], ['between', 'Rango'], ['eq', 'Igual'], ['neq', 'Diferente'], ['in', 'En lista'], ['not_in', 'Fuera de lista'], ['informativo', 'Informativo'],
 ];
 const SEMAPHORE_OPERATORS = new Set(['max', 'min', 'between']);
 const SOURCE_LABELS = {
@@ -165,6 +165,8 @@ function normalizeLimitRule(value, operator = 'max') {
     : { valor_esperado: value, limite: value };
   const yellow = raw.usar_amarillo ?? SEMAPHORE_OPERATORS.has(operator);
 
+  if (operator === 'informativo') return { usar_amarillo: false };
+  if (operator === 'in' || operator === 'not_in') return { valor_esperado: firstNonEmpty(raw.valor_esperado, raw.limite, ''), usar_amarillo: false };
   if (operator === 'eq' || operator === 'neq') {
     return {
       valor_esperado: firstNonEmpty(raw.valor_esperado, raw.limite, ''),
@@ -210,6 +212,7 @@ function requiredBoundaryKeys(operator, yellow) {
 
 function validateRule(field, rawRule, context, scaleItems = []) {
   if (field.origen_limite === 'asignacion' || field.origen_limite === 'informativo') return '';
+  if ((rawRule?.operador || field.operador) === 'informativo') return '';
   const rule = normalizeLimitRule(rawRule, field.operador);
   const missing = requiredBoundaryKeys(field.operador, rule.usar_amarillo)
     .find((key) => rule[key] === '' || rule[key] === null || rule[key] === undefined);
@@ -308,9 +311,9 @@ function valueInputForField(field, value, onChange, scaleItems = []) {
   if (field.origen_limite === 'asignacion') return <span className={styles.inlineNote}>Se captura al asignar</span>;
   if (field.tipo_comparacion === 'booleano') return <select value={normalizeBooleanLimitValue(field, rule.valor_esperado)} onChange={(event) => patch({ valor_esperado: event.target.value, usar_amarillo: false })}>{booleanOptions(field).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>;
   const isScale = field.tipo_comparacion === 'escala';
-  if (['eq', 'neq'].includes(field.operador)) {
+  if (['eq', 'neq', 'in', 'not_in'].includes(field.operador)) {
     if (isScale) return <BoundaryInput field={field} boundary="valor_esperado" value={rule.valor_esperado} onChange={(next) => patch({ valor_esperado: next, usar_amarillo: false })} scaleItems={scaleItems} />;
-    return <input value={rule.valor_esperado || ''} placeholder="Valor esperado" onChange={(event) => patch({ valor_esperado: event.target.value, usar_amarillo: false })} />;
+    return <input value={rule.valor_esperado || ''} placeholder={['in', 'not_in'].includes(field.operador) ? 'Valores separados por ;' : 'Valor esperado'} onChange={(event) => patch({ valor_esperado: event.target.value, usar_amarillo: false })} />;
   }
   return <SemaphoreRuleEditor field={field} rule={rule} patch={patch} scaleItems={scaleItems} />;
 }
@@ -387,8 +390,9 @@ function SemaphoreRuleEditor({ field, rule, patch, scaleItems }) {
 }
 
 function LimitValueInput({ field, value, onChange, scaleItemsByScale }) {
-  const scaleItems = scaleItemsForField(field, scaleItemsByScale);
-  return valueInputForField(field, value, onChange, scaleItems);
+  const itemField = { ...field, operador: value?.operador || field.operador };
+  const scaleItems = scaleItemsForField(itemField, scaleItemsByScale);
+  return valueInputForField(itemField, value, onChange, scaleItems);
 }
 
 async function loadTestDetail(testLike) {
@@ -580,7 +584,7 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
       for (const criterion of catalogCriteria) {
         for (const field of catalogFields) {
           const error = validateRule(
-            field,
+            { ...field, operador: criterion.valores?.[field.codigo]?.operador || field.operador },
             criterion.valores?.[field.codigo],
             `${criterion.nombre} / ${field.nombre}`,
             scaleItemsForField(field, scaleItemsByScale),
@@ -627,7 +631,7 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
           ...row,
           valores: Object.fromEntries(catalogFields.map((field) => [
             field.codigo,
-            normalizeLimitRule(row.valores?.[field.codigo], field.operador),
+            { ...normalizeLimitRule(row.valores?.[field.codigo], row.valores?.[field.codigo]?.operador || field.operador), operador: row.valores?.[field.codigo]?.operador || field.operador },
           ])),
         })) : [],
         decision: {
@@ -660,7 +664,7 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
         {!loading && step === 0 && <TestStep tests={tests} selected={test} onSelect={selectTest} />}
         {!loading && step === 1 && <StructureTable fields={fields} />}
         {!loading && step === 2 && <SourceMapStep fields={fields} catalogs={catalogs} selectedCatalogs={selectedCatalogs} setSelectedCatalogs={setSelectedCatalogs} updateField={updateField} />}
-        {!loading && step === 3 && <MatrixStep fields={fields} catalogFields={catalogFields} directFields={directFields} selectedCatalogs={selectedCatalogs} catalogs={catalogs} criteria={catalogCriteria} setCriterionValue={setCriterionValue} updateField={updateField} scaleItemsByScale={scaleItemsByScale} />}
+        {!loading && step === 3 && <MatrixStep fields={fields} catalogFields={catalogFields} directFields={directFields} selectedCatalogs={selectedCatalogs} catalogs={catalogs} criteria={catalogCriteria} setCriterionValue={setCriterionValue} updateField={updateField} scaleItemsByScale={scaleItemsByScale} sourceId={editing ? (initialSourceId || router.query.id) : ''} />}
         {!loading && step === 4 && <Preview test={test} fields={fields} catalogFields={catalogFields} directFields={directFields} criteria={catalogCriteria} selectedCatalogs={selectedCatalogs} />}
       </section>
       <footer className={styles.footer}>{step > 0 && <button className={styles.secondary} onClick={() => setStep((value) => value - 1)}>Anterior</button>}{step < STEPS.length - 1 ? <button onClick={next}>Siguiente <ChevronRight size={18} /></button> : <button onClick={save} disabled={saving}><Save size={18} /> {saving ? 'Guardando...' : 'Guardar configuración'}</button>}</footer>
@@ -772,25 +776,30 @@ function SourceMapStep({ fields, catalogs, selectedCatalogs, setSelectedCatalogs
   );
 }
 
-function MatrixStep({ catalogFields, directFields, criteria, setCriterionValue, updateField, scaleItemsByScale }) {
+function MatrixStep({ catalogFields, directFields, criteria, setCriterionValue, updateField, scaleItemsByScale, sourceId }) {
+  const fileRef = useRef(null);
+  const downloadTemplate = async () => {
+    try { const response = await api.limitSources.downloadMatrixTemplate(sourceId); const url = URL.createObjectURL(response.data); const link = document.createElement('a'); link.href = url; link.download = 'matriz_limites.xlsx'; link.click(); URL.revokeObjectURL(url); } catch (error) { toast.error(buildErrorMessage(error, 'No se pudo descargar la plantilla.')); }
+  };
+  const importMatrix = async (event) => {
+    const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
+    try { const result = await api.limitSources.importMatrix(sourceId, file); toast.success(`${result.actualizados} reglas actualizadas. Recargue la pantalla para ver la matriz.`); } catch (error) { toast.error(buildErrorMessage(error, 'No se pudo importar la matriz.')); }
+  };
   const changeOperator = (field, operator) => {
     updateField(field.codigo, {
       operador: operator,
       valor_global: normalizeLimitRule(field.valor_global, operator),
     });
     criteria.forEach((criterion) => {
-      setCriterionValue(
-        criterion.key,
-        field.codigo,
-        normalizeLimitRule(criterion.valores?.[field.codigo], operator),
-      );
+      setCriterionValue(criterion.key, field.codigo, { ...normalizeLimitRule(criterion.valores?.[field.codigo], operator), operador: operator });
     });
   };
   return (
     <div>
       <h2>4. Matriz de limites</h2>
-      <p className={styles.muted}>Defina las fronteras siguiendo la banda de color. La zona amarilla viene activa y puede deshabilitarse por campo.</p>
-      {!!catalogFields.length && <section className={styles.limitSection}><h3>Campos dependientes de catalogo</h3><div className={styles.tableWrap}><table><thead><tr><th>Combinacion</th>{catalogFields.map((field) => <th key={field.codigo}><strong>{field.nombre}</strong><select value={field.operador} onChange={(event) => changeOperator(field, event.target.value)}>{operatorsForField(field).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></th>)}</tr></thead><tbody>{criteria.map((criterion) => <tr key={criterion.key}><td><strong>{criterion.nombre}</strong></td>{catalogFields.map((field) => <td key={field.codigo}><LimitValueInput field={field} value={criterion.valores?.[field.codigo]} onChange={(value) => setCriterionValue(criterion.key, field.codigo, value)} scaleItemsByScale={scaleItemsByScale} /></td>)}</tr>)}</tbody></table></div></section>}
+      <p className={styles.muted}>Defina las fronteras siguiendo la banda de color. La operación y el semáforo se configuran por combinación y campo.</p>
+      {!!sourceId && <div className={styles.toolbar}><p>Use la plantilla oficial para actualizar muchas reglas.</p><button type="button" className={styles.secondary} onClick={downloadTemplate}><ArrowDownToLine size={16} /> Descargar plantilla</button><button type="button" className={styles.secondary} onClick={() => fileRef.current?.click()}><FileUp size={16} /> Subir Excel</button><input ref={fileRef} type="file" accept=".xlsx" onChange={importMatrix} hidden /></div>}
+      {!!catalogFields.length && <section className={styles.limitSection}><h3>Campos dependientes de catalogo</h3><p className={styles.muted}>Cada combinación puede usar una operación distinta para cada campo.</p><div className={styles.tableWrap}><table><thead><tr><th>Combinacion</th>{catalogFields.map((field) => <th key={field.codigo}><strong>{field.nombre}</strong></th>)}</tr></thead><tbody>{criteria.map((criterion) => <tr key={criterion.key}><td><strong>{criterion.nombre}</strong></td>{catalogFields.map((field) => { const rule = criterion.valores?.[field.codigo] || {}; const operator = rule.operador || field.operador; return <td key={field.codigo}><select value={operator} onChange={(event) => setCriterionValue(criterion.key, field.codigo, { ...normalizeLimitRule(rule, event.target.value), operador: event.target.value })}>{operatorsForField(field).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><LimitValueInput field={field} value={{ ...rule, operador: operator }} onChange={(value) => setCriterionValue(criterion.key, field.codigo, { ...value, operador: operator })} scaleItemsByScale={scaleItemsByScale} /></td>; })}</tr>)}</tbody></table></div></section>}
       {!!directFields.length && <section className={styles.limitSection}><h3>Campos con limite directo, escala o esperado</h3><div className={styles.directGrid}>{directFields.map((field) => <div key={field.codigo} className={styles.directField}><strong>{field.nombre}</strong><small>{SOURCE_LABELS[field.origen_limite]}</small><select value={field.operador} onChange={(event) => changeOperator(field, event.target.value)}>{operatorsForField(field).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><LimitValueInput field={field} value={field.valor_global} onChange={(value) => updateField(field.codigo, { valor_global: value })} scaleItemsByScale={scaleItemsByScale} /></div>)}</div></section>}
     </div>
   );

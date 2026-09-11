@@ -32,16 +32,28 @@ const resourceService = (path) => {
 
 const catalogFields = resourceService('technical-config/catalog-fields');
 const catalogItems = resourceService('technical-config/catalog-items');
+const catalogVersions = resourceService('technical-config/catalog-versions');
 const catalogItemValues = resourceService('technical-config/catalog-item-values');
 const limitSourcesBase = resourceService('technical-config/limit-sources');
 
 export const dynamicTechnicalConfigService = {
   catalogs: resourceService('technical-config/catalogs'),
+  catalogVersions,
   sampleFields: resourceService('technical-config/sample-fields'),
   catalogFields,
   fields: catalogFields,
   catalogItems,
   items: catalogItems,
+  importCatalogItems: async (version, archivo) => {
+    const form = new FormData();
+    form.append('version', version);
+    form.append('archivo', archivo);
+    return unwrap(await apiClient.post(endpoint('technical-config/catalog-items/import-excel'), form));
+  },
+  downloadCatalogItemsTemplate: async (version) => apiClient.get(
+    `${endpoint('technical-config/catalog-items/template-excel')}?${new URLSearchParams({ version })}`,
+    { responseType: 'blob' }
+  ),
   catalogItemValues,
   itemValues: catalogItemValues,
   comparisonScales: resourceService('technical-config/comparison-scales'),
@@ -55,6 +67,8 @@ export const dynamicTechnicalConfigService = {
     configure: async (payload) => unwrap(await apiClient.post(endpoint('technical-config/limit-sources/configure'), payload)),
     resolvePreview: async (payload) => unwrap(await apiClient.post(endpoint('technical-config/limit-sources/resolve-preview'), payload)),
     generateFields: async (id, payload = {}) => unwrap(await apiClient.post(`${endpoint('technical-config/limit-sources')}${id}/generate-fields/`, payload)),
+    downloadMatrixTemplate: async (id) => apiClient.get(`${endpoint('technical-config/limit-sources')}${id}/matrix-template/`, { responseType: 'blob' }),
+    importMatrix: async (id, archivo) => { const form = new FormData(); form.append('archivo', archivo); return unwrap(await apiClient.post(`${endpoint('technical-config/limit-sources')}${id}/import-matrix/`, form)); },
   },
   limitFields: resourceService('technical-config/limit-fields'),
   evaluationCriteria: resourceService('technical-config/evaluation-criteria'),

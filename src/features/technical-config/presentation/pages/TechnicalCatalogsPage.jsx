@@ -1,7 +1,7 @@
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ChevronRight, Edit3, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowLeft, ChevronRight, Edit3, FileUp, MoreHorizontal, Plus, Search, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { technicalConfigService } from '../../infrastructure/technicalConfigService';
 import { apiErrorToText, slugify } from '../components/technicalConfigUtils';
@@ -22,6 +22,7 @@ const EMPTY_CATALOG = {
 };
 
 const EMPTY_ITEM = { nombre: '', codigo: '', descripcion: '', activo: true };
+const EMPTY_VERSION = { nombre: '', norma_referencia: '', fecha_vigencia: '', notas: '', activo: true };
 
 const appliesLabel = (value) => {
   const v = String(value || '').toLowerCase();
@@ -34,14 +35,18 @@ const appliesLabel = (value) => {
 export default function TechnicalCatalogsPage() {
   const [catalogs, setCatalogs] = useState([]);
   const [items, setItems] = useState([]);
+  const [versions, setVersions] = useState([]);
   const [selectedCatalogId, setSelectedCatalogId] = useState('');
+  const [selectedVersionId, setSelectedVersionId] = useState('');
   const [drawer, setDrawer] = useState(null);
   const [catalogForm, setCatalogForm] = useState(EMPTY_CATALOG);
   const [itemForm, setItemForm] = useState(EMPTY_ITEM);
+  const [versionForm, setVersionForm] = useState(EMPTY_VERSION);
   const [editingCatalogId, setEditingCatalogId] = useState(null);
   const [editingItemId, setEditingItemId] = useState(null);
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef(null);
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogPageSize, setCatalogPageSize] = useState(20);
   const [catalogMeta, setCatalogMeta] = useState({ count: 0 });
@@ -52,6 +57,10 @@ export default function TechnicalCatalogsPage() {
   const selectedCatalog = useMemo(
     () => catalogs.find((catalog) => String(catalog.id) === String(selectedCatalogId)),
     [catalogs, selectedCatalogId]
+  );
+  const selectedVersion = useMemo(
+    () => versions.find((version) => String(version.id) === String(selectedVersionId)),
+    [versions, selectedVersionId]
   );
 
   const itemCounts = useMemo(() => {
@@ -101,7 +110,7 @@ export default function TechnicalCatalogsPage() {
   };
 
   const loadItems = async () => {
-    if (!selectedCatalogId) {
+    if (!selectedCatalogId || !selectedVersionId) {
       setItems([]);
       setItemMeta({ count: 0 });
       return;
@@ -110,6 +119,7 @@ export default function TechnicalCatalogsPage() {
       const data = await technicalConfigService.pageCatalogItems({
         incluir_eliminados: true,
         catalogo: selectedCatalogId,
+        version: selectedVersionId,
         page: itemPage,
         page_size: itemPageSize,
       });
@@ -120,12 +130,25 @@ export default function TechnicalCatalogsPage() {
     }
   };
 
+  const loadVersions = async () => {
+    if (!selectedCatalogId) { setVersions([]); return; }
+    try {
+      const data = await technicalConfigService.pageCatalogVersions({ catalogo: selectedCatalogId, incluir_eliminados: true, page_size: 100 });
+      setVersions(data.results || []);
+    } catch (error) {
+      toast.error(apiErrorToText(error) || 'No se pudieron cargar las versiones.');
+    }
+  };
+
   const load = async () => {
-    await Promise.all([loadCatalogs(), loadItems()]);
+    await Promise.all([loadCatalogs(), loadVersions(), loadItems()]);
   };
 
   useEffect(() => { loadCatalogs(); }, [catalogPage, catalogPageSize, search]);
-  useEffect(() => { loadItems(); }, [selectedCatalogId, itemPage, itemPageSize]);
+  useEffect(() => { loadVersions(); }, [selectedCatalogId]);
+  useEffect(() => { loadItems(); }, [selectedCatalogId, selectedVersionId, itemPage, itemPageSize]);
+  // La navegación interna nunca debe arrastrar un panel abierto a otra vista.
+  useEffect(() => { setDrawer(null); }, [selectedCatalogId, selectedVersionId]);
 
   const openNewCatalog = () => {
     setEditingCatalogId(null);
@@ -152,6 +175,11 @@ export default function TechnicalCatalogsPage() {
     setEditingItemId(null);
     setItemForm(EMPTY_ITEM);
     setDrawer('item');
+  };
+
+  const openNewVersion = () => {
+    setVersionForm(EMPTY_VERSION);
+    setDrawer('version');
   };
 
   const openEditItem = (item) => {
@@ -197,6 +225,7 @@ export default function TechnicalCatalogsPage() {
     try {
       const payload = {
         catalogo: selectedCatalogId,
+        version: selectedVersionId,
         nombre: itemForm.nombre,
         codigo: slugify(itemForm.codigo || itemForm.nombre),
         descripcion: itemForm.descripcion || '',
@@ -211,6 +240,49 @@ export default function TechnicalCatalogsPage() {
       toast.error(apiErrorToText(error) || 'No se pudo guardar el item.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveVersion = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const version = await technicalConfigService.createCatalogVersion({ ...versionForm, catalogo: selectedCatalogId });
+      toast.success(`Versión ${version.numero} creada y marcada como actual.`);
+      setDrawer(null);
+      await loadVersions();
+      setSelectedVersionId(String(version.id));
+    } catch (error) {
+      toast.error(apiErrorToText(error) || 'No se pudo crear la versión.');
+    } finally { setSaving(false); }
+  };
+
+  const uploadItems = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setSaving(true);
+    try {
+      const result = await technicalConfigService.importCatalogItems(selectedVersionId, file);
+      toast.success(`${result.creados} ítems creados y ${result.actualizados} actualizados.`);
+      await loadItems();
+      await loadVersions();
+    } catch (error) {
+      toast.error(apiErrorToText(error) || 'No se pudo importar el archivo.');
+    } finally { setSaving(false); }
+  };
+
+  const downloadTemplate = async () => {
+    try {
+      const response = await technicalConfigService.downloadCatalogItemsTemplate(selectedVersionId);
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `plantilla_items_v${selectedVersion.numero}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(apiErrorToText(error) || 'No se pudo descargar la plantilla.');
     }
   };
 
@@ -239,27 +311,34 @@ export default function TechnicalCatalogsPage() {
     }
   };
 
-  if (selectedCatalog) {
+  if (selectedCatalog && selectedVersion) {
     return (
       <main className={ps.page}>
         <div className={ps.pageScroll}>
           <section className={ps.wideShell}>
-            <button type="button" className={ps.backButton} onClick={() => setSelectedCatalogId('')}>
+            <button type="button" className={ps.backButton} onClick={() => setSelectedVersionId('')}>
               <ArrowLeft size={21} />
-              Catálogos técnicos
+              Versiones de {selectedCatalog.nombre}
             </button>
 
             <header className={ps.header}>
               <div className={ps.headerMain}>
-                <h1 className={ps.sectionTitle}>{selectedCatalog.nombre}</h1>
+                <h1 className={ps.sectionTitle}>{selectedCatalog.nombre} · v{selectedVersion.numero}</h1>
                 <p className={ps.subtitle}>
-                  {appliesLabel(selectedCatalog.tipo_muestra)} · {selectedItems.length} items · <span style={{ color: selectedCatalog.activo === false ? '#ef232a' : '#58c878' }}>●</span> {selectedCatalog.activo === false ? 'Inactivo' : 'Activo'}
+                  {selectedVersion.norma_referencia || 'Sin norma de referencia'} · {itemMeta.count} ítems · {selectedVersion.fecha_vigencia || 'Sin fecha de vigencia'}
                 </p>
               </div>
               <div className={ps.actionsRight}>
                 <button type="button" className={ps.buttonPrimary} onClick={openNewItem}>
                   <Plus size={21} /> Nuevo item
                 </button>
+                <button type="button" className={ps.buttonSecondary} onClick={() => fileInputRef.current?.click()} disabled={saving}>
+                  <FileUp size={18} /> Subir Excel
+                </button>
+                <button type="button" className={ps.buttonSecondary} onClick={downloadTemplate}>
+                  <ArrowDownToLine size={18} /> Descargar plantilla
+                </button>
+                <input ref={fileInputRef} type="file" accept=".xlsx" onChange={uploadItems} style={{ display: 'none' }} />
                 <button type="button" className={ps.buttonSecondary} onClick={() => openEditCatalog(selectedCatalog)}>
                   <Edit3 size={18} /> Editar catálogo
                 </button>
@@ -268,6 +347,7 @@ export default function TechnicalCatalogsPage() {
                 </button>
               </div>
             </header>
+            <p className={ps.helpText}>Descargue la plantilla oficial, complete los ítems y vuelva a subirla. Si un código ya existe en esta versión, se actualiza.</p>
 
             <table className={ps.linearTable}>
               <thead>
@@ -321,6 +401,21 @@ export default function TechnicalCatalogsPage() {
     );
   }
 
+  if (selectedCatalog) {
+    return (
+      <main className={ps.page}><div className={ps.pageScroll}><section className={ps.wideShell}>
+        <button type="button" className={ps.backButton} onClick={() => setSelectedCatalogId('')}><ArrowLeft size={21} />Catálogos técnicos</button>
+        <header className={ps.header}><div className={ps.headerMain}><h1 className={ps.sectionTitle}>{selectedCatalog.nombre}</h1><p className={ps.subtitle}>Versiones publicadas para mantener trazabilidad ante cambios normativos.</p></div><div className={ps.actionsRight}><button type="button" className={ps.buttonPrimary} onClick={openNewVersion}><Plus size={21} />Nueva versión</button></div></header>
+        <table className={ps.linearTable}><thead><tr><th>Versión</th><th>Norma de referencia</th><th>Vigencia</th><th>Ítems</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
+          {versions.map((version) => <tr key={version.id} className={String(selectedCatalog.version_actual) === String(version.id) ? ps.selected : ''}><td>v{version.numero}{version.nombre ? ` · ${version.nombre}` : ''}</td><td>{version.norma_referencia || '—'}</td><td>{version.fecha_vigencia || '—'}</td><td>{version.items_count || 0}</td><td><span className={ps.statusPill}>{String(selectedCatalog.version_actual) === String(version.id) ? 'Actual' : (version.activo === false ? 'Inactiva' : 'Histórica')}</span></td><td><button type="button" className={ps.tableAction} onClick={() => { setItemPage(1); setSelectedVersionId(String(version.id)); }}><MoreHorizontal size={19} /> Más <ChevronRight size={20} /></button></td></tr>)}
+          {!versions.length ? <tr><td colSpan="6" style={{ color: '#999' }}>Este catálogo aún no tiene versiones.</td></tr> : null}
+        </tbody></table>
+      </section></div>
+      {drawer === 'version' ? <CatalogDrawer drawer={drawer} title="Nueva versión" versionForm={versionForm} setVersionForm={setVersionForm} saveVersion={saveVersion} close={() => setDrawer(null)} saving={saving} /> : null}
+      </main>
+    );
+  }
+
   return (
     <main className={ps.page}>
       <div className={ps.pageScroll}>
@@ -366,7 +461,7 @@ export default function TechnicalCatalogsPage() {
                   <td><span className={ps.statusPill}>{catalog.activo === false ? 'Inactivo' : 'Activo'}</span></td>
                   <td>
                     <button type="button" className={ps.tableAction} onClick={() => { setItemPage(1); setSelectedCatalogId(String(catalog.id)); }}>
-                      Ver <ChevronRight size={22} />
+                      Más <ChevronRight size={22} />
                     </button>
                   </td>
                 </tr>
@@ -411,12 +506,16 @@ function CatalogDrawer({
   setCatalogForm,
   itemForm,
   setItemForm,
+  versionForm,
+  setVersionForm,
   saveCatalog,
   saveItem,
+  saveVersion,
   close,
   saving,
 }) {
   const isCatalog = drawer === 'catalog';
+  const isVersion = drawer === 'version';
   return (
     <aside className={ps.sidePanel}>
       <div className={ps.sidePanelHeader}>
@@ -424,7 +523,7 @@ function CatalogDrawer({
         <button type="button" className={ps.closeButton} onClick={close}><X size={25} /></button>
       </div>
 
-      <form className={ps.formStack} onSubmit={isCatalog ? saveCatalog : saveItem}>
+      <form className={ps.formStack} onSubmit={isCatalog ? saveCatalog : (isVersion ? saveVersion : saveItem)}>
         {isCatalog ? (
           <>
             <div className={ps.field}>
@@ -449,6 +548,25 @@ function CatalogDrawer({
               <textarea className={ps.textarea} value={catalogForm.descripcion} onChange={(e) => setCatalogForm({ ...catalogForm, descripcion: e.target.value })} placeholder="Descripción opcional" />
             </div>
           </>
+        ) : isVersion ? (
+          <>
+            <div className={ps.field}>
+              <label>Nombre de la versión</label>
+              <input className={ps.input} value={versionForm.nombre} onChange={(e) => setVersionForm({ ...versionForm, nombre: e.target.value })} placeholder="Ej. Actualización ASTM 2026" />
+            </div>
+            <div className={ps.field}>
+              <label>Norma de referencia</label>
+              <input className={ps.input} value={versionForm.norma_referencia} onChange={(e) => setVersionForm({ ...versionForm, norma_referencia: e.target.value })} placeholder="Ej. ASTM D445:2026" />
+            </div>
+            <div className={ps.field}>
+              <label>Fecha de vigencia</label>
+              <input type="date" className={ps.input} value={versionForm.fecha_vigencia} onChange={(e) => setVersionForm({ ...versionForm, fecha_vigencia: e.target.value })} />
+            </div>
+            <div className={ps.field}>
+              <label>Notas</label>
+              <textarea className={ps.textarea} value={versionForm.notas} onChange={(e) => setVersionForm({ ...versionForm, notas: e.target.value })} placeholder="Motivo o alcance del cambio" />
+            </div>
+          </>
         ) : (
           <>
             <div className={ps.field}>
@@ -469,7 +587,7 @@ function CatalogDrawer({
         <div className={ps.panelFooter}>
           <button type="button" className={ps.buttonSecondary} onClick={close}>Cancelar</button>
           <button type="submit" className={ps.buttonPrimary} disabled={saving}>
-            {isCatalog ? 'Guardar catálogo' : 'Crear item'}
+            {isCatalog ? 'Guardar catálogo' : (isVersion ? 'Crear versión' : 'Crear item')}
           </button>
         </div>
       </form>
