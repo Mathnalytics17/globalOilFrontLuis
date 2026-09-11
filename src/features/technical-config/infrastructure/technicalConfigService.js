@@ -18,6 +18,11 @@ export const updateCatalog = (id, payload) => dynamicTechnicalConfigService.cata
 export const patchCatalog = (id, payload) => dynamicTechnicalConfigService.catalogs.patch(id, payload);
 export const deleteCatalog = (id) => dynamicTechnicalConfigService.catalogs.remove(id);
 export const restoreCatalog = (id) => dynamicTechnicalConfigService.catalogs.restore(id);
+export const pageCatalogVersions = (params = {}) => callPage(dynamicTechnicalConfigService.catalogVersions, params);
+export const createCatalogVersion = (payload) => dynamicTechnicalConfigService.catalogVersions.create(payload);
+export const updateCatalogVersion = (id, payload) => dynamicTechnicalConfigService.catalogVersions.update(id, payload);
+export const importCatalogItems = (version, file) => dynamicTechnicalConfigService.importCatalogItems(version, file);
+export const downloadCatalogItemsTemplate = (version) => dynamicTechnicalConfigService.downloadCatalogItemsTemplate(version);
 
 export const listSampleFields = (params = {}) => callList(dynamicTechnicalConfigService.sampleFields, params);
 export const pageSampleFields = (params = {}) => callPage(dynamicTechnicalConfigService.sampleFields, params);
@@ -137,6 +142,11 @@ export const technicalConfigService = {
   patchCatalog,
   deleteCatalog,
   restoreCatalog,
+  pageCatalogVersions,
+  createCatalogVersion,
+  updateCatalogVersion,
+  importCatalogItems,
+  downloadCatalogItemsTemplate,
   listSampleFields,
   pageSampleFields,
   createSampleField,
