@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
-import { BarChart3, Edit3, Eye, Plus, RefreshCcw, Search, Wrench } from 'lucide-react';
+import { BarChart3, Edit3, Eye, MapPin, Plus, RefreshCcw, Search, Wrench } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import { machinesService } from '@features/machines/infrastructure/machinesService';
@@ -12,8 +12,8 @@ const MACHINE_SORT_COLUMNS = {
   nombre: {},
   codigo_equipo: {},
   numero_serie: {},
-  componente: {},
-  tipoAceite: {},
+  puntos_muestreo_activos: { type: 'number' },
+  ubicacion_activo: {},
   empresa: { accessor: (machine) => machine.empresa_info?.nombre },
 };
 
@@ -48,8 +48,8 @@ export default function MachinesPage() {
       machine.nombre,
       machine.codigo_equipo,
       machine.numero_serie,
-      machine.componente,
-      machine.tipoAceite,
+      machine.puntos_muestreo_activos,
+      machine.ubicacion_activo,
       machine.empresa_info?.nombre,
     ].filter(Boolean).join(' ').toLowerCase().includes(term));
   }, [machines, search]);
@@ -86,7 +86,7 @@ export default function MachinesPage() {
         <div className="toolbar">
           <label>
             <Search size={18} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre, codigo, serie, componente o empresa" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre, código, serie, ubicación o empresa" />
           </label>
           <span>{filtered.length} resultado(s)</span>
         </div>
@@ -99,39 +99,35 @@ export default function MachinesPage() {
                 <SortableTableHeader columnKey="nombre" sort={sort} onSort={requestSort}>Maquina</SortableTableHeader>
                 <SortableTableHeader columnKey="codigo_equipo" sort={sort} onSort={requestSort}>Codigo</SortableTableHeader>
                 <SortableTableHeader columnKey="numero_serie" sort={sort} onSort={requestSort}>Serie</SortableTableHeader>
-                <SortableTableHeader columnKey="componente" sort={sort} onSort={requestSort}>Componente</SortableTableHeader>
-                <SortableTableHeader columnKey="tipoAceite" sort={sort} onSort={requestSort}>Aceite</SortableTableHeader>
-                <th>Frecuencias</th>
+                <SortableTableHeader columnKey="puntos_muestreo_activos" sort={sort} onSort={requestSort}>Puntos de medida</SortableTableHeader>
+                <SortableTableHeader columnKey="ubicacion_activo" sort={sort} onSort={requestSort}>Draga / ubicación</SortableTableHeader>
                 <SortableTableHeader columnKey="empresa" sort={sort} onSort={requestSort}>Empresa</SortableTableHeader>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="empty">Cargando maquinas...</td></tr>
+                <tr><td colSpan={8} className="empty">Cargando maquinas...</td></tr>
               ) : sortedRows.length ? sortedRows.map((machine) => (
                 <tr key={machine.id}>
                   <td><strong>{machine.id}</strong></td>
                   <td>{machine.nombre || '-'}</td>
                   <td>{machine.codigo_equipo || '-'}</td>
                   <td>{machine.numero_serie || '-'}</td>
-                  <td>{machine.componente || '-'}</td>
-                  <td>{machine.tipoAceite || '-'}</td>
-                  <td>
-                    <span>Cambio: {machine.frecuenciaCambio || '-'}</span>
-                    <span>Analisis: {machine.frecuenciaAnalisis || '-'}</span>
-                  </td>
+                  <td><strong>{machine.puntos_muestreo_activos || 0}</strong></td>
+                  <td>{machine.ubicacion_activo || 'Sin ubicación'}</td>
                   <td>{machine.empresa_info?.nombre || '-'}</td>
                   <td>
                     <div className="rowActions">
                       <button type="button" onClick={() => router.push(`/machines/detail-machine?id=${machine.id}`)} title="Ver detalle"><Eye size={17} /></button>
                       <button type="button" onClick={() => router.push(`/machines/edit-machine?id=${machine.id}`)} title="Editar"><Edit3 size={17} /></button>
+                      <button type="button" onClick={() => router.push(`/machines/edit-machine?id=${machine.id}#puntos-medida`)} title="Gestionar puntos de medida"><MapPin size={17} /></button>
                       <button type="button" onClick={() => router.push(`/machines/historico?machine=${machine.id}`)} title="Historico"><BarChart3 size={17} /></button>
                     </div>
                   </td>
                 </tr>
               )) : (
-                <tr><td colSpan={9} className="empty">No hay maquinas que coincidan con la busqueda.</td></tr>
+                <tr><td colSpan={8} className="empty">No hay maquinas que coincidan con la busqueda.</td></tr>
               )}
             </tbody>
           </table>
@@ -158,7 +154,7 @@ export default function MachinesPage() {
         input { flex: 1; border: 0; outline: 0; background: transparent; color: #fff; }
         .toolbar span { color: #aeb4c0; white-space: nowrap; }
         .tableWrap { overflow: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 1050px; }
+        table { width: 100%; border-collapse: collapse; min-width: 900px; }
         th { text-align: left; background: #26272c; color: #c8ced8; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; padding: 13px; }
         td { border-top: 1px solid #31343c; padding: 13px; vertical-align: middle; color: #e8ebf1; }
         td span { display: block; color: #aeb4c0; }

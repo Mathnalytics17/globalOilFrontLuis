@@ -44,6 +44,7 @@ const normalizeImportedMuestra = (row) => {
     tipo_muestra: isGrasa ? "grasa" : "aceite",
     condicion: data.condicion || "usada",
     referencia_equipo: toSelectValue(data.referencia_equipo),
+    punto_muestreo: toSelectValue(data.punto_muestreo),
     equipo_placa: data.equipo_placa || data.placa_manual || data.placa || "",
     periodo_servicio_aceite: data.periodo_servicio_aceite ?? data.periodo_aceite ?? "",
     unidad_periodo_aceite: data.unidad_periodo_aceite || data.unidad_aceite || "horas",
@@ -77,6 +78,14 @@ const getErrorMessage = (error) => {
   if (Array.isArray(data.message)) return data.message.join(" ");
 
   return "No se pudo procesar el archivo. Revise la consola.";
+};
+
+const formatRowError = (error) => {
+  if (typeof error === "string") return error;
+  const fields = Array.isArray(error?.fields) && error.fields.length
+    ? `${error.fields.join(", ")}: `
+    : "";
+  return `${fields}${error?.message || "Error de validación"}`;
 };
 
 const BulkSamplesExcelTab = ({ form, state, onStateChange, onUseRows }) => {
@@ -282,7 +291,7 @@ Volver a cargar filas válidas
                 Hay filas con errores
               </div>
               <p className="text-sm text-yellow-200/80">
-                Corrige el Excel y vuelve a subirlo, o carga únicamente las filas válidas.
+                Cada error identifica la columna que debe corregirse. Corrige el Excel y vuelve a subirlo, o carga únicamente las filas válidas.
               </p>
             </div>
           )}
@@ -297,6 +306,9 @@ Volver a cargar filas válidas
                   <th className="px-3 py-3 text-left">Condición</th>
                   <th className="px-3 py-3 text-left">Fabricante</th>
                   <th className="px-3 py-3 text-left">Referencia</th>
+                  <th className="px-3 py-3 text-left">Máquina</th>
+                  <th className="px-3 py-3 text-left">Punto de medida</th>
+                  <th className="px-3 py-3 text-left">Placa manual</th>
                   <th className="px-3 py-3 text-left">Errores</th>
                 </tr>
               </thead>
@@ -315,10 +327,13 @@ Volver a cargar filas válidas
                     <td className="px-3 py-3 capitalize">{row.data?.condicion || "-"}</td>
                     <td className="px-3 py-3">{row.data?.fabricante || "-"}</td>
                     <td className="px-3 py-3">{row.data?.referencia_marca || "-"}</td>
+                    <td className="px-3 py-3 break-words">{row.data?.referencia_equipo || "-"}</td>
+                    <td className="px-3 py-3 break-words">{row.data?.punto_muestreo || "-"}</td>
+                    <td className="px-3 py-3 break-words">{row.data?.equipo_placa || "-"}</td>
                     <td className="px-3 py-3 break-words">
                       {row.errors?.length ? (
                         <ul className="list-disc pl-4 text-yellow-200 space-y-1">
-                          {row.errors.map((error, index) => <li key={index}>{error}</li>)}
+                          {row.errors.map((error, index) => <li key={index}>{formatRowError(error)}</li>)}
                         </ul>
                       ) : (
                         <span className="text-gray-400">Sin errores</span>

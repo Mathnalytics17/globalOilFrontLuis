@@ -52,7 +52,7 @@ const DetailMachine = () => {
   };
 
   const handleEdit = () => {
-    router.push(`/maquinas/editar/${id}`);
+    router.push(`/machines/edit-machine?id=${id}`);
   };
 
   const handleViewMuestra = (muestraId) => {
@@ -195,6 +195,14 @@ const DetailMachine = () => {
                 <div className="flex justify-between items-center py-2 border-b border-[#444]">
                   <span className="text-[#d9d9d9]">Número de Serie</span>
                   <span className="text-white font-medium">{machine.numero_serie || 'No especificado'}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-[#444]">
+                  <span className="text-[#d9d9d9]">Tipo de aceite</span>
+                  <span className="text-white font-medium">{machine.tipoAceite || 'No especificado'}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-[#444]">
+                  <span className="text-[#d9d9d9]">Frecuencias</span>
+                  <span className="text-white font-medium">Cambio: {machine.frecuenciaCambio || '-'} · Análisis: {machine.frecuenciaAnalisis || '-'}</span>
                 </div>
 
                 <div className="hidden justify-between items-center py-2 border-b border-[#444]">
