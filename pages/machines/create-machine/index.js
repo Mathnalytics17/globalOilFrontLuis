@@ -17,10 +17,7 @@ const CreateMachine = () => {
   // Estado del formulario
   const [formData, setFormData] = useState({
     nombre: '',
-    componente: '',
-    tipoAceite: '',
-    frecuenciaCambio: '',
-    frecuenciaAnalisis: '',
+    descripcion: '',
     numero_serie: '',
     codigo_equipo: '', // ✅ Ahora editable y más amigable
     empresa: '',
@@ -181,12 +178,8 @@ const CreateMachine = () => {
       // 1. Preparar datos para la máquina
       const machinePayload = {
         nombre: formData.nombre,
-        descripcion: formData.numero_serie || '',
+        descripcion: formData.descripcion.trim(),
         empresa: parseInt(formData.empresa),
-        componente: '',
-        tipoAceite: '',
-        frecuenciaCambio: formData.frecuenciaCambio ? Number(formData.frecuenciaCambio) : 0,
-        frecuenciaAnalisis: formData.frecuenciaAnalisis ? Number(formData.frecuenciaAnalisis) : 0,
         numero_serie: formData.numero_serie,
         codigo_equipo: formData.codigo_equipo, // ✅ Usar el código ingresado por el usuario
       };
@@ -215,8 +208,8 @@ const CreateMachine = () => {
       // 5. Crear la carpeta
       await foldersService.create(folderData);
       
-      toast.success('Máquina y carpeta creadas correctamente');
-      router.push('/machines');
+      toast.success('Máquina y carpeta creadas. Ahora agregue sus puntos de medida.');
+      router.push(`/machines/edit-machine?id=${machineResult.id}#puntos-medida`);
       
     } catch (error) {
       
@@ -353,76 +346,17 @@ const CreateMachine = () => {
                 </p>
               </div>
 
-              {false && (
-              <>
-              {/* Componente */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-white">
-                  Componente <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="componente"
-                  value={formData.componente}
+              <div className="space-y-2 md:col-span-2">
+                <label className="block text-sm font-medium text-white">Descripción</label>
+                <textarea
+                  name="descripcion"
+                  value={formData.descripcion}
                   onChange={handleChange}
-                  required
+                  rows={4}
                   className="w-full px-4 py-3 bg-[#292929] border border-[#444] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors"
-                  placeholder="Ingrese el componente"
+                  placeholder="Descripción detallada de la máquina y sus características técnicas"
                 />
               </div>
-
-              {/* Tipo de aceite */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-white">
-                  Tipo de aceite <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="tipoAceite"
-                  value={formData.tipoAceite}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-3 bg-[#292929] border border-[#444] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors"
-                  placeholder="Ingrese el tipo de aceite"
-                />
-              </div>
-
-              {/* Frecuencia de cambio */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-white">
-                  Frecuencia de cambio (horas) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  name="frecuenciaCambio"
-                  value={formData.frecuenciaCambio}
-                  onChange={handleChange}
-                  required
-                  min="1"
-                  className="w-full px-4 py-3 bg-[#292929] border border-[#444] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors"
-                  placeholder="Ej: 500"
-                />
-              </div>
-
-              {/* Frecuencia de análisis */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-white">
-                  Frecuencia de análisis (horas) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  name="frecuenciaAnalisis"
-                  value={formData.frecuenciaAnalisis}
-                  onChange={handleChange}
-                  required
-                  min="1"
-                  className="w-full px-4 py-3 bg-[#292929] border border-[#444] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-colors"
-                  placeholder="Ej: 250"
-                />
-              </div>
-
-              </>
-              )}
 
               {/* Número de serie */}
               <div className="space-y-2">

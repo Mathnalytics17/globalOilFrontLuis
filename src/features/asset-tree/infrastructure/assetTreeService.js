@@ -31,6 +31,11 @@ export const assetTreeService = {
     return data;
   },
 
+  async listSamplingPoints(params = {}) {
+    const { data } = await apiClient.get('/sampling-points/', { params });
+    return Array.isArray(data) ? data : (data?.results || []);
+  },
+
   async organizeSamplingPoint(id, payload) {
     const { data } = await apiClient.post(`/sampling-points/${id}/organize/`, payload);
     return data;

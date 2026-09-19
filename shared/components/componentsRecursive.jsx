@@ -61,7 +61,7 @@ const TreeNode = ({ node, reload }) => {
       if (type === 'machine') {
         machine = await machinesService.create({
           nombre: machineData.nombre,
-          componente: machineData.descripcion,
+          descripcion: machineData.descripcion,
           empresa: node.company?.id,
         });
       }
@@ -153,7 +153,7 @@ const TreeNode = ({ node, reload }) => {
             <FolderPlus className="h-4 w-4 text-sky-400" />
           </button>
         )}
-        {node.type === 'folder' ? <button type="button" title="Renombrar carpeta" onClick={renameFolder}><Pencil className="h-4 w-4 text-emerald-400" /></button> : null}
+        {['folder', 'root'].includes(node.type) ? <button type="button" title="Renombrar carpeta" onClick={renameFolder}><Pencil className="h-4 w-4 text-emerald-400" /></button> : null}
         {node.type === 'machine' && (
           <>
             <button type="button" title="Ver lotes y muestras de esta maquina" onClick={openFilteredLots}>
@@ -202,6 +202,8 @@ const TreeNode = ({ node, reload }) => {
           <p><strong>Codigo:</strong> {node.machine?.codigo_equipo || 'No especificado'}</p>
           <p><strong>Serie:</strong> {node.machine?.numero_serie || 'No especificada'}</p>
           <p><strong>Componente:</strong> {node.machine?.componente || 'No especificado'}</p>
+          <p><strong>Tipo de aceite:</strong> {node.machine?.tipoAceite || 'No especificado'}</p>
+          <p><strong>Ubicación:</strong> {node.company?.nombre || 'Empresa'} / {node.name}</p>
         </Modal.Body>
         <Modal.Footer className="bg-[#1a1a1a]">
           <Button variant="secondary" onClick={() => setDetailOpen(false)}>Cerrar</Button>
@@ -298,23 +300,23 @@ export default function RecursiveFolderDocumentStructure() {
 }
 
 const SamplingPointModal = ({ show, machine, point, onHide, onSaved }) => {
-  const [form, setForm] = useState({ nombre: '', codigo: '', descripcion: '' });
+  const [form, setForm] = useState({ nombre: '', codigo: '', descripcion: '', lubricante: '', frecuencia_cambio: '', unidad_frecuencia_cambio: 'horas', frecuencia_analisis: '', unidad_frecuencia_analisis: 'horas' });
   const [saving, setSaving] = useState(false);
   useEffect(() => {
     if (!show) return;
     setForm(point ? {
-      nombre: point.nombre || '', codigo: point.codigo || '', descripcion: point.descripcion || '',
-    } : { nombre: '', codigo: '', descripcion: '' });
+      nombre: point.nombre || '', codigo: point.codigo || '', descripcion: point.descripcion || '', lubricante: point.lubricante || '', frecuencia_cambio: point.frecuencia_cambio || '', unidad_frecuencia_cambio: point.unidad_frecuencia_cambio || 'horas', frecuencia_analisis: point.frecuencia_analisis || '', unidad_frecuencia_analisis: point.unidad_frecuencia_analisis || 'horas',
+    } : { nombre: '', codigo: '', descripcion: '', lubricante: '', frecuencia_cambio: '', unidad_frecuencia_cambio: 'horas', frecuencia_analisis: '', unidad_frecuencia_analisis: 'horas' });
   }, [show, point]);
   const save = async () => {
     if (!form.nombre.trim()) return toast.error('Escriba el nombre del punto');
     setSaving(true);
     try {
-      const payload = { ...form, nombre: form.nombre.trim(), maquina: machine.id };
+      const payload = { ...form, nombre: form.nombre.trim(), maquina: machine.id, frecuencia_cambio: form.frecuencia_cambio === '' ? null : Number(form.frecuencia_cambio), frecuencia_analisis: form.frecuencia_analisis === '' ? null : Number(form.frecuencia_analisis) };
       if (point) await assetTreeService.updateSamplingPoint(point.id, payload);
       else await assetTreeService.createSamplingPoint(payload);
       toast.success(point ? 'Punto de muestreo actualizado' : 'Punto de muestreo creado');
-      setForm({ nombre: '', codigo: '', descripcion: '' });
+      setForm({ nombre: '', codigo: '', descripcion: '', lubricante: '', frecuencia_cambio: '', unidad_frecuencia_cambio: 'horas', frecuencia_analisis: '', unidad_frecuencia_analisis: 'horas' });
       onSaved();
     } catch (error) {
       toast.error(error.response?.data?.nombre?.[0] || error.response?.data?.detail || 'No se pudo crear el punto');
@@ -327,6 +329,9 @@ const SamplingPointModal = ({ show, machine, point, onHide, onSaved }) => {
         <p className="text-sm text-gray-400">Quedara dentro de <strong>{machine?.nombre}</strong> y sera un nodo terminal.</p>
         <input className="form-control bg-dark text-white" placeholder="Nombre *" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
         <input className="form-control bg-dark text-white" placeholder="Codigo opcional" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} />
+        <input className="form-control bg-dark text-white" placeholder="Lubricante o tipo de aceite" value={form.lubricante} onChange={(e) => setForm({ ...form, lubricante: e.target.value })} />
+        <div className="row g-2"><div className="col"><input className="form-control bg-dark text-white" type="number" min="0" placeholder="Frecuencia de cambio" value={form.frecuencia_cambio} onChange={(e) => setForm({ ...form, frecuencia_cambio: e.target.value })} /></div><div className="col"><select className="form-select bg-dark text-white" value={form.unidad_frecuencia_cambio} onChange={(e) => setForm({ ...form, unidad_frecuencia_cambio: e.target.value })}><option value="horas">Horas</option><option value="km">Kilómetros</option><option value="dias">Días</option></select></div></div>
+        <div className="row g-2"><div className="col"><input className="form-control bg-dark text-white" type="number" min="0" placeholder="Frecuencia de análisis" value={form.frecuencia_analisis} onChange={(e) => setForm({ ...form, frecuencia_analisis: e.target.value })} /></div><div className="col"><select className="form-select bg-dark text-white" value={form.unidad_frecuencia_analisis} onChange={(e) => setForm({ ...form, unidad_frecuencia_analisis: e.target.value })}><option value="horas">Horas</option><option value="km">Kilómetros</option><option value="dias">Días</option></select></div></div>
         <textarea className="form-control bg-dark text-white" placeholder="Descripcion opcional" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
       </Modal.Body>
       <Modal.Footer className="bg-[#1a1a1a]"><Button variant="secondary" onClick={onHide}>Cancelar</Button><Button variant="danger" disabled={saving} onClick={save}>{saving ? 'Guardando...' : point ? 'Guardar cambios' : 'Crear punto'}</Button></Modal.Footer>

@@ -3,7 +3,9 @@ import { normalizePaginated } from '../../../utils/pagination';
 
 export const machinesService = {
   async list(params = {}) {
-    const { data } = await apiClient.get('/machines/', { params });
+    const { data } = await apiClient.get('/machines/', {
+      params: { page_size: 1000, ...params },
+    });
     return normalizePaginated(data).results;
   },
 

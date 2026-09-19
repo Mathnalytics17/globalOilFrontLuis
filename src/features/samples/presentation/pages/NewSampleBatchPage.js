@@ -288,6 +288,7 @@ const createEmptyMuestra = () => ({
   condicion: "usada",
 
   equipo_modo: "catalogo",
+  punto_muestreo: "",
   referencia_equipo: "",
   equipo_placa: "",
 
@@ -339,6 +340,7 @@ const NuevoLoteMuestrasPage = () => {
 
   const [clientes, setClientes] = useState([]);
   const [maquinas, setMaquinas] = useState([]);
+  const [puntosMuestreo, setPuntosMuestreo] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [tiposGestion, setTiposGestion] = useState([]);
   const [loadingTiposGestion, setLoadingTiposGestion] = useState(false);
@@ -371,6 +373,11 @@ const NuevoLoteMuestrasPage = () => {
     if (!selectedCompanyId) return isGlobalUser() ? maquinas : maquinas.filter((machine) => String(machine.empresa || machine.empresa_id || machine.empresa_info?.id || "") === String(currentUser?.empresa_id || ""));
     return maquinas.filter((machine) => String(machine.empresa || machine.empresa_id || machine.empresa_info?.id || "") === String(selectedCompanyId));
   }, [maquinas, selectedCompanyId, currentUser]);
+
+  const puntosFiltrados = useMemo(() => {
+    const companyId = selectedCompanyId || currentUser?.empresa_id;
+    return puntosMuestreo.filter((point) => !companyId || String(point.empresa_id) === String(companyId));
+  }, [puntosMuestreo, selectedCompanyId, currentUser]);
 
   const getCompanyName = (cliente) => {
     return (
@@ -529,6 +536,7 @@ const NuevoLoteMuestrasPage = () => {
       const companies = options.companies || [];
       setClientes(companies.length ? companies : (externalCompany ? [externalCompany] : []));
       setMaquinas(options.machines || []);
+      setPuntosMuestreo(options.samplingPoints || []);
       if (user && !isGlobalUser(user) && user.empresa_id) {
         setForm((prev) => ({
           ...prev,
@@ -565,6 +573,7 @@ const NuevoLoteMuestrasPage = () => {
         if (field === "condicion" && value === "nueva") {
           updated.equipo_modo = "catalogo";
           updated.referencia_equipo = "";
+          updated.punto_muestreo = "";
           updated.equipo_placa = "";
           updated.periodo_servicio_aceite = "";
           updated.periodo_servicio_equipo = "";
@@ -572,7 +581,14 @@ const NuevoLoteMuestrasPage = () => {
 
         if (field === "equipo_modo") {
           if (value === "catalogo") updated.equipo_placa = "";
-          if (value === "manual") updated.referencia_equipo = "";
+          if (value === "manual") { updated.referencia_equipo = ""; updated.punto_muestreo = ""; }
+        }
+
+        if (field === "punto_muestreo" && value) {
+          const point = puntosMuestreo.find((item) => String(item.id) === String(value));
+          updated.equipo_modo = "catalogo";
+          updated.referencia_equipo = point ? String(point.maquina) : "";
+          updated.equipo_placa = "";
         }
 
         if (field === "referencia_equipo" && value) {
@@ -724,10 +740,10 @@ const NuevoLoteMuestrasPage = () => {
 
       if (
         muestra.condicion === "usada" &&
-        ((muestra.equipo_modo === "catalogo" && !muestra.referencia_equipo) ||
+        ((muestra.equipo_modo === "catalogo" && !muestra.punto_muestreo) ||
           (muestra.equipo_modo === "manual" && !muestra.equipo_placa.trim()))
       ) {
-        nextErrors[`muestras.${index}.referencia_equipo`] = "Una muestra usada debe tener máquina o placa manual";
+        nextErrors[`muestras.${index}.punto_muestreo`] = "Una muestra usada debe seleccionar un punto de medida o usar identificación manual";
       }
 
       if (muestra.periodo_servicio_aceite && Number(muestra.periodo_servicio_aceite) < 0) {
@@ -781,6 +797,9 @@ const NuevoLoteMuestrasPage = () => {
           muestra.referencia_equipo
             ? muestra.referencia_equipo
             : null,
+        punto_muestreo:
+          muestra.condicion === "usada" && muestra.equipo_modo === "catalogo" && muestra.punto_muestreo
+            ? muestra.punto_muestreo : null,
         equipo_placa:
           muestra.condicion === "usada" &&
           muestra.equipo_modo === "manual" &&
@@ -1307,6 +1326,7 @@ const NuevoLoteMuestrasPage = () => {
                   removeMuestra={removeMuestra}
                   maquinas={maquinas}
                   maquinasFiltradas={maquinasFiltradas}
+                  puntosFiltrados={puntosFiltrados}
                   dynamicTechnicalCatalogs={dynamicTechnicalCatalogs}
                   errors={errors}
                   loadingOptions={loadingOptions || loadingTechnicalCatalogs}
@@ -1357,6 +1377,7 @@ const MuestraRow = ({
   removeMuestra,
   maquinas,
   maquinasFiltradas,
+  puntosFiltrados,
   dynamicTechnicalCatalogs,
   errors,
   loadingOptions,
@@ -1471,13 +1492,14 @@ const MuestraRow = ({
             </div>
 
             {muestra.equipo_modo !== "manual" ? (
-              <Field label="Máquina / Equipo" error={getError("referencia_equipo")}>
-                <select value={muestra.referencia_equipo} onChange={(e) => updateMuestra(index, "referencia_equipo", e.target.value)} className="input-dark" disabled={loadingOptions}>
-                  <option value="">Seleccione máquina</option>
-                  {(maquinasFiltradas || maquinas).map((maquina) => (
-                    <option key={maquina.id} value={maquina.id}>{maquina.nombre || maquina.name || maquina.codigo || maquina.placa || maquina.id}</option>
+              <Field label="Punto de medida" error={getError("punto_muestreo")}>
+                <select value={muestra.punto_muestreo} onChange={(e) => updateMuestra(index, "punto_muestreo", e.target.value)} className="input-dark" disabled={loadingOptions}>
+                  <option value="">Seleccione punto de medida</option>
+                  {puntosFiltrados.map((point) => (
+                    <option key={point.id} value={point.id}>{point.maquina_codigo || point.maquina_nombre} · {point.nombre}{point.lubricante ? ` · ${point.lubricante}` : ''}</option>
                   ))}
                 </select>
+                <span className="mt-1 block text-xs text-gray-400">La máquina, lubricante y frecuencias se determinan desde el punto seleccionado.</span>
               </Field>
             ) : (
               <Field label="Placa o identificación manual" error={getError("referencia_equipo")}>
