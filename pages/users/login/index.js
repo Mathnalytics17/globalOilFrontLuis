@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@context/AuthContext';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 
 export default function Login() {
@@ -177,9 +178,9 @@ export default function Login() {
             </button>
 
             <div className="mt-auto pt-8">
-              <a href='/users/forgotPassword' className="text-white block mb-2 hover:underline cursor-pointer">
+              <Link href="/users/forgotPassword" className="text-white block mb-2 hover:underline cursor-pointer">
                 ¿Olvidaste tu contraseña? Ingresa aquí
-              </a>
+              </Link>
 
             </div>
           </form>

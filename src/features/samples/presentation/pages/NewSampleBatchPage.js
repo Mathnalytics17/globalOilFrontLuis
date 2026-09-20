@@ -1432,7 +1432,7 @@ const MuestraRow = ({
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
             <div>
               <p className="text-sm font-semibold text-gray-300">Campos técnicos para {isAceite ? "aceite" : "grasa"}</p>
-              <p className="text-xs text-gray-500 mt-1">Si no conocen un dato, marque "Desconocido".</p>
+              <p className="text-xs text-gray-500 mt-1">Si no conocen un dato, marque &quot;Desconocido&quot;.</p>
             </div>
           </div>
 
