@@ -1,0 +1,37 @@
+name: Frontend Deploy
+
+on:
+    push:
+        branches:
+            - master
+
+concurrency:
+    group: frontend-production
+    cancel-in-progress: false
+
+jobs:
+    deploy:
+        name: deploy-production
+        runs-on: ubuntu-latest
+        environment: production
+
+        steps:
+            - name: Deploy frontend
+              uses: appleboy/ssh-action@v1.2.5
+              with:
+                  host: ${{ secrets.SSH_HOST }}
+                  username: ${{ secrets.SSH_USER }}
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  port: ${{ secrets.SSH_PORT }}
+                  script: |
+                      set -e
+
+                      cd /root/globalOil/frontend
+
+                      git fetch origin master
+                      git switch master
+                      git reset --hard origin/master
+
+                      docker compose -f docker-compose.prod.yml up -d --build frontend
+
+                      docker compose -f docker-compose.prod.yml ps frontend
