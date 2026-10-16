@@ -64,9 +64,12 @@ export const dynamicTechnicalConfigService = {
 
   limitSources: {
     ...limitSourcesBase,
-    configure: async (payload) => unwrap(await apiClient.post(endpoint('technical-config/limit-sources/configure'), payload)),
+    configure: async (payload, options = {}) => unwrap(await apiClient.post(endpoint('technical-config/limit-sources/configure'), payload, options)),
+    versions: async (prueba) => unwrap(await apiClient.get(`${endpoint('technical-config/limit-sources/versions')}?${new URLSearchParams({ prueba })}`)),
     resolvePreview: async (payload) => unwrap(await apiClient.post(endpoint('technical-config/limit-sources/resolve-preview'), payload)),
     generateFields: async (id, payload = {}) => unwrap(await apiClient.post(`${endpoint('technical-config/limit-sources')}${id}/generate-fields/`, payload)),
+    activate: async (id) => unwrap(await apiClient.post(`${endpoint('technical-config/limit-sources')}${id}/activate/`)),
+    deactivate: async (id) => unwrap(await apiClient.post(`${endpoint('technical-config/limit-sources')}${id}/deactivate/`)),
     downloadMatrixTemplate: async (id) => apiClient.get(`${endpoint('technical-config/limit-sources')}${id}/matrix-template/`, { responseType: 'blob' }),
     importMatrix: async (id, archivo) => { const form = new FormData(); form.append('archivo', archivo); return unwrap(await apiClient.post(`${endpoint('technical-config/limit-sources')}${id}/import-matrix/`, form)); },
   },

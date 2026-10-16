@@ -41,30 +41,6 @@
       ],
       "@shared/*": [
         "./src/shared/*"
-      ],
-      "@components/*": [
-        "./shared/components/*"
-      ],
-      "@context/*": [
-        "./shared/context/*"
-      ],
-      "@formats/*": [
-        "./shared/formats/*"
-      ],
-      "@hooks/*": [
-        "./shared/hooks/*"
-      ],
-      "@lib/*": [
-        "./shared/lib/*"
-      ],
-      "@schemas/*": [
-        "./shared/schemas/*"
-      ],
-      "@styles/*": [
-        "./styles/*"
-      ],
-      "@utils/*": [
-        "./shared/utils/*"
       ]
     }
   },

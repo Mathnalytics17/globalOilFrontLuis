@@ -1,11 +1,13 @@
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { ArrowDownToLine, ArrowLeft, Check, ChevronLeft, ChevronRight, FileUp, Pencil, Plus, Save, Search } from 'lucide-react';
+import { ArrowDownToLine, Check, ChevronDown, ChevronLeft, ChevronRight, FileUp, Pencil, Plus, Power, Save, Search } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { dynamicTechnicalConfigService as api } from '../../infrastructure/dynamicTechnicalConfigService';
 import { normalizeList, slugify, buildErrorMessage } from '../components/technicalConfigUtils';
+import GlobalOilLoader from '@shared/ui/GlobalOilLoader';
+import PaginationBar from '@shared/ui/PaginationBar';
 import styles from './TechnicalLimitsFinalPage.module.css';
 
 const STEPS = ['Prueba', 'Estructura', 'Origen', 'Matriz y semaforo', 'Resumen'];
@@ -15,12 +17,15 @@ const OPERATORS = [
 const SEMAPHORE_OPERATORS = new Set(['max', 'min', 'between']);
 const SOURCE_LABELS = {
   catalogo: 'Catalogo tecnico',
-  directo: 'Valor fijo',
-  asignacion: 'Editable al asignar',
+  directo: 'Regla base',
   escala: 'Escala del campo',
   booleano: 'Valor esperado',
   informativo: 'Informativo',
 };
+const newIdempotencyKey = () => (
+  globalThis.crypto?.randomUUID?.()
+  || `${Date.now()}-${Math.random().toString(36).slice(2)}`
+);
 
 const idOf = (value) => value?.id ?? value?.pk ?? value ?? '';
 const labelOf = (value) => value?.nombre_visible || value?.nombre_variable || value?.nombre || value?.etiqueta || value?.label || value?.titulo || value?.value || value?.valor || value?.codigo || value?.acronimo || '';
@@ -211,36 +216,37 @@ function requiredBoundaryKeys(operator, yellow) {
 }
 
 function validateRule(field, rawRule, context, scaleItems = []) {
-  if (field.origen_limite === 'asignacion' || field.origen_limite === 'informativo') return '';
-  if ((rawRule?.operador || field.operador) === 'informativo') return '';
-  const rule = normalizeLimitRule(rawRule, field.operador);
-  const missing = requiredBoundaryKeys(field.operador, rule.usar_amarillo)
+  if (field.origen_limite === 'informativo') return '';
+  const operator = rawRule?.operador || field.operador;
+  if (operator === 'informativo') return '';
+  const rule = normalizeLimitRule(rawRule, operator);
+  const missing = requiredBoundaryKeys(operator, rule.usar_amarillo)
     .find((key) => rule[key] === '' || rule[key] === null || rule[key] === undefined);
   if (missing) return `${context}: complete todos los valores visibles del limite.`;
 
   if (field.tipo_comparacion === 'escala') {
     const position = (value) => scaleItems.findIndex((item) => String(optionValue(item)) === String(value));
-    if (requiredBoundaryKeys(field.operador, rule.usar_amarillo).some((key) => position(rule[key]) < 0)) {
+    if (requiredBoundaryKeys(operator, rule.usar_amarillo).some((key) => position(rule[key]) < 0)) {
       return `${context}: seleccione valores vigentes de la escala.`;
     }
     const minCritical = position(rule.min_critico);
     const minAcceptable = position(rule.min_aceptable);
     const maxAcceptable = position(rule.max_aceptable);
     const maxCritical = position(rule.max_critico);
-    if (field.operador === 'between' && minAcceptable > maxAcceptable) {
+    if (operator === 'between' && minAcceptable > maxAcceptable) {
       return `${context}: el minimo aceptable debe aparecer antes del maximo aceptable en la escala.`;
     }
-    if (rule.usar_amarillo && ['min', 'between'].includes(field.operador) && minCritical > minAcceptable) {
+    if (rule.usar_amarillo && ['min', 'between'].includes(operator) && minCritical > minAcceptable) {
       return `${context}: el minimo critico debe aparecer antes del minimo aceptable en la escala.`;
     }
-    if (rule.usar_amarillo && ['max', 'between'].includes(field.operador) && maxAcceptable > maxCritical) {
+    if (rule.usar_amarillo && ['max', 'between'].includes(operator) && maxAcceptable > maxCritical) {
       return `${context}: el maximo aceptable debe aparecer antes del maximo critico en la escala.`;
     }
     return '';
   }
 
   const numeric = ['numerica', 'numero', 'numeric'].includes(field.tipo_comparacion);
-  if (!numeric || ['eq', 'neq'].includes(field.operador)) return '';
+  if (!numeric || ['eq', 'neq'].includes(operator)) return '';
   const number = (value) => value === '' || value === null || value === undefined ? null : Number(value);
   const minCritical = number(rule.min_critico);
   const minAcceptable = number(rule.min_aceptable);
@@ -263,9 +269,9 @@ function validateRule(field, rawRule, context, scaleItems = []) {
 
 function sourceOptionsForField(field) {
   if (isCommentType(field)) return ['informativo'];
-  if (field.tipo_comparacion === 'escala') return ['escala', 'directo', 'asignacion', 'informativo'];
-  if (field.tipo_comparacion === 'booleano') return ['booleano', 'asignacion', 'informativo'];
-  return ['catalogo', 'directo', 'asignacion', 'informativo'];
+  if (field.tipo_comparacion === 'escala') return ['escala', 'directo', 'informativo'];
+  if (field.tipo_comparacion === 'booleano') return ['booleano', 'informativo'];
+  return ['catalogo', 'directo', 'informativo'];
 }
 
 function groupByResult(fields) {
@@ -308,7 +314,7 @@ function mergeExistingCriteria(rows, criteria) {
 function valueInputForField(field, value, onChange, scaleItems = []) {
   const rule = normalizeLimitRule(value, field.operador);
   const patch = (changes) => onChange({ ...rule, ...changes });
-  if (field.origen_limite === 'asignacion') return <span className={styles.inlineNote}>Se captura al asignar</span>;
+  if (field.origen_limite === 'asignacion') return <span className={styles.inlineNote}>Configuración heredada: se convertirá en regla base al guardar.</span>;
   if (field.tipo_comparacion === 'booleano') return <select value={normalizeBooleanLimitValue(field, rule.valor_esperado)} onChange={(event) => patch({ valor_esperado: event.target.value, usar_amarillo: false })}>{booleanOptions(field).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>;
   const isScale = field.tipo_comparacion === 'escala';
   if (['eq', 'neq', 'in', 'not_in'].includes(field.operador)) {
@@ -410,7 +416,7 @@ function mergeConfiguredField(field, saved) {
 
   const allowedOperators = new Set(operatorsForField(field).map(([value]) => value));
   const operator = allowedOperators.has(saved.operador) ? saved.operador : field.operador;
-  const source = saved.origen_limite || field.origen_limite;
+  const source = saved.origen_limite === 'asignacion' ? 'directo' : (saved.origen_limite || field.origen_limite);
   const informative = source === 'informativo' || field.tipo_comparacion === 'comentario';
 
   return {
@@ -445,6 +451,8 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
   const [fields, setFields] = useState([]);
   const [selectedCatalogs, setSelectedCatalogs] = useState([]);
   const [criteria, setCriteria] = useState([]);
+  const [draftSourceId, setDraftSourceId] = useState('');
+  const saveInFlight = useRef(false);
 
   const reload = async () => {
     setLoading(true);
@@ -455,14 +463,14 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
         api.listCatalogItems({ page_size: 1000 }),
         api.listComparisonScales({ page_size: 1000 }),
         api.listComparisonScaleItems({ page_size: 1000 }),
-        api.listLimitSources({ page_size: 1000 }),
+        api.listLimitSources({ historial: true, page_size: 5000 }),
       ]);
       setTests(list(testData));
       setCatalogs(list(catalogData));
       setItems(list(itemData));
       setScales(list(scaleData));
       setScaleItems(list(scaleItemData));
-      setSources(list(sourceData));
+      setSources(normalizeList(sourceData));
     } catch (error) {
       toast.error(buildErrorMessage(error, 'No fue posible cargar la configuracion.'));
     } finally {
@@ -528,7 +536,7 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
   };
 
   const catalogFields = useMemo(() => fields.filter((field) => field.participa && field.origen_limite === 'catalogo'), [fields]);
-  const directFields = useMemo(() => fields.filter((field) => field.participa && ['directo', 'escala', 'booleano', 'asignacion'].includes(field.origen_limite)), [fields]);
+  const directFields = useMemo(() => fields.filter((field) => field.participa && ['directo', 'escala', 'booleano'].includes(field.origen_limite)), [fields]);
   const evaluableFields = useMemo(() => fields.filter((field) => field.participa && field.origen_limite !== 'informativo'), [fields]);
   const compound = evaluableFields.length > 1 || new Set(evaluableFields.map((field) => field.resultado)).size > 1;
   const allCommentOnly = fields.length > 0 && !evaluableFields.length;
@@ -544,7 +552,13 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
       const scaleId = scaleIdOf(item);
       if (!scaleId) return;
       if (!map.has(scaleId)) map.set(scaleId, []);
-      map.get(scaleId).push(item);
+      const current = map.get(scaleId);
+      // The API can provide an item both in the global collection and nested
+      // under its scale.  Keep one option per actual scale value.
+      const itemKey = String(optionValue(item)).trim().toLowerCase();
+      if (!current.some((candidate) => String(optionValue(candidate)).trim().toLowerCase() === itemKey)) {
+        current.push(item);
+      }
     });
     return map;
   }, [scaleItems, scales]);
@@ -570,6 +584,15 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
     if (index >= 0) rows[index].valores[fieldCode] = value;
     return rows;
   });
+
+  const refreshImportedMatrix = async (sourceId) => {
+    const updatedSource = await api.limitSources.get(sourceId);
+    const updatedCriteria = list(updatedSource?.criterios || updatedSource?.criterios_limite);
+    setCriteria(updatedCriteria);
+    setSources((current) => current.map((source) => (
+      String(source.id) === String(sourceId) ? { ...source, ...updatedSource } : source
+    )));
+  };
 
   const nextError = () => {
     if (step === 0 && !test) return 'Seleccione una prueba.';
@@ -602,13 +625,9 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
     setStep((value) => Math.min(value + 1, STEPS.length - 1));
   };
 
-  const save = async () => {
-    const error = nextError();
-    if (error) return toast.warn(error);
-    setSaving(true);
-    try {
-      const hasCatalog = catalogFields.length > 0;
-      const payload = {
+  const buildConfigurationPayload = () => {
+    const hasCatalog = catalogFields.length > 0;
+    return {
         prueba: idOf(test),
         fuente: hasCatalog ? 'catalogos' : 'global',
         catalogos: hasCatalog ? selectedCatalogs.map((catalogo, index) => ({ catalogo, orden: index + 1 })) : [],
@@ -641,30 +660,62 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
           campos: fields,
         },
         reglas_resultados: {},
-      };
-      await api.limitSources.configure(payload);
-      toast.success('Configuracion de limites guardada.');
-      router.push('/configuracion-tecnica/limites');
+    };
+  };
+
+  const prepareMatrixDraft = async () => {
+    if (draftSourceId) return draftSourceId;
+    if (saveInFlight.current) return '';
+    saveInFlight.current = true;
+    setSaving(true);
+    try {
+      const source = await api.limitSources.configure({ ...buildConfigurationPayload(), borrador_matriz: true });
+      if (!source?.id) throw new Error('No se pudo preparar la matriz.');
+      setDraftSourceId(source.id);
+      setSources((current) => [...current.filter((item) => String(item.id) !== String(source.id)), source]);
+      return source.id;
     } catch (error) {
-      toast.error(buildErrorMessage(error, 'No fue posible guardar los limites.'));
+      toast.error(buildErrorMessage(error, 'No se pudo preparar la matriz para el Excel.'));
+      return '';
     } finally {
+      saveInFlight.current = false;
       setSaving(false);
     }
   };
 
-  if (listing) return <ListPage loading={loading} sources={sources} onReload={reload} />;
+  const save = async () => {
+    if (saveInFlight.current) return;
+    const error = nextError();
+    if (error) return toast.warn(error);
+    saveInFlight.current = true;
+    setSaving(true);
+    try {
+      const payload = buildConfigurationPayload();
+      await api.limitSources.configure(payload, {
+        headers: { 'Idempotency-Key': newIdempotencyKey() },
+      });
+      toast.success('Configuracion de limites guardada.');
+      await router.replace('/configuracion-tecnica/limites');
+    } catch (error) {
+      toast.error(buildErrorMessage(error, 'No fue posible guardar los limites.'));
+    } finally {
+      saveInFlight.current = false;
+      setSaving(false);
+    }
+  };
+
+  if (listing) return <ListPage loading={loading} sources={sources} onChanged={reload} />;
 
   return (
     <main className={styles.page}>
-      <Link href="/configuracion-tecnica/limites" className={styles.back}><ArrowLeft size={18} /> Límites por prueba</Link>
-      <header className={styles.header}><div><h1>{editing ? 'Editar configuración de límites' : 'Nueva configuración de límites'}</h1></div><p>La estructura viene de la prueba. Cada campo define su propio origen de límite.</p></header>
+      <header className={styles.header}><div><h1>{editing ? 'Crear nueva versión de límites' : 'Nueva configuración de límites'}</h1></div><p>{editing ? 'La versión consultada se usa como base; al guardar se conservará intacta y se publicará una versión nueva.' : 'La estructura viene de la prueba. Cada campo define su propio origen de límite.'}</p></header>
       <nav className={styles.steps} style={{ gridTemplateColumns: `repeat(${STEPS.length}, 1fr)` }}>{STEPS.map((name, index) => <button key={name} className={index === step ? styles.activeStep : index < step ? styles.doneStep : ''} onClick={() => setStep(index)}><span>{index < step ? <Check size={16} /> : index + 1}</span>{name}</button>)}</nav>
       <section className={styles.panel}>
-        {loading && <p>Cargando...</p>}
+        {loading && <GlobalOilLoader label="Cargando configuración de límites..." />}
         {!loading && step === 0 && <TestStep tests={tests} selected={test} onSelect={selectTest} />}
         {!loading && step === 1 && <StructureTable fields={fields} />}
         {!loading && step === 2 && <SourceMapStep fields={fields} catalogs={catalogs} selectedCatalogs={selectedCatalogs} setSelectedCatalogs={setSelectedCatalogs} updateField={updateField} />}
-        {!loading && step === 3 && <MatrixStep fields={fields} catalogFields={catalogFields} directFields={directFields} selectedCatalogs={selectedCatalogs} catalogs={catalogs} criteria={catalogCriteria} setCriterionValue={setCriterionValue} updateField={updateField} scaleItemsByScale={scaleItemsByScale} sourceId={editing ? (initialSourceId || router.query.id) : ''} />}
+        {!loading && step === 3 && <MatrixStep fields={fields} catalogFields={catalogFields} directFields={directFields} selectedCatalogs={selectedCatalogs} catalogs={catalogs} criteria={catalogCriteria} setCriterionValue={setCriterionValue} updateField={updateField} scaleItemsByScale={scaleItemsByScale} sourceId={editing ? (initialSourceId || router.query.id) : draftSourceId} onPrepareDraft={prepareMatrixDraft} onImported={refreshImportedMatrix} />}
         {!loading && step === 4 && <Preview test={test} fields={fields} catalogFields={catalogFields} directFields={directFields} criteria={catalogCriteria} selectedCatalogs={selectedCatalogs} />}
       </section>
       <footer className={styles.footer}>{step > 0 && <button className={styles.secondary} onClick={() => setStep((value) => value - 1)}>Anterior</button>}{step < STEPS.length - 1 ? <button onClick={next}>Siguiente <ChevronRight size={18} /></button> : <button onClick={save} disabled={saving}><Save size={18} /> {saving ? 'Guardando...' : 'Guardar configuración'}</button>}</footer>
@@ -672,7 +723,11 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
   );
 }
 
-function ListPage({ loading, sources, onReload }) {
+function ListPage({ loading, sources, onChanged }) {
+  const [expandedTest, setExpandedTest] = useState('');
+  const [busyVersion, setBusyVersion] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const sourceTestLabel = (source) => {
     const prueba = source.prueba_info || source.prueba || source.test_info || source.test;
     const acronym = prueba?.acronimo || source.prueba_acronimo || source.acronimo;
@@ -681,12 +736,86 @@ function ListPage({ loading, sources, onReload }) {
     return acronym || name || 'Prueba sin nombre';
   };
 
+  const versionsByTest = useMemo(() => {
+    const grouped = new Map();
+    sources.forEach((source) => {
+      const key = String(idOf(source.prueba) || idOf(source.prueba_info) || source.prueba_id || source.id);
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(source);
+    });
+    return [...grouped.values()].map((versions) => versions.sort((a, b) => Number(b.version || 0) - Number(a.version || 0) || Number(b.id) - Number(a.id)));
+  }, [sources]);
+
+  const totalPages = Math.max(1, Math.ceil(versionsByTest.length / pageSize));
+  const visibleTests = versionsByTest.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
+  const changeAvailability = async (source, action) => {
+    setBusyVersion(`${action}:${source.id}`);
+    try {
+      await api.limitSources[action](source.id);
+      toast.success(action === 'activate' ? `Versión V${source.version || 1} activada.` : `Versión V${source.version || 1} desactivada para nuevas asignaciones.`);
+      await onChanged();
+    } catch (error) {
+      toast.error(buildErrorMessage(error, 'No fue posible actualizar la versión.'));
+    } finally {
+      setBusyVersion('');
+    }
+  };
+
   return (
     <main className={styles.page}>
-      <header className={styles.header}><div><Link href="/configuracion-tecnica" className={styles.back}><ArrowLeft size={18} /> Configuración técnica</Link><h1>Límites por prueba</h1></div><Link href="/configuracion-tecnica/limites/create" className={styles.primary}><Plus size={18} /> Nueva configuración</Link></header>
+      <header className={styles.header}><div><h1>Límites por prueba</h1><p>Administre la versión vigente e historial sin cambiar contratos ya asignados.</p></div><Link href="/configuracion-tecnica/limites/create" className={styles.primary}><Plus size={18} /> Nueva configuración</Link></header>
       <section className={styles.panel}>
-        <div className={styles.toolbar}><p>Configure operadores, orígenes y decisión técnica por prueba.</p><button className={styles.secondary} onClick={onReload}>Recargar</button></div>
-        {loading ? <p>Cargando...</p> : <div className={styles.cards}>{sources.map((source) => <article key={source.id} className={styles.card}><div><h2>{sourceTestLabel(source)}</h2><p>{source.tipo_limite === 'catalogo' ? 'Con catálogo técnico' : 'Límites globales / directos'}</p></div><div className={styles.cardActions}><Link href={`/configuracion-tecnica/limites/edit/${source.id}`}><Pencil size={16} /> Editar</Link></div></article>)}</div>}
+        {loading ? <GlobalOilLoader label="Cargando límites configurados..." /> : <>
+          <div className={styles.versionTableWrap}>
+            <table className={styles.versionTable}>
+              <thead><tr><th>Prueba</th><th>Versión vigente</th><th>Configuración</th><th>Asignaciones</th><th>Historial</th><th aria-label="Acciones" /></tr></thead>
+              <tbody>{visibleTests.length === 0 ? <tr><td colSpan={6} className={styles.emptyTable}>No hay configuraciones de límites para mostrar.</td></tr> : visibleTests.map((versions) => {
+          const current = versions.find((source) => source.activo && source.publicada !== false && !source.deleted_at) || versions[0];
+          const testKey = String(idOf(current.prueba) || idOf(current.prueba_info) || current.prueba_id || current.id);
+          const expanded = expandedTest === testKey;
+          return <Fragment key={testKey}>
+            <tr key={testKey}>
+              <td><strong className={styles.testName}>{sourceTestLabel(current)}</strong></td>
+              <td><span className={styles.currentBadge}>V{current.version || 1} · Vigente</span></td>
+              <td>{SOURCE_LABELS[current.tipo_limite] || 'Regla base'}</td>
+              <td>{current.asignaciones_count || 0} fijada(s)</td>
+              <td>{versions.length} versión(es)</td>
+              <td><div className={styles.tableActions}>
+                <button type="button" className={styles.tableAction} onClick={() => setExpandedTest(expanded ? '' : testKey)} aria-expanded={expanded}><ChevronDown size={16} /> {expanded ? 'Ocultar' : 'Historial'}</button>
+                <Link href={`/configuracion-tecnica/limites/edit/${current.id}`} className={styles.tableAction} title="Crear una nueva versión desde la vigente"><Pencil size={16} /> Nueva versión</Link>
+              </div></td>
+            </tr>
+            {expanded ? <tr className={styles.historyRow}><td colSpan={6}><div className={styles.historyTableWrap}>
+              <table className={styles.historyTable}>
+                <thead><tr><th>Versión</th><th>Estado</th><th>Creada</th><th>Asignaciones fijadas</th><th>Acciones</th></tr></thead>
+                <tbody>{versions.map((source) => {
+                const isCurrent = source.id === current.id;
+                const selectable = source.publicada !== false;
+                return <tr key={source.id}>
+                  <td><strong>V{source.version || 1}</strong></td>
+                  <td><span className={isCurrent ? styles.currentBadge : selectable ? styles.historyBadge : styles.disabledBadge}>{isCurrent ? 'Vigente' : selectable ? 'Histórica disponible' : 'Desactivada'}</span></td>
+                  <td>{source.created_at ? new Date(source.created_at).toLocaleString('es-CO') : 'Sin fecha'}</td>
+                  <td>{source.asignaciones_count || 0}</td>
+                  <td><div className={styles.tableActions}>
+                    <Link href={`/configuracion-tecnica/limites/edit/${source.id}`} title="Usar esta versión como base sin modificarla"><Pencil size={15} /> Usar como base</Link>
+                    {!isCurrent ? <button type="button" disabled={busyVersion === `activate:${source.id}`} onClick={() => changeAvailability(source, 'activate')}><Check size={15} /> Activar</button> : null}
+                    {!isCurrent && selectable ? <button type="button" disabled={busyVersion === `deactivate:${source.id}`} onClick={() => changeAvailability(source, 'deactivate')}><Power size={15} /> Desactivar</button> : null}
+                  </div></td>
+                </tr>;
+              })}</tbody>
+              </table>
+            </div></td></tr> : null}
+          </Fragment>;
+        })}</tbody>
+            </table>
+          </div>
+          <PaginationBar count={versionsByTest.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
+        </>}
       </section>
     </main>
   );
@@ -776,14 +905,32 @@ function SourceMapStep({ fields, catalogs, selectedCatalogs, setSelectedCatalogs
   );
 }
 
-function MatrixStep({ catalogFields, directFields, criteria, setCriterionValue, updateField, scaleItemsByScale, sourceId }) {
+function MatrixStep({ catalogFields, directFields, criteria, setCriterionValue, updateField, scaleItemsByScale, sourceId, onPrepareDraft, onImported }) {
   const fileRef = useRef(null);
+  const hasPersistedSource = Boolean(sourceId);
+  const getMatrixSourceId = async () => sourceId || await onPrepareDraft?.();
   const downloadTemplate = async () => {
-    try { const response = await api.limitSources.downloadMatrixTemplate(sourceId); const url = URL.createObjectURL(response.data); const link = document.createElement('a'); link.href = url; link.download = 'matriz_limites.xlsx'; link.click(); URL.revokeObjectURL(url); } catch (error) { toast.error(buildErrorMessage(error, 'No se pudo descargar la plantilla.')); }
+    try {
+      const matrixSourceId = await getMatrixSourceId();
+      if (!matrixSourceId) return;
+      const response = await api.limitSources.downloadMatrixTemplate(matrixSourceId); const url = URL.createObjectURL(response.data); const link = document.createElement('a'); link.href = url; link.download = 'matriz_limites.xlsx'; link.click(); URL.revokeObjectURL(url);
+    } catch (error) { toast.error(buildErrorMessage(error, 'No se pudo descargar la plantilla.')); }
   };
   const importMatrix = async (event) => {
     const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
-    try { const result = await api.limitSources.importMatrix(sourceId, file); toast.success(`${result.actualizados} reglas actualizadas. Recargue la pantalla para ver la matriz.`); } catch (error) { toast.error(buildErrorMessage(error, 'No se pudo importar la matriz.')); }
+    try {
+      const matrixSourceId = await getMatrixSourceId();
+      if (!matrixSourceId) return;
+      const result = await api.limitSources.importMatrix(matrixSourceId, file);
+      await onImported?.(matrixSourceId);
+      toast.success(`${result.actualizados} reglas actualizadas.`);
+    } catch (error) {
+      const details = Array.isArray(error?.response?.data?.errores) ? error.response.data.errores : [];
+      const message = details.length
+        ? `No se aplicó el archivo: ${details.slice(0, 3).map((item) => `fila ${item.fila}: ${item.error}`).join(' · ')}${details.length > 3 ? ` · y ${details.length - 3} más` : ''}`
+        : buildErrorMessage(error, 'No se pudo importar la matriz.');
+      toast.error(message);
+    }
   };
   const changeOperator = (field, operator) => {
     updateField(field.codigo, {
@@ -797,10 +944,17 @@ function MatrixStep({ catalogFields, directFields, criteria, setCriterionValue, 
   return (
     <div>
       <h2>4. Matriz de limites</h2>
-      <p className={styles.muted}>Defina las fronteras siguiendo la banda de color. La operación y el semáforo se configuran por combinación y campo.</p>
-      {!!sourceId && <div className={styles.toolbar}><p>Use la plantilla oficial para actualizar muchas reglas.</p><button type="button" className={styles.secondary} onClick={downloadTemplate}><ArrowDownToLine size={16} /> Descargar plantilla</button><button type="button" className={styles.secondary} onClick={() => fileRef.current?.click()}><FileUp size={16} /> Subir Excel</button><input ref={fileRef} type="file" accept=".xlsx" onChange={importMatrix} hidden /></div>}
+      <p className={styles.muted}>Defina la operación y las bandas de evaluación. Toda regla que decide un estado técnico muestra su semáforo.</p>
+      <div className={styles.toolbar}>
+        <p>{hasPersistedSource ? 'Descargue la plantilla guiada para actualizar varias reglas de catálogo.' : 'Puede descargar o importar ahora: el sistema prepara un borrador con la prueba, campos y combinaciones seleccionadas, sin exigirle completar la matriz manualmente.'}</p>
+        <div className={styles.toolbarActions}>
+          <button type="button" className={styles.secondary} onClick={downloadTemplate}><ArrowDownToLine size={16} /> Descargar plantilla</button>
+          <button type="button" className={styles.secondary} onClick={() => fileRef.current?.click()}><FileUp size={16} /> Subir Excel</button>
+        </div>
+        <input ref={fileRef} type="file" accept=".xlsx" onChange={importMatrix} hidden />
+      </div>
       {!!catalogFields.length && <section className={styles.limitSection}><h3>Campos dependientes de catalogo</h3><p className={styles.muted}>Cada combinación puede usar una operación distinta para cada campo.</p><div className={styles.tableWrap}><table><thead><tr><th>Combinacion</th>{catalogFields.map((field) => <th key={field.codigo}><strong>{field.nombre}</strong></th>)}</tr></thead><tbody>{criteria.map((criterion) => <tr key={criterion.key}><td><strong>{criterion.nombre}</strong></td>{catalogFields.map((field) => { const rule = criterion.valores?.[field.codigo] || {}; const operator = rule.operador || field.operador; return <td key={field.codigo}><select value={operator} onChange={(event) => setCriterionValue(criterion.key, field.codigo, { ...normalizeLimitRule(rule, event.target.value), operador: event.target.value })}>{operatorsForField(field).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><LimitValueInput field={field} value={{ ...rule, operador: operator }} onChange={(value) => setCriterionValue(criterion.key, field.codigo, { ...value, operador: operator })} scaleItemsByScale={scaleItemsByScale} /></td>; })}</tr>)}</tbody></table></div></section>}
-      {!!directFields.length && <section className={styles.limitSection}><h3>Campos con limite directo, escala o esperado</h3><div className={styles.directGrid}>{directFields.map((field) => <div key={field.codigo} className={styles.directField}><strong>{field.nombre}</strong><small>{SOURCE_LABELS[field.origen_limite]}</small><select value={field.operador} onChange={(event) => changeOperator(field, event.target.value)}>{operatorsForField(field).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><LimitValueInput field={field} value={field.valor_global} onChange={(value) => updateField(field.codigo, { valor_global: value })} scaleItemsByScale={scaleItemsByScale} /></div>)}</div></section>}
+      {!!directFields.length && <section className={styles.limitSection}><h3>Reglas base, escalas y valores esperados</h3><p className={styles.muted}>La regla base se aplica a todas las muestras. Los ajustes permitidos al asignar una prueba conservan esta misma evaluación.</p><div className={styles.directGrid}>{directFields.map((field) => <div key={field.codigo} className={styles.directField}><strong>{field.nombre}</strong><small>{SOURCE_LABELS[field.origen_limite]}</small><select value={field.operador} onChange={(event) => changeOperator(field, event.target.value)}>{operatorsForField(field).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><LimitValueInput field={field} value={field.valor_global} onChange={(value) => updateField(field.codigo, { valor_global: value })} scaleItemsByScale={scaleItemsByScale} /></div>)}</div></section>}
     </div>
   );
 }

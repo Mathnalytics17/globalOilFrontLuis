@@ -1,24 +1,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
-import {
-  Block,
-  DeleteOutline,
-  Edit,
-  LockOpen,
-  Mail,
-  RemoveRedEye,
-  Security,
-  VisibilityOff,
-  PersonAddAlt,
-} from '@mui/icons-material';
+import { Ban as Block, Eye as RemoveRedEye, EyeOff as VisibilityOff, Mail, Pencil as Edit, Trash2 as DeleteOutline, Unlock as LockOpen, UserPlus as PersonAddAlt } from 'lucide-react';
 import { securityService } from '../../infrastructure/securityService';
 import { companiesService } from '@features/companies/infrastructure/companiesService';
-import { useAuth } from '@features/auth/application/AuthContext';
+import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import { isGlobalUser } from '@features/auth/application/sessionAccess';
 import s from '../components/Security.module.css';
-import SortableTableHeader from '@components/SortableTableHeader';
-import useTableSort from '@hooks/useTableSort';
+import SortableTableHeader from '@shared/ui/SortableTableHeader';
+import useTableSort from '@shared/hooks/useTableSort';
 import {
   BackLink,
   Drawer,
@@ -305,15 +295,15 @@ export default function SecurityUsersPage() {
                     <td>{item.last_login ? new Date(item.last_login).toLocaleString() : <span className={s.muted}>Sin registro</span>}</td>
                     <td>
                       <div className={s.actions}>
-                        <button className={s.iconButton} title="Ver detalle" type="button" onClick={() => { setSelectedUser(item); setDrawer('detail'); }}><RemoveRedEye fontSize="small" /></button>
-                        {canEdit ? <button className={s.iconButton} title="Editar usuario" type="button" onClick={() => openEdit(item)}><Edit fontSize="small" /></button> : null}
-                        {canReinvite && (isPending(item) || isDisabled(item)) ? <button className={s.iconButton} title="Reinvitar usuario" type="button" onClick={() => openAction(item, 'reinvite')}><PersonAddAlt fontSize="small" /></button> : null}
-                        {canDeactivate && !isDisabled(item) && item.id !== user?.id ? <button className={s.iconButton} title="Desactivar cuenta" type="button" onClick={() => openAction(item, 'deactivate')}><DeleteOutline fontSize="small" /></button> : null}
-                        {canUnblock && isDisabled(item) ? <button className={s.iconButton} title="Reactivar cuenta" type="button" onClick={() => openAction(item, 'reactivate')}><LockOpen fontSize="small" /></button> : null}
-                        {canBlock && !isBlocked(item) && !isPending(item) ? <button className={s.iconButton} title="Bloquear acceso" type="button" onClick={() => openAction(item, 'block')}><Block fontSize="small" /></button> : null}
-                        {canUnblock && isBlocked(item) ? <button className={s.iconButton} title="Desbloquear acceso" type="button" onClick={() => openAction(item, 'unblock')}><LockOpen fontSize="small" /></button> : null}
-                        {canBlock && !isReadOnly(item) && !isBlocked(item) && !isPending(item) ? <button className={s.iconButton} title="Pasar a solo lectura" type="button" onClick={() => openAction(item, 'readonly')}><VisibilityOff fontSize="small" /></button> : null}
-                        {canUnblock && isReadOnly(item) ? <button className={s.iconButton} title="Restaurar escritura" type="button" onClick={() => openAction(item, 'restore')}><Edit fontSize="small" /></button> : null}
+                        <button className={s.iconButton} title="Ver detalle" type="button" onClick={() => { setSelectedUser(item); setDrawer('detail'); }}><RemoveRedEye /></button>
+                        {canEdit ? <button className={s.iconButton} title="Editar usuario" type="button" onClick={() => openEdit(item)}><Edit /></button> : null}
+                        {canReinvite && (isPending(item) || isDisabled(item)) ? <button className={s.iconButton} title="Reinvitar usuario" type="button" onClick={() => openAction(item, 'reinvite')}><PersonAddAlt /></button> : null}
+                        {canDeactivate && !isDisabled(item) && item.id !== user?.id ? <button className={s.iconButton} title="Desactivar cuenta" type="button" onClick={() => openAction(item, 'deactivate')}><DeleteOutline /></button> : null}
+                        {canUnblock && isDisabled(item) ? <button className={s.iconButton} title="Reactivar cuenta" type="button" onClick={() => openAction(item, 'reactivate')}><LockOpen /></button> : null}
+                        {canBlock && !isBlocked(item) && !isPending(item) ? <button className={s.iconButton} title="Bloquear acceso" type="button" onClick={() => openAction(item, 'block')}><Block /></button> : null}
+                        {canUnblock && isBlocked(item) ? <button className={s.iconButton} title="Desbloquear acceso" type="button" onClick={() => openAction(item, 'unblock')}><LockOpen /></button> : null}
+                        {canBlock && !isReadOnly(item) && !isBlocked(item) && !isPending(item) ? <button className={s.iconButton} title="Pasar a solo lectura" type="button" onClick={() => openAction(item, 'readonly')}><VisibilityOff /></button> : null}
+                        {canUnblock && isReadOnly(item) ? <button className={s.iconButton} title="Restaurar escritura" type="button" onClick={() => openAction(item, 'restore')}><Edit /></button> : null}
                       </div>
                     </td>
                   </tr>

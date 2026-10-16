@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import {
-  ArrowLeft,
   CheckCircle2,
   ClipboardList,
   Layers,
@@ -9,7 +8,6 @@ import {
   Plus,
   RefreshCw,
   Save,
-  Search,
   Trash2,
   Wand2,
 } from 'lucide-react';
@@ -21,7 +19,8 @@ import { testsService } from '@features/technical-config/infrastructure/testsSer
 import { sampleManagementTypesService } from '@features/samples/infrastructure/sampleManagementTypesService';
 import { predefinedTestBatchesService } from '@features/technical-config/infrastructure/predefinedTestBatchesService';
 import technicalConfigService from '@features/technical-config/infrastructure/technicalConfigService';
-import { presentLimitBands } from '@utils/limitPresentation';
+import { presentLimitBands } from '@shared/utils/limitPresentation';
+import withRequiredPermissions from '@shared/auth/withRequiredPermissions';
 
 const createRow = () => ({
   key: `row_${Math.random().toString(36).slice(2)}`,
@@ -35,6 +34,7 @@ const createRow = () => ({
   criterio_limite_escala_item: '',
   criterio_limite_valor: '',
   criterio_evaluacion: '',
+  fuente_limite: '',
   configuracion_resultados: {},
 });
 
@@ -508,7 +508,7 @@ const formatTechnicalAttributes = (sample) => {
   }).join(' - ');
 };
 
-export default function AsignacionPruebasPage() {
+function AsignacionPruebasPage() {
   const router = useRouter();
 
   const [batches, setBatches] = useState([]);
@@ -530,6 +530,7 @@ export default function AsignacionPruebasPage() {
   const [rows, setRows] = useState([createRow()]);
   const [selectedBundleId, setSelectedBundleId] = useState('');
   const [usePredefined, setUsePredefined] = useState(true);
+  const [aplicarLimites, setAplicarLimites] = useState(true);
   const [batchSearch, setBatchSearch] = useState('');
   const [applyMode, setApplyMode] = useState('all');
   const [selectedSamples, setSelectedSamples] = useState([]);
@@ -589,8 +590,8 @@ export default function AsignacionPruebasPage() {
         predefinedTestBatchesService.list({}),
         technicalConfigService.listConditions({ activo: true, page_size: 1000 }),
         technicalConfigService.listUnits({ activo: true, page_size: 1000 }),
-        technicalConfigService.listLimitSources({ activo: true, page_size: 1000 }),
-        technicalConfigService.listLimitFields({ activo: true, page_size: 1000 }),
+        technicalConfigService.listLimitSources({ historial: true, page_size: 5000 }),
+        technicalConfigService.listLimitFields({ historial: true, page_size: 5000 }),
         technicalConfigService.listCatalogItems({ activo: true, page_size: 1000 }),
         technicalConfigService.listComparisonScales({ activo: true, page_size: 1000 }),
         technicalConfigService.listComparisonScaleItems({ activo: true, page_size: 1000 }),
@@ -625,8 +626,22 @@ export default function AsignacionPruebasPage() {
   };
 
   const getSourcesForTest = (testId) => (
-    limitSources.filter((source) => String(getSourceTestId(source)) === String(testId))
+    limitSources
+      .filter((source) => String(getSourceTestId(source)) === String(testId))
+      .sort((left, right) => Number(right.version || 0) - Number(left.version || 0) || Number(right.id) - Number(left.id))
   );
+
+  const getDefaultSourceForTest = (testId) => (
+    getSourcesForTest(testId).find((source) => source.activo !== false && !source.deleted_at)
+    || getSourcesForTest(testId)[0]
+    || null
+  );
+
+  const getSourcesForRow = (row) => {
+    const sources = getSourcesForTest(row?.prueba);
+    if (!row?.fuente_limite) return getDefaultSourceForTest(row?.prueba) ? [getDefaultSourceForTest(row?.prueba)] : [];
+    return sources.filter((source) => String(source.id) === String(row.fuente_limite));
+  };
 
   const getGlobalSourcesForTest = (testId) => (
     getSourcesForTest(testId).filter((source) => getLimitSourceType(source) === 'global')
@@ -651,7 +666,7 @@ export default function AsignacionPruebasPage() {
   const getLimitFieldsForSources = (sources) => (
     sources.flatMap((source) => (
       limitFields
-        .filter((field) => String(getFieldSourceId(field)) === String(source.id) && field.operador !== 'informativo')
+        .filter((field) => String(getFieldSourceId(field)) === String(source.id) && field.operador !== 'informativo' && field.activo !== false && !field.deleted_at)
         .map((field) => ({ ...field, origen_limite: getFieldOrigin(source, field), fuente_limite_source: source }))
     ))
   );
@@ -713,8 +728,11 @@ export default function AsignacionPruebasPage() {
     return rule;
   };
 
-  const getDefaultLimitCriterionForTest = (testId) => {
-    const sources = getSourcesForTest(testId);
+  const getDefaultLimitCriterionForTest = (testId, sourceId = null) => {
+    const selected = sourceId
+      ? getSourcesForTest(testId).filter((source) => String(source.id) === String(sourceId))
+      : (getDefaultSourceForTest(testId) ? [getDefaultSourceForTest(testId)] : []);
+    const sources = selected;
     const adjustableFields = getAdjustableLimitFields(sources);
     if (!adjustableFields.length) return {};
 
@@ -759,7 +777,7 @@ export default function AsignacionPruebasPage() {
   };
 
   const getEffectiveLimitCriterionForRow = (row) => {
-    const defaultCriterion = getDefaultLimitCriterionForTest(row?.prueba);
+    const defaultCriterion = getDefaultLimitCriterionForTest(row?.prueba, row?.fuente_limite);
     return {
       criterio_limite_escala: row?.criterio_limite_escala || defaultCriterion.criterio_limite_escala || '',
       criterio_limite_escala_item: row?.criterio_limite_escala_item || defaultCriterion.criterio_limite_escala_item || '',
@@ -770,11 +788,13 @@ export default function AsignacionPruebasPage() {
   const buildRowFromTest = (testId) => {
     const test = tests.find((item) => String(item.id) === String(testId));
     if (!test) return { ...createRow(), prueba: String(testId || '') };
-    const defaultCriterion = getDefaultLimitCriterionForTest(test.id);
+    const source = getDefaultSourceForTest(test.id);
+    const defaultCriterion = getDefaultLimitCriterionForTest(test.id, source?.id);
 
     return {
       key: `row_${Math.random().toString(36).slice(2)}`,
       prueba: String(test.id),
+      fuente_limite: source ? String(source.id) : '',
       condicion: test.condicion_catalogo ? String(test.condicion_catalogo) : '',
       condicion_texto: test.condicion || test.condicion_catalogo_info?.nombre || '',
       unidad: getTestResultUnits(test).join(', ') || test.unidad_medida || '',
@@ -791,14 +811,18 @@ export default function AsignacionPruebasPage() {
   const hydrateExistingAssignments = (assignments) => {
     if (!assignments?.length) return false;
 
+    setAplicarLimites(assignments.some((item) => item.aplicar_limites !== false));
+
     const uniqueRows = [];
     const seen = new Set();
 
     assignments.forEach((item) => {
       const pruebaId = item.prueba?.id || item.prueba;
-      const defaultCriterion = getDefaultLimitCriterionForTest(pruebaId);
+      const selectedSourceId = item.fuente_limite ? String(item.fuente_limite) : String(getDefaultSourceForTest(pruebaId)?.id || '');
+      const defaultCriterion = getDefaultLimitCriterionForTest(pruebaId, selectedSourceId);
       const signature = [
         pruebaId,
+        item.fuente_limite || '',
         item.condicion_catalogo || '',
         item.condicion_configurada || '',
         item.unidad_configurada || '',
@@ -817,6 +841,7 @@ export default function AsignacionPruebasPage() {
       uniqueRows.push({
         key: `existing_${signature}`,
         prueba: String(pruebaId || ''),
+        fuente_limite: selectedSourceId,
         condicion: item.condicion_catalogo ? String(item.condicion_catalogo) : '',
         condicion_texto: item.condicion_configurada || item.prueba?.condicion || '',
         unidad: item.unidad_configurada || item.prueba?.unidad_medida || '',
@@ -1004,6 +1029,20 @@ export default function AsignacionPruebasPage() {
         };
       }
 
+      if (field === 'fuente_limite') {
+        const defaultCriterion = getDefaultLimitCriterionForTest(row.prueba, value);
+        return {
+          ...row,
+          fuente_limite: value,
+          criterio_limite_catalogo: '',
+          criterio_limite_item: '',
+          criterio_limite_escala: defaultCriterion.criterio_limite_escala || '',
+          criterio_limite_escala_item: defaultCriterion.criterio_limite_escala_item || '',
+          criterio_limite_valor: defaultCriterion.criterio_limite_valor || '',
+          criterio_evaluacion: '',
+        };
+      }
+
       if (field === 'condicion') {
         const condition = conditions.find((item) => String(item.id) === String(value));
         return {
@@ -1113,7 +1152,7 @@ export default function AsignacionPruebasPage() {
   };
 
   const getRowManualLimitFields = (row) => {
-    const sources = limitSources.filter((source) => String(getSourceTestId(source)) === String(row?.prueba));
+    const sources = getSourcesForRow(row);
     return getAdjustableLimitFields(sources);
   };
 
@@ -1144,7 +1183,7 @@ export default function AsignacionPruebasPage() {
   };
 
   const getEffectiveCatalogCriterionForRow = (row, sources = null) => {
-    const rowSources = sources || limitSources.filter((source) => String(getSourceTestId(source)) === String(row?.prueba));
+    const rowSources = sources || getSourcesForRow(row);
     const catalogSources = getCatalogLimitSources(rowSources);
     const selectedSource = catalogSources.find((source) => String(getSourceCatalogId(source)) === String(row?.criterio_limite_catalogo)) || catalogSources[0];
     const catalogId = row?.criterio_limite_catalogo || (selectedSource ? getSourceCatalogId(selectedSource) : '');
@@ -1246,10 +1285,12 @@ export default function AsignacionPruebasPage() {
       ).values());
       setRows(uniqueDetails.length
         ? uniqueDetails.map((detail) => {
-          const defaultCriterion = getDefaultLimitCriterionForTest(detail.prueba);
+          const sourceId = detail.fuente_limite ? String(detail.fuente_limite) : String(getDefaultSourceForTest(detail.prueba)?.id || '');
+          const defaultCriterion = getDefaultLimitCriterionForTest(detail.prueba, sourceId);
           return {
             key: `bundle_${detail.id}`,
             prueba: detail.prueba ? String(detail.prueba) : '',
+            fuente_limite: sourceId,
             condicion: detail.condicion ? String(detail.condicion) : '',
             condicion_texto: detail.condicion_texto || '',
             unidad: detail.unidad || '',
@@ -1291,7 +1332,7 @@ export default function AsignacionPruebasPage() {
       sample_ids: samplesToSend,
       lote_predefinido: selectedBundleId ? Number(selectedBundleId) : null,
       pruebas: rows.filter((row) => row.prueba).map((row) => {
-        const sources = limitSources.filter((source) => String(getSourceTestId(source)) === String(row.prueba));
+        const sources = getSourcesForRow(row);
         const adjustableFields = getAdjustableLimitFields(sources);
         const effectiveCriterion = adjustableFields.length ? getEffectiveLimitCriterionForRow(row) : {};
         const catalogCriterion = getEffectiveCatalogCriterionForRow(row, sources);
@@ -1309,20 +1350,22 @@ export default function AsignacionPruebasPage() {
         ));
         return {
           prueba: Number(row.prueba),
+          aplicar_limites: aplicarLimites,
+          fuente_limite: aplicarLimites && row.fuente_limite ? Number(row.fuente_limite) : null,
           condicion: row.condicion ? Number(row.condicion) : null,
           condicion_texto: row.condicion_texto || null,
           unidad: row.unidad || null,
           configuracion_resultados: row.configuracion_resultados || {},
-          criterio_limite_catalogo: catalogCriterion.catalogId ? Number(catalogCriterion.catalogId) : null,
-          criterio_limite_item: catalogCriterion.itemId ? Number(catalogCriterion.itemId) : null,
-          criterio_limite_escala: globalScaleId ? Number(globalScaleId) : null,
-          criterio_limite_escala_item: globalScaleItem ? Number(globalScaleItem.id) : null,
-          criterio_limite_valor: isEmptyCriterionValue(effectiveCriterion.criterio_limite_valor) ? null : effectiveCriterion.criterio_limite_valor,
-          criterio_evaluacion: row.criterio_evaluacion ? Number(row.criterio_evaluacion) : null,
+          criterio_limite_catalogo: aplicarLimites && catalogCriterion.catalogId ? Number(catalogCriterion.catalogId) : null,
+          criterio_limite_item: aplicarLimites && catalogCriterion.itemId ? Number(catalogCriterion.itemId) : null,
+          criterio_limite_escala: aplicarLimites && globalScaleId ? Number(globalScaleId) : null,
+          criterio_limite_escala_item: aplicarLimites && globalScaleItem ? Number(globalScaleItem.id) : null,
+          criterio_limite_valor: aplicarLimites && !isEmptyCriterionValue(effectiveCriterion.criterio_limite_valor) ? effectiveCriterion.criterio_limite_valor : null,
+          criterio_evaluacion: aplicarLimites && row.criterio_evaluacion ? Number(row.criterio_evaluacion) : null,
         };
       }),
     };
-  }, [applyMode, sampleList, selectedSampleObjects, selectedBatchId, selectedBundleId, rows, limitSources, limitFields, comparisonScaleItems]);
+  }, [applyMode, sampleList, selectedSampleObjects, selectedBatchId, selectedBundleId, aplicarLimites, rows, limitSources, limitFields, comparisonScaleItems]);
 
   const saveAssignment = async (estado) => {
     if (!selectedBatchId) {
@@ -1340,14 +1383,14 @@ export default function AsignacionPruebasPage() {
       return;
     }
 
-    const missingCriterion = rows.find((row) => {
+    const missingCriterion = aplicarLimites && rows.find((row) => {
       if (!row.prueba) return false;
       const effectiveCriterion = getEffectiveLimitCriterionForRow(row);
       const effectiveRow = {
         ...row,
         ...effectiveCriterion,
       };
-      const sources = limitSources.filter((source) => String(getSourceTestId(source)) === String(row.prueba));
+      const sources = getSourcesForRow(row);
       const catalogCriterion = getEffectiveCatalogCriterionForRow(row, sources);
       if (catalogCriterion.catalogSources.length && !catalogCriterion.itemId) return true;
       const fields = getLimitFieldsForSources(sources);
@@ -1370,10 +1413,10 @@ export default function AsignacionPruebasPage() {
       return;
     }
 
-    const invalidOrder = rows
+    const invalidOrder = aplicarLimites && rows
       .filter((row) => row.prueba)
       .flatMap((row) => {
-        const sources = limitSources.filter((source) => String(getSourceTestId(source)) === String(row.prueba));
+        const sources = getSourcesForRow(row);
         const fields = getAdjustableLimitFields(sources);
         const effectiveCriterion = getEffectiveLimitCriterionForRow(row);
         const effectiveRow = { ...row, ...effectiveCriterion };
@@ -1520,9 +1563,6 @@ export default function AsignacionPruebasPage() {
 
   const stats = {
     samples: sampleList.length || selectedBatch?.total_muestras || 0,
-    assigned: currentAssignments.length,
-    draft: currentAssignments.filter((item) => item.estado_asignacion === 'borrador').length,
-    confirmed: currentAssignments.filter((item) => item.estado_asignacion === 'confirmada').length,
   };
 
   return (
@@ -1530,9 +1570,6 @@ export default function AsignacionPruebasPage() {
       <div className="assignShell">
         <header className="topBar">
           <div className="titleBlock">
-            <button type="button" onClick={() => router.push('/muestras/lotes')} className="backBtn">
-              <ArrowLeft size={18} />
-            </button>
             <div className="iconBox"><ClipboardList size={21} /></div>
             <div>
               <h1>Asignar pruebas al lote</h1>
@@ -1541,10 +1578,6 @@ export default function AsignacionPruebasPage() {
           </div>
 
           <div className="topActions">
-            <button type="button" onClick={loadAll} className="btn secondary" disabled={loading}>
-              <RefreshCw size={16} className={loading ? 'spin' : ''} />
-              Recargar
-            </button>
             <button
               type="button"
               disabled={!currentAssignments.some((item) => item.estado_asignacion === 'confirmada')}
@@ -1636,15 +1669,29 @@ export default function AsignacionPruebasPage() {
                 <span>2</span>
                 <div>
                   <h2>Constructor de pruebas</h2>
-                <p>Variable, condición, criterio de límite y unidad informativa.</p>
+                  <p>{aplicarLimites ? 'Variable, condición, criterio de límite y unidad informativa.' : 'Variable, condición y unidad. Los resultados no serán evaluados contra límites.'}</p>
                 </div>
               </div>
 
+              <label className="limitSwitch">
+                <input
+                  type="checkbox"
+                  checked={aplicarLimites}
+                  onChange={(event) => setAplicarLimites(event.target.checked)}
+                />
+                <span className="limitSwitchTrack" aria-hidden="true"><span /></span>
+                <span>
+                  <strong>Aplicar límites al lote</strong>
+                  <small>{aplicarLimites ? 'Se guardará la versión de límites y se calculará el semáforo.' : 'Solo se registrarán resultados; no habrá semáforo ni criterios de límite.'}</small>
+                </span>
+              </label>
+
               <div className="tableEditor">
-                <div className="editorRow editorHead">
+                <div className={`editorRow editorHead ${aplicarLimites ? '' : 'withoutLimits'}`}>
                   <div>Variable</div>
-                    <div>Condición</div>
-                    <div>Criterio límite</div>
+                  {aplicarLimites ? <div>Límites aplicados</div> : null}
+                  <div>Condición</div>
+                  {aplicarLimites ? <div>Criterio límite</div> : null}
                   <div>Unidad</div>
                   <div>Acciones</div>
                 </div>
@@ -1652,7 +1699,7 @@ export default function AsignacionPruebasPage() {
                 {rows.map((row) => {
 
                   return (
-                    <div className="editorRow" key={row.key}>
+                    <div className={`editorRow ${aplicarLimites ? '' : 'withoutLimits'}`} key={row.key}>
                       <select value={row.prueba} onChange={(e) => updateRow(row.key, 'prueba', e.target.value)}>
                         <option value="">Variable...</option>
                         {tests.map((item) => (
@@ -1661,6 +1708,20 @@ export default function AsignacionPruebasPage() {
                           </option>
                         ))}
                       </select>
+
+                      {aplicarLimites ? <select
+                        value={row.fuente_limite}
+                        disabled={!row.prueba}
+                        onChange={(e) => updateRow(row.key, 'fuente_limite', e.target.value)}
+                        title="Versión de límites que quedará fijada en esta asignación"
+                      >
+                        {!row.prueba ? <option value="">Seleccione una prueba</option> : null}
+                        {getSourcesForTest(row.prueba).map((source) => (
+                          <option key={source.id} value={source.id} disabled={source.publicada === false}>
+                            V{source.version || 1}{source.activo !== false && !source.deleted_at ? ' · activa' : ' · inactiva / histórica'}
+                          </option>
+                        ))}
+                      </select> : null}
 
                       <select value={row.condicion} onChange={(e) => updateRow(row.key, 'condicion', e.target.value)}>
                         <option value="">Sin condición</option>
@@ -1671,9 +1732,9 @@ export default function AsignacionPruebasPage() {
                         ))}
                       </select>
 
-                      <div className="criterionCell">
+                      {aplicarLimites ? <div className="criterionCell">
                         {(() => {
-                          const sources = limitSources.filter((source) => String(getSourceTestId(source)) === String(row.prueba));
+                          const sources = getSourcesForRow(row);
                           const catalogSources = getCatalogLimitSources(sources);
                           const globalSources = sources.filter((source) => getLimitSourceType(source) === 'global');
                           const assignmentFields = getAdjustableLimitFields(sources);
@@ -1848,7 +1909,7 @@ export default function AsignacionPruebasPage() {
                             </div>
                           );
                         })()}
-                      </div>
+                      </div> : null}
 
                       <button
                         type="button"
@@ -2052,29 +2113,6 @@ export default function AsignacionPruebasPage() {
             ) : null}
           </main>
 
-          <aside className="rightPanel">
-            <section className="miniBox">
-              <h3>Resumen</h3>
-              <div className="miniStat"><span>Muestras</span><strong>{stats.samples}</strong></div>
-              <div className="miniStat"><span>Asignaciones</span><strong>{stats.assigned}</strong></div>
-              <div className="miniStat"><span>Borradores</span><strong>{stats.draft}</strong></div>
-              <div className="miniStat"><span>Confirmadas</span><strong>{stats.confirmed}</strong></div>
-            </section>
-
-            <section className="miniBox">
-              <h3>Asignaciones actuales</h3>
-              <div className="assignmentList">
-                {currentAssignments.length ? currentAssignments.slice(0, 9).map((item) => (
-                  <div key={item.id} className="assignmentItem">
-                    <strong>{item.prueba?.acronimo || item.prueba?.nombre_variable || item.prueba}</strong>
-                        <span>{item.muestra_id || item.muestra} · {item.estado_asignacion || '-'}</span>
-                  </div>
-                )) : (
-                <p className="muted">Aún no hay pruebas asignadas al lote.</p>
-                )}
-              </div>
-            </section>
-          </aside>
         </div>
 
         {resultConfigRowKey ? (() => {
@@ -2185,8 +2223,8 @@ export default function AsignacionPruebasPage() {
         {infoRowKey ? (() => {
           const row = rows.find((item) => item.key === infoRowKey);
           const test = tests.find((item) => String(item.id) === String(row?.prueba));
-          const sources = getSourcesForTest(row?.prueba);
-          const fields = sources.flatMap((source) => (
+          const selectedSources = getSourcesForRow(row);
+          const fields = selectedSources.flatMap((source) => (
             limitFields
               .filter((field) => String(getFieldSourceId(field)) === String(source.id))
               .map((field) => ({ ...field, source }))
@@ -2371,6 +2409,7 @@ export default function AsignacionPruebasPage() {
                                         field,
                                         (current) => ({ ...current, [boundaryKey]: event.target.value })
                                       )}
+                                      onWheel={(event) => event.currentTarget.blur()}
                                       placeholder={getLimitFieldPlaceholder(field)}
                                     />
                                   )}
@@ -2443,9 +2482,9 @@ export default function AsignacionPruebasPage() {
 
         .backBtn,
         .iconBox {
-          width: 44px;
-          height: 44px;
-          border-radius: 10px;
+          width: 36px;
+          height: 36px;
+          border-radius: 8px;
           border: 1px solid #444;
           background: #121212;
           color: white;
@@ -2459,14 +2498,14 @@ export default function AsignacionPruebasPage() {
 
         .titleBlock h1 {
           margin: 0;
-          font-size: 26px;
+          font-size: 24px;
           line-height: 1.1;
         }
 
         .titleBlock p {
-          margin: 4px 0 0;
-          color: #c9c9c9;
-          font-size: 14px;
+          margin: 3px 0 0;
+          color: #aeb4bd;
+          font-size: 12.5px;
         }
 
         .topActions {
@@ -2476,8 +2515,8 @@ export default function AsignacionPruebasPage() {
         }
 
         .btn {
-          min-height: 40px;
-          border-radius: 10px;
+          min-height: 36px;
+          border-radius: 7px;
           border: 1px solid #444;
           background: #222;
           color: white;
@@ -2485,8 +2524,9 @@ export default function AsignacionPruebasPage() {
           align-items: center;
           justify-content: center;
           gap: 8px;
-          padding: 0 14px;
-          font-weight: 800;
+          padding: 0 11px;
+          font-size: 12.5px;
+          font-weight: 650;
           cursor: pointer;
           transition: .16s ease;
         }
@@ -2519,26 +2559,26 @@ export default function AsignacionPruebasPage() {
         }
 
         .btn.big {
-          min-height: 52px;
-          padding: 0 24px;
-          font-size: 16px;
+          min-height: 38px;
+          padding: 0 13px;
+          font-size: 12.5px;
         }
 
         .lotHeader {
           display: grid;
-          grid-template-columns: 62px minmax(360px, 1.3fr) repeat(6, minmax(120px, 1fr));
-          gap: 14px;
+          grid-template-columns: 44px minmax(240px, 1.4fr) repeat(6, minmax(92px, 1fr));
+          gap: 10px;
           align-items: center;
           border: 1px solid #3a3a3a;
-          background: linear-gradient(180deg, rgba(27,27,27,.96), rgba(19,19,19,.96));
-          border-radius: 12px;
-          padding: 14px 18px;
+          background: #191b1e;
+          border-radius: 10px;
+          padding: 8px 9px;
           margin-bottom: 10px;
         }
 
         .lotIcon {
-          width: 56px;
-          height: 56px;
+          width: 38px;
+          height: 38px;
           border-radius: 50%;
           display: grid;
           place-items: center;
@@ -2552,10 +2592,10 @@ export default function AsignacionPruebasPage() {
         .field span {
           display: block;
           color: #aeb6c1;
-          font-size: 12px;
+          font-size: 10.5px;
           text-transform: uppercase;
-          letter-spacing: .09em;
-          margin-bottom: 7px;
+          letter-spacing: .055em;
+          margin-bottom: 5px;
         }
 
         .lotSelectorLine {
@@ -2573,8 +2613,8 @@ export default function AsignacionPruebasPage() {
         .templateGrid input,
         .templateGrid select {
           width: 100%;
-          height: 38px;
-          border-radius: 8px;
+          height: 36px;
+          border-radius: 7px;
           border: 1px solid #454545;
           background: #080808;
           color: white;
@@ -2626,13 +2666,13 @@ export default function AsignacionPruebasPage() {
 
         .lotInfo strong,
         .lotInfo .value {
-          font-size: 16px;
+          font-size: 13px;
           color: white;
         }
 
         .lotInfo .value.strong {
-          font-weight: 900;
-          font-size: 19px;
+          font-weight: 700;
+          font-size: 15px;
         }
 
         .pill {
@@ -2661,16 +2701,16 @@ export default function AsignacionPruebasPage() {
         .flowPanel,
         .rightPanel > section {
           border: 1px solid #3a3a3a;
-          background: linear-gradient(180deg, rgba(27,27,27,.96), rgba(18,18,18,.96));
+          background: #191b1e;
           border-radius: 12px;
         }
 
         .flowPanel {
-          padding: 16px 18px;
+          padding: 13px 14px;
         }
 
         .flowPanel.compact {
-          padding: 14px 18px;
+          padding: 12px 14px;
         }
 
         .flowTitle {
@@ -2693,13 +2733,13 @@ export default function AsignacionPruebasPage() {
 
         .flowTitle h2 {
           margin: 0;
-          font-size: 21px;
+          font-size: 16px;
         }
 
         .flowTitle p {
           margin: 3px 0 0;
-          color: #bdbdbd;
-          font-size: 13px;
+          color: #aeb4bd;
+          font-size: 12px;
         }
 
         .predefinedLine {
@@ -2731,12 +2771,70 @@ export default function AsignacionPruebasPage() {
           background: #111;
         }
 
+        .limitSwitch {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          width: fit-content;
+          margin: 0 0 16px;
+          padding: 11px 14px;
+          border: 1px solid #3b4048;
+          border-radius: 10px;
+          background: #15171a;
+          cursor: pointer;
+        }
+
+        .limitSwitch input {
+          position: absolute;
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        .limitSwitchTrack {
+          width: 42px;
+          height: 23px;
+          padding: 3px;
+          display: inline-flex;
+          align-items: center;
+          border-radius: 999px;
+          background: #555b66;
+          transition: background .18s ease;
+        }
+
+        .limitSwitchTrack span {
+          width: 17px;
+          height: 17px;
+          border-radius: 50%;
+          background: #fff;
+          transition: transform .18s ease;
+        }
+
+        .limitSwitch input:checked + .limitSwitchTrack {
+          background: #dc2832;
+        }
+
+        .limitSwitch input:checked + .limitSwitchTrack span {
+          transform: translateX(19px);
+        }
+
+        .limitSwitch strong,
+        .limitSwitch small {
+          display: block;
+        }
+
+        .limitSwitch strong { color: #f3f4f6; }
+        .limitSwitch small { margin-top: 2px; color: #adb5c2; font-weight: 400; }
+
         .editorRow {
           display: grid;
-          grid-template-columns: minmax(190px, 1.25fr) minmax(150px, .9fr) minmax(230px, 1.35fr) minmax(86px, .55fr) 74px;
+          grid-template-columns: minmax(170px, 1.1fr) minmax(145px, .8fr) minmax(135px, .75fr) minmax(220px, 1.3fr) minmax(86px, .55fr) 74px;
           gap: 0;
           align-items: center;
           border-top: 1px solid #333;
+        }
+
+        .editorRow.withoutLimits {
+          grid-template-columns: minmax(190px, 1.25fr) minmax(160px, .9fr) minmax(120px, .7fr) 74px;
         }
 
         .editorRow:first-child {
@@ -2744,11 +2842,11 @@ export default function AsignacionPruebasPage() {
         }
 
         .editorHead {
-          min-height: 38px;
-          background: #242424;
-          color: #bdbdbd;
-          font-size: 13px;
-          font-weight: 800;
+          min-height: 34px;
+          background: #1d1f22;
+          color: #9399a2;
+          font-size: 10.5px;
+          font-weight: 650;
         }
 
         .editorHead div {
@@ -2760,8 +2858,8 @@ export default function AsignacionPruebasPage() {
           border-radius: 0;
           border-width: 0 1px 0 0;
           border-color: #333;
-          height: 40px;
-          background: #141414;
+          height: 36px;
+          background: #141518;
         }
 
         .editorRow > *:last-child {
@@ -2978,7 +3076,7 @@ export default function AsignacionPruebasPage() {
 
         .modalCriterionField input,
         .modalCriterionField select {
-          min-height: 44px;
+          min-height: 36px;
           border-radius: 9px;
           border: 1px solid #424242;
           background: #090909;
@@ -3080,7 +3178,7 @@ export default function AsignacionPruebasPage() {
         .assignmentBoundaryField select {
           width: 100%;
           min-width: 0;
-          min-height: 42px;
+          min-height: 36px;
           padding: 0 11px;
           border: 1px solid #424242;
           border-radius: 7px;
@@ -3119,7 +3217,7 @@ export default function AsignacionPruebasPage() {
         }
 
         .resultConfigButton {
-          min-height: 44px;
+          min-height: 38px;
           width: 100%;
           display: grid;
           align-content: center;
@@ -3347,7 +3445,7 @@ export default function AsignacionPruebasPage() {
 
         .samplesTable {
           width: 100%;
-          min-width: 980px;
+          min-width: 760px;
           border-collapse: collapse;
         }
 
@@ -3475,12 +3573,12 @@ export default function AsignacionPruebasPage() {
           bottom: 0;
           z-index: 20;
           border: 1px solid #3a3a3a;
-          background: linear-gradient(180deg, rgba(34,34,34,.98), rgba(18,18,18,.98));
-          min-height: 66px;
+          background: #191b1e;
+          min-height: 56px;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 10px 16px;
+          padding: 8px 10px;
           margin-top: 10px;
           border-radius: 12px;
           box-shadow: 0 -10px 28px rgba(0,0,0,.28);
@@ -3497,7 +3595,7 @@ export default function AsignacionPruebasPage() {
 
         @media (max-width: 1350px) {
           .lotHeader {
-            grid-template-columns: 56px minmax(340px, 1.5fr) repeat(3, minmax(120px, 1fr));
+            grid-template-columns: 42px minmax(220px, 1.5fr) repeat(3, minmax(96px, 1fr));
           }
 
           .workGrid {
@@ -3534,14 +3632,14 @@ export default function AsignacionPruebasPage() {
             grid-template-columns: 1fr;
           }
 
-          .tableEditor,
-          .samplesTableWrap { overflow-x: hidden; }
+          .tableEditor { overflow: visible; border: 0; background: transparent; }
+          .samplesTableWrap { overflow-x: auto; }
 
           .editorHead { display: none; }
           .editorRow {
             grid-template-columns: minmax(0, 1fr);
             gap: 8px;
-            padding: 14px;
+            padding: 10px;
             border: 1px solid #333;
             border-radius: 9px;
             margin-bottom: 10px;
@@ -3587,3 +3685,5 @@ const LotInfo = ({ label, value, strong = false, pill = false }) => (
     <div className={`${pill ? 'pill' : 'value'} ${strong ? 'strong' : ''}`}>{value}</div>
   </div>
 );
+
+export default withRequiredPermissions(AsignacionPruebasPage, ['pruebas_muestra.ver', 'pruebas_muestra.asignar_lote']);

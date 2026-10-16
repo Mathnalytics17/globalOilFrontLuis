@@ -40,6 +40,18 @@ jobs:
                       git switch master
                       git reset --hard origin/master
 
-                      docker compose -f docker-compose.prod.yml up -d --build frontend
+                      docker compose -f docker-compose.prod.yml up -d --build --force-recreate --remove-orphans frontend
 
                       docker compose -f docker-compose.prod.yml ps frontend
+
+                      # Do not prune volumes: they may hold data from other
+                      # services. This only removes stopped containers, unused
+                      # images and stale build cache older than seven days.
+                      retention="${DOCKER_PRUNE_UNTIL:-168h}"
+                      echo "Docker usage before cleanup:"
+                      docker system df || true
+                      docker container prune --force --filter "until=${retention}" || true
+                      docker image prune --all --force --filter "until=${retention}" || true
+                      docker builder prune --all --force --filter "until=${retention}" || true
+                      echo "Docker usage after cleanup:"
+                      docker system df || true

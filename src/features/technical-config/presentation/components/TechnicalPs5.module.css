@@ -34,7 +34,7 @@
   align-items: center;
   gap: 13px;
   margin-bottom: 54px;
-  font-size: 27px;
+  font-size: 20px;
   font-weight: 900;
   letter-spacing: .12em;
 }
@@ -78,7 +78,7 @@
   gap: 12px;
   min-height: 46px;
   border: 1px solid rgba(255,255,255,.18);
-  background: rgba(255,255,255,.03);
+  background: #1b1d20;
   color: #f1f1f1;
   border-radius: 8px;
   padding: 0 17px;
@@ -88,7 +88,7 @@
 
 .title {
   margin: 22px 0 8px;
-  font-size: 36px;
+  font-size: clamp(28px, 3vw, 34px);
   line-height: 1.02;
   font-weight: 600;
   letter-spacing: -.04em;
@@ -96,7 +96,7 @@
 
 .sectionTitle {
   margin: 22px 0 7px;
-  font-size: clamp(34px, 3.4vw, 46px);
+  font-size: clamp(28px, 3vw, 34px);
   line-height: 1.05;
   font-weight: 600;
   letter-spacing: -.04em;
@@ -105,8 +105,8 @@
 .subtitle {
   margin: 0;
   color: #b8b8b8;
-  font-size: 18px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .settingsList {
@@ -143,7 +143,7 @@
   width: 4px;
   border-radius: 20px;
   background: #ef232a;
-  box-shadow: 0 0 22px rgba(239,35,42,.8);
+  box-shadow: none;
 }
 
 .settingsIcon {
@@ -158,7 +158,7 @@
 }
 
 .settingsLabel strong {
-  font-size: 17px;
+  font-size: 13px;
   font-weight: 500;
 }
 
@@ -183,7 +183,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 30px;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .headerMain {
@@ -194,7 +194,7 @@
   display: flex;
   gap: 12px;
   align-items: center;
-  padding-top: 55px;
+  padding-top: 0;
 }
 
 .searchActionLine {
@@ -202,7 +202,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 24px;
-  margin: 30px 0 18px;
+  margin: 22px 0 14px;
 }
 
 .searchBox {
@@ -212,7 +212,7 @@
 
 .searchBox svg {
   position: absolute;
-  left: 15px;
+  left: 12px;
   top: 50%;
   transform: translateY(-50%);
   color: #9a9a9a;
@@ -222,31 +222,31 @@
 .select,
 .textarea {
   width: 100%;
-  border: 1px solid rgba(255,255,255,.17);
-  background: rgba(10,10,10,.45);
+  border: 1px solid #353940;
+  background: #141518;
   color: #fff;
   border-radius: 7px;
-  min-height: 52px;
-  padding: 0 15px;
-  font-size: 16px;
+  min-height: 40px;
+  padding: 0 11px;
+  font-size: 13px;
   outline: none;
 }
 
 .searchInput {
   width: 100%;
-  border: 1px solid rgba(255,255,255,.17);
-  background: rgba(10,10,10,.45);
+  border: 1px solid #353940;
+  background: #141518;
   color: #fff;
   border-radius: 7px;
-  min-height: 52px;
-  padding: 0 15px 0 48px;
-  font-size: 16px;
+  min-height: 40px;
+  padding: 0 11px 0 40px;
+  font-size: 13px;
   outline: none;
 }
 
 .textarea {
-  min-height: 140px;
-  padding-top: 14px;
+  min-height: 92px;
+  padding-top: 10px;
   resize: vertical;
 }
 
@@ -260,11 +260,11 @@
 .buttonPrimary,
 .buttonSecondary,
 .buttonGhost {
-  min-height: 52px;
+  min-height: 36px;
   border-radius: 7px;
-  padding: 0 22px;
-  font-size: 16px;
-  font-weight: 700;
+  padding: 0 11px;
+  font-size: 12.5px;
+  font-weight: 650;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -281,9 +281,9 @@
 }
 
 .buttonSecondary {
-  border: 1px solid rgba(255,255,255,.22);
+  border: 1px solid #353940;
   color: #fff;
-  background: rgba(255,255,255,.03);
+  background: #1b1d20;
 }
 
 .buttonGhost {
@@ -296,25 +296,25 @@
   width: 100%;
   border-collapse: collapse;
   border-top: 1px solid rgba(255,255,255,.13);
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 .linearTable th {
   text-align: left;
   color: #b6b6b6;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 18px 20px;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 9px 10px;
   border-bottom: 1px solid rgba(255,255,255,.13);
 }
 
 .linearTable td {
-  padding: 19px 20px;
+  padding: 9px 10px;
   border-bottom: 1px solid rgba(255,255,255,.10);
   color: #f1f1f1;
-  font-size: 17px;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  font-size: 12px;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .linearTable tbody tr {
@@ -379,7 +379,7 @@
   background: none;
   border: 0;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 13px;
 }
 
 .sidePanel {
@@ -387,12 +387,12 @@
   top: 64px;
   right: 0;
   bottom: 0;
-  width: min(420px, 92vw);
+  width: min(400px, 92vw);
   z-index: 80;
   background: #181818;
   border-left: 1px solid rgba(255,255,255,.14);
-  padding: 28px 28px 0;
-  box-shadow: -28px 0 60px rgba(0,0,0,.35);
+  padding: 20px 20px 0;
+  box-shadow: -18px 0 50px rgba(0,0,0,.28);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -411,7 +411,7 @@
 
 .sidePanelTitle {
   margin: 0;
-  font-size: clamp(26px, 3vw, 31px);
+  font-size: 22px;
   font-weight: 500;
 }
 
@@ -487,14 +487,14 @@
 .subNav {
   display: flex;
   align-items: center;
-  gap: 26px;
+  gap: 22px;
   border-bottom: 1px solid rgba(255,255,255,.13);
-  margin: 26px 0 30px;
+  margin: 20px 0 22px;
 }
 
 .subNav button {
   position: relative;
-  min-height: 56px;
+  min-height: 42px;
   background: transparent;
   border: 0;
   color: #b7b7b7;
@@ -520,7 +520,7 @@
 .topSummary {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  border: 1px solid rgba(255,255,255,.13);
+  border: 1px solid rgba(255,255,255,.07);
   border-radius: 6px;
   margin: 24px 0 34px;
   overflow: hidden;
@@ -544,7 +544,7 @@
 
 .summaryCell strong {
   color: #fff;
-  font-size: 17px;
+  font-size: 13px;
 }
 
 .limitSection {
@@ -572,14 +572,14 @@
 
 .limitTitle {
   margin: 0;
-  font-size: 27px;
+  font-size: 20px;
   font-weight: 500;
 }
 
 .limitGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr) auto;
-  gap: 32px;
+  gap: 16px;
   align-items: end;
 }
 
@@ -601,7 +601,7 @@
 }
 
 .sequenceBox strong {
-  font-size: 16px;
+  font-size: 13px;
 }
 
 .sequenceBox span {
@@ -636,7 +636,7 @@
 .matrixTable {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 .matrixTable th,
@@ -660,7 +660,7 @@
   background: rgba(0,0,0,.32);
   color: #fff;
   padding: 0 13px;
-  font-size: 16px;
+  font-size: 13px;
 }
 
 .matrixTable select {
@@ -756,28 +756,14 @@
   .searchActionLine, .header, .limitGrid, .sequenceGrid { grid-template-columns: minmax(0, 1fr); display: grid; }
   .topSummary { grid-template-columns: 1fr; }
   .sidePanel { top: 0; width: 100vw; }
-  .linearTable { min-width: 0; font-size: 14px; }
-  .linearTable,
-  .linearTable thead,
-  .linearTable tbody,
-  .linearTable tr,
-  .linearTable th,
-  .linearTable td {
-    display: block;
-    width: 100%;
-  }
-  .linearTable thead { display: none; }
-  .linearTable tr {
-    border-bottom: 1px solid rgba(255,255,255,.12);
-    padding: 12px 0;
-  }
-  .linearTable th,
-  .linearTable td { padding: 12px 8px; font-size: 14px; }
+  .linearTable { display: block; width: 100%; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: 12px; }
+  .linearTable thead, .linearTable tbody { display: table; width: max(680px, 100%); table-layout: auto; }
+  .linearTable th, .linearTable td { padding: 8px 9px; font-size: 12px; }
   .actionsRight,
   .panelFooter,
   .footerNote { flex-wrap: wrap; justify-content: flex-start; }
   .settingsRow { grid-template-columns: 48px minmax(0, 1fr) 28px; }
-  .settingsLabel strong { font-size: 18px; }
+  .settingsLabel strong { font-size: 13px; }
   .settingsLabel span { font-size: 13px; }
   .title,
   .sectionTitle { letter-spacing: 0; }
@@ -787,7 +773,7 @@
   .logoCenter { justify-content: flex-start; margin-bottom: 24px; font-size: 20px; }
   .buttonPrimary,
   .buttonSecondary,
-  .buttonGhost { width: 100%; min-height: 46px; }
+  .buttonGhost { width: auto; min-height: 34px; }
   .searchActionLine { gap: 12px; }
   .matrixTable th,
   .matrixTable td { padding: 10px 6px; font-size: 13px; }

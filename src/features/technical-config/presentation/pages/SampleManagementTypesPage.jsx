@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
+import { Building2, Layers, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import MetricStrip from '@shared/ui/MetricStrip';
+import OverflowMenu from '@shared/ui/OverflowMenu';
 import TechnicalConfigShell from '../components/TechnicalConfigShell';
 import styles from '../components/TechnicalConfig.module.css';
 import { apiErrorToText } from '../components/technicalConfigUtils';
 import { sampleManagementTypesService } from '@features/samples/infrastructure/sampleManagementTypesService';
 import { companiesOptionsService } from '@features/companies/infrastructure/companiesOptionsService';
-import SortableTableHeader from '@components/SortableTableHeader';
-import useTableSort from '@hooks/useTableSort';
+import SortableTableHeader from '@shared/ui/SortableTableHeader';
+import useTableSort from '@shared/hooks/useTableSort';
 
 const EMPTY_FORM = {
   id: null,
@@ -211,12 +214,14 @@ export default function SampleManagementTypesPage() {
     >
       {error ? <div className={styles.alert}>{error}</div> : null}
 
-      <section className={styles.grid}>
-        <article className={`${styles.card} ${styles.col3}`}><h3>Total</h3><div className={styles.statNumber}>{stats.total}</div></article>
-        <article className={`${styles.card} ${styles.col3}`}><h3>Activos</h3><div className={styles.statNumber}>{stats.activos}</div></article>
-        <article className={`${styles.card} ${styles.col3}`}><h3>Globales</h3><div className={styles.statNumber}>{stats.globales}</div></article>
-        <article className={`${styles.card} ${styles.col3}`}><h3>Por empresa</h3><div className={styles.statNumber}>{stats.especificos}</div></article>
+      <MetricStrip items={[
+        { label: 'Total', value: stats.total, icon: Layers },
+        { label: 'Activos', value: stats.activos, icon: RefreshCw },
+        { label: 'Globales', value: stats.globales, icon: Building2 },
+        { label: 'Por empresa', value: stats.especificos, icon: Building2 },
+      ]} />
 
+      <section className={styles.grid}>
         <article className={`${styles.card} ${styles.col5}`}>
           <h2>{form.id ? 'Editar tipo de gestión' : 'Nuevo tipo de gestión'}</h2>
           <p>Define el nombre, los tiempos y si aplica para todos los clientes o solo para empresas específicas.</p>
@@ -240,7 +245,7 @@ export default function SampleManagementTypesPage() {
                 <option value="false">Inactivo</option>
               </select>
             </label>
-            <label className={styles.fieldFull} style={{ display: 'flex', gap: 10, alignItems: 'center', flexDirection: 'row' }}>
+            <label className={styles.checkRow}>
               <input type="checkbox" checked={form.aplica_a_todos} onChange={(e) => updateForm('aplica_a_todos', e.target.checked)} />
               <span className={styles.label} style={{ margin: 0 }}>Aplica a todos los clientes</span>
             </label>
@@ -251,7 +256,7 @@ export default function SampleManagementTypesPage() {
                 <input className={styles.input} value={companySearch} onChange={(e) => setCompanySearch(e.target.value)} placeholder="Buscar empresa..." />
                 <div style={{ maxHeight: 230, overflow: 'auto', marginTop: 10, border: '1px solid #303746', borderRadius: 14, padding: 10 }}>
                   {filteredCompanies.map((company) => (
-                    <label key={company.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 4px' }}>
+                    <label key={company.id} className={styles.checkRow} style={{ padding: '8px 4px' }}>
                       <input type="checkbox" checked={selectedCompanyIds.includes(String(company.id))} onChange={() => toggleCompany(company.id)} />
                       <span>{company.nombre}</span>
                     </label>
@@ -274,7 +279,7 @@ export default function SampleManagementTypesPage() {
               <h2 style={{ margin: 0 }}>Tipos registrados</h2>
               <p className={styles.help}>Se listan los tipos de gestión disponibles para lotes de muestras.</p>
             </div>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <label className={styles.checkRow}>
               <input type="checkbox" checked={includeDeleted} onChange={(e) => setIncludeDeleted(e.target.checked)} />
               <span>Ver eliminados</span>
             </label>
@@ -294,7 +299,7 @@ export default function SampleManagementTypesPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? <tr><td colSpan={5}>Cargando...</td></tr> : null}
+                {loading ? <tr><td colSpan={5}>Cargando tipos de gestión…</td></tr> : null}
                 {!loading && !filtered.length ? <tr><td colSpan={5}>No hay tipos de gestión.</td></tr> : null}
                 {!loading && sortedRows.map((item) => (
                   <tr key={item.id}>
@@ -303,12 +308,12 @@ export default function SampleManagementTypesPage() {
                     <td>{getCompaniesLabel(item)}</td>
                     <td>{item.deleted_at || !item.activo ? <span className={styles.badgeRed}>Inactivo</span> : <span className={styles.badgeGreen}>Activo</span>}</td>
                     <td>
-                      <div className={styles.actions}>
-                        <button className={`${styles.btn} ${styles.secondary}`} type="button" onClick={() => edit(item)}>Editar</button>
-                        {item.deleted_at || !item.activo
-                          ? <button className={`${styles.btn} ${styles.secondary}`} type="button" onClick={() => restore(item)}>Restaurar</button>
-                          : <button className={`${styles.btn} ${styles.danger}`} type="button" onClick={() => remove(item)}>Eliminar</button>}
-                      </div>
+                      <OverflowMenu items={[
+                        { label: 'Editar', icon: Pencil, onClick: () => edit(item) },
+                        item.deleted_at || !item.activo
+                          ? { label: 'Restaurar', icon: RefreshCw, onClick: () => restore(item) }
+                          : { label: 'Eliminar', icon: Trash2, danger: true, onClick: () => remove(item) },
+                      ]} />
                     </td>
                   </tr>
                 ))}

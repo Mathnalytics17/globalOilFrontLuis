@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Edit3, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { Pencil as Edit3, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import technicalConfigService from '../../infrastructure/technicalConfigService';
@@ -140,11 +140,7 @@ export default function TechnicalSampleFieldsPage() {
     <TechnicalConfigShell
       title="Campos técnicos de muestra"
       subtitle="Define qué inputs aparecen al registrar aceites y grasas, y a qué catálogo pertenece cada uno."
-      action={(
-        <button type="button" className={`${styles.btn} ${styles.secondary}`} onClick={reload} disabled={loading}>
-          <RefreshCw size={16} /> Recargar
-        </button>
-      )}
+      action={null}
     >
       <div className={styles.grid}>
         <section className={`${styles.card} ${styles.col5}`}>

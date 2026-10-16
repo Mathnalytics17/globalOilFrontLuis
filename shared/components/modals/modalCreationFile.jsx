@@ -1,139 +1,44 @@
-import React, { useState } from "react";
-import Modal from "react-bootstrap/Modal";
-import Button from "react-bootstrap/Button";
-import Form from "react-bootstrap/Form";
+import { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 
 const ModalCreationFile = ({ show, onHide, onCreate }) => {
-  const [type, setType] = useState("folder");
-  const [name, setName] = useState("");
-  const [descripcion, setDescripcion] = useState("");
+  const [type, setType] = useState('folder');
+  const [name, setName] = useState('');
+  const [descripcion, setDescripcion] = useState('');
 
+  useEffect(() => {
+    if (!show) return;
+    setType('folder');
+    setName('');
+    setDescripcion('');
+  }, [show]);
 
+  const close = () => onHide?.();
   const handleCreate = () => {
-    if (!name.trim()) {
-      alert("El nombre no puede estar vacío.");
-      return;
-    }
-
-    if (type === "machine") {
-      if (!name || !descripcion) {
-        alert("Por favor complete todos los campos requeridos para la máquina.");
-        return;
-      }
-    }
-
-    const machineData = type === "machine" ? {
-      nombre: name,
-      descripcion: descripcion,
-      isMachine:true,
-    } : null;
-
-    onCreate(machineData, name, type);
-    resetForm();
+    if (!name.trim()) return alert('El nombre no puede estar vacío.');
+    if (type === 'machine' && !descripcion.trim()) return alert('Ingrese la descripción de la máquina.');
+    const machineData = type === 'machine' ? { nombre: name.trim(), descripcion: descripcion.trim(), isMachine: true } : null;
+    onCreate(machineData, name.trim(), type);
+    close();
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleCreate();
-    }
-  };
-
-  const resetForm = () => {
-    setName("");
-    setDescripcion("");
-    setType("folder");
-    onHide();
-  };
+  if (!show) return null;
 
   return (
-    <Modal show={show} onHide={resetForm} centered backdrop="static" keyboard={false}>
-      <Modal.Header closeButton style={{ backgroundColor: "#292929", color: "#ffffff", borderBottom: "1px solid #444" }}>
-        <Modal.Title>Crear {type === "machine" ? "Máquina" : "Carpeta"}</Modal.Title>
-      </Modal.Header>
-      
-      <Modal.Body style={{ backgroundColor: "#1a1a1a", color: "#ffffff" }}>
-        <Form onKeyPress={handleKeyPress}>
-          <Form.Group className="mb-3">
-            <Form.Label style={{ color: "#e0e0e0" }}>Tipo</Form.Label>
-            <Form.Select
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              className="form-control"
-              style={{ 
-                backgroundColor: "#333", 
-                color: "#fff", 
-                border: "1px solid #555" 
-              }}
-            >
-              <option value="folder">Carpeta</option>
-              <option value="machine">Máquina</option>
-            </Form.Select>
-          </Form.Group>
-
-          <Form.Group className="mb-3">
-            <Form.Label style={{ color: "#e0e0e0" }}>Nombre</Form.Label>
-            <Form.Control
-              type="text"
-              placeholder={`Ingrese el nombre de ${type === "machine" ? "la máquina" : "la carpeta"}`}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              style={{ 
-                backgroundColor: "#333", 
-                color: "#fff", 
-                border: "1px solid #555"
-              }}
-            />
-          </Form.Group>
-
-          {type === "machine" && (
-            <>
-              <Form.Group className="mb-3">
-                <Form.Label style={{ color: "#e0e0e0" }}>Descripción</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="Ingrese la descripción"
-                  value={descripcion}
-                  onChange={(e) => setDescripcion(e.target.value)}
-                  required
-                  style={{ 
-                    backgroundColor: "#333", 
-                    color: "#fff", 
-                    border: "1px solid #555" 
-                  }}
-                />
-              </Form.Group>
-            </>
-          )}
-        </Form>
-      </Modal.Body>
-
-      <Modal.Footer style={{ backgroundColor: "#1a1a1a", borderTop: "1px solid #444" }}>
-        <Button 
-          variant="secondary" 
-          onClick={resetForm}
-          style={{ 
-            backgroundColor: "#555", 
-            border: "1px solid #666",
-            color: "#fff"
-          }}
-        >
-          Cancelar
-        </Button>
-        <Button 
-          variant="primary" 
-          onClick={handleCreate}
-          style={{ 
-            backgroundColor: "#dc2626", 
-            border: "1px solid #dc2626",
-            color: "#fff"
-          }}
-        >
-          Crear
-        </Button>
-      </Modal.Footer>
-    </Modal>
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4" onMouseDown={(event) => event.target === event.currentTarget && close()}>
+      <section className="w-full max-w-md rounded-xl border border-white/[0.08] bg-[#191b1e] shadow-2xl">
+        <header className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
+          <div><h2 className="m-0 text-lg font-semibold text-white">Crear {type === 'machine' ? 'máquina' : 'carpeta'}</h2><p className="mt-1 text-xs text-[#858b94]">Agregue un nuevo nodo a la estructura de activos.</p></div>
+          <button type="button" className="go-mini !h-8 !w-8 !p-0" onClick={close} aria-label="Cerrar"><X className="h-4 w-4" /></button>
+        </header>
+        <div className="go-form-grid !grid-cols-1 p-5">
+          <label>Tipo<select value={type} onChange={(event) => setType(event.target.value)}><option value="folder">Carpeta</option><option value="machine">Máquina</option></select></label>
+          <label>Nombre<input value={name} onChange={(event) => setName(event.target.value)} placeholder={type === 'machine' ? 'Nombre de la máquina' : 'Nombre de la carpeta'} /></label>
+          {type === 'machine' ? <label>Descripción<textarea value={descripcion} onChange={(event) => setDescripcion(event.target.value)} placeholder="Descripción de la máquina" /></label> : null}
+        </div>
+        <footer className="flex justify-end gap-2 border-t border-white/[0.06] px-5 py-4"><button className="go-ghost" type="button" onClick={close}>Cancelar</button><button className="go-primary" type="button" onClick={handleCreate}>Crear</button></footer>
+      </section>
+    </div>
   );
 };
 

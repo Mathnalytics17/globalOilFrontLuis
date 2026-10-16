@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import {
   Plus,
@@ -6,7 +6,6 @@ import {
   Copy,
   Save,
   CheckCircle,
-  ArrowLeft,
   AlertCircle,
 } from "lucide-react";
 import { toast } from "react-toastify";
@@ -16,6 +15,9 @@ import { sampleBatchesService } from "@features/samples/infrastructure/sampleBat
 import { sampleManagementTypesService } from "@features/samples/infrastructure/sampleManagementTypesService";
 import { authService } from "@features/auth/infrastructure/authService";
 import BulkSamplesExcelTab from "@features/samples/components/BulkSamplesExcelTab";
+import PageHeader from '@shared/ui/PageHeader';
+import MetricStrip from '@shared/ui/MetricStrip';
+import { notifyApiError } from '@shared/ui/notifications';
 import DynamicSampleTechnicalFields, {
   buildDynamicAttributesPayload,
   createDynamicAttributes,
@@ -291,6 +293,13 @@ const createEmptyMuestra = () => ({
   punto_muestreo: "",
   referencia_equipo: "",
   equipo_placa: "",
+  punto_manual: "",
+  lubricante_catalogo: "",
+  lubricante_nuevo: "",
+  frecuencia_cambio_muestra: "",
+  unidad_frecuencia_cambio_muestra: "horas",
+  frecuencia_analisis_muestra: "",
+  unidad_frecuencia_analisis_muestra: "horas",
 
   periodo_servicio_aceite: "",
   unidad_periodo_aceite: "horas",
@@ -341,6 +350,7 @@ const NuevoLoteMuestrasPage = () => {
   const [clientes, setClientes] = useState([]);
   const [maquinas, setMaquinas] = useState([]);
   const [puntosMuestreo, setPuntosMuestreo] = useState([]);
+  const [lubricantes, setLubricantes] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [tiposGestion, setTiposGestion] = useState([]);
   const [loadingTiposGestion, setLoadingTiposGestion] = useState(false);
@@ -537,6 +547,7 @@ const NuevoLoteMuestrasPage = () => {
       setClientes(companies.length ? companies : (externalCompany ? [externalCompany] : []));
       setMaquinas(options.machines || []);
       setPuntosMuestreo(options.samplingPoints || []);
+      setLubricantes(options.lubricants || []);
       if (user && !isGlobalUser(user) && user.empresa_id) {
         setForm((prev) => ({
           ...prev,
@@ -589,6 +600,15 @@ const NuevoLoteMuestrasPage = () => {
           updated.equipo_modo = "catalogo";
           updated.referencia_equipo = point ? String(point.maquina) : "";
           updated.equipo_placa = "";
+          if (point?.lubricante_catalogo) updated.lubricante_catalogo = String(point.lubricante_catalogo);
+          if (point?.lubricante_catalogo_info) {
+            updated.fabricante = point.lubricante_catalogo_info.fabricante || '';
+            updated.referencia_marca = point.lubricante_catalogo_info.referencia || '';
+          }
+          updated.frecuencia_cambio_muestra = point?.frecuencia_cambio ?? "";
+          updated.unidad_frecuencia_cambio_muestra = point?.unidad_frecuencia_cambio || "horas";
+          updated.frecuencia_analisis_muestra = point?.frecuencia_analisis ?? "";
+          updated.unidad_frecuencia_analisis_muestra = point?.unidad_frecuencia_analisis || "horas";
         }
 
         if (field === "referencia_equipo" && value) {
@@ -829,7 +849,13 @@ const NuevoLoteMuestrasPage = () => {
         referencia_marca: tech.referencia_marca,
         campos_adicionales: {
           fabricante: tech.fabricante,
+          frecuencia_cambio_muestra: muestra.frecuencia_cambio_muestra === "" ? null : Number(muestra.frecuencia_cambio_muestra),
+          unidad_frecuencia_cambio_muestra: muestra.unidad_frecuencia_cambio_muestra,
+          frecuencia_analisis_muestra: muestra.frecuencia_analisis_muestra === "" ? null : Number(muestra.frecuencia_analisis_muestra),
+          unidad_frecuencia_analisis_muestra: muestra.unidad_frecuencia_analisis_muestra,
         },
+        lubricante_catalogo: muestra.lubricante_catalogo || null,
+        lubricante_nuevo: muestra.lubricante_nuevo?.trim() || null,
 
         // Configuracion tecnica de aceites/grasas basada en Campos tecnicos de muestra.
         atributos_tecnicos: buildDynamicAttributesPayload(
@@ -1067,7 +1093,7 @@ const NuevoLoteMuestrasPage = () => {
       router.push("/muestras/lotes");
     } catch (error) {
       console.error("Error al registrar lote", error?.response?.data || error);
-      toast.error("Error al registrar el lote. Revise la consola para ver el detalle del backend.");
+      notifyApiError(error, "No se pudo registrar el lote. Revise la información e inténtelo nuevamente.", { scope: 'sample-batch-create' });
     } finally {
       setSaving(false);
     }
@@ -1087,50 +1113,31 @@ const NuevoLoteMuestrasPage = () => {
   const visibleMuestras = muestras.slice(manualStart, manualStart + MANUAL_SAMPLE_PAGE_SIZE);
 
   return (
-    <div className="min-h-0 bg-transparent text-white px-3 py-4 sm:px-5">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-          <div>
-            <button
-              onClick={() => router.push("/muestras/lotes")}
-              className="inline-flex items-center gap-2 text-gray-300 hover:text-white mb-4"
-            >
-              <ArrowLeft size={18} />
-              Volver a lotes
-            </button>
+    <div className="go-page sample-batch-create">
+      <div className="go-shell">
 
-            <h1 className="text-3xl font-bold">Registro de Lote de Muestras</h1>
-            <p className="text-gray-300 mt-2">
-              Complete la información general del lote y agregue una o varias muestras.
-            </p>
-          </div>
+        <PageHeader
+          title="Nuevo lote de muestras"
+          subtitle="Complete la información general y agregue las muestras que serán recibidas por el laboratorio."
+          actions={(
+            <>
+              <button disabled={saving} onClick={() => handleSubmit("borrador")} className="go-ghost">
+                <Save size={16} /> Guardar borrador
+              </button>
+              <button disabled={saving} onClick={() => handleSubmit("registrado")} className="go-primary">
+                <CheckCircle size={16} /> Registrar lote
+              </button>
+            </>
+          )}
+        />
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              disabled={saving}
-              onClick={() => handleSubmit("borrador")}
-              className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 rounded-lg font-semibold"
-            >
-              <Save size={18} />
-              Guardar borrador
-            </button>
-
-            <button
-              disabled={saving}
-              onClick={() => handleSubmit("registrado")}
-              className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg font-semibold"
-            >
-              <CheckCircle size={18} />
-              Registrar lote
-            </button>
-          </div>
-        </header>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <SummaryCard title="Total muestras" value={totalMuestras} />
-          <SummaryCard title="Aceites" value={resumenTipos.aceites} />
-          <SummaryCard title="Grasas" value={resumenTipos.grasas} />
-        </div>
+        <MetricStrip
+          items={[
+            { label: 'Total muestras', value: totalMuestras },
+            { label: 'Aceites', value: resumenTipos.aceites },
+            { label: 'Grasas', value: resumenTipos.grasas },
+          ]}
+        />
 
         {Object.keys(errors).length > 0 && (
           <div className="rounded-xl border border-red-700/60 bg-red-950/30 px-4 py-3 text-sm text-red-100">
@@ -1139,7 +1146,7 @@ const NuevoLoteMuestrasPage = () => {
           </div>
         )}
 
-        <section className="bg-[#1a1a1a] border border-[#333] rounded-xl p-6 space-y-5">
+        <section className="go-card sample-batch-section space-y-5">
           <div>
             <h2 className="text-xl font-bold">Información General del Lote</h2>
             <p className="text-gray-400 text-sm mt-1">Datos comunes para todas las muestras del lote.</p>
@@ -1147,7 +1154,7 @@ const NuevoLoteMuestrasPage = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <Field label="Tipo de cliente" error={errors.tipo_cliente}>
-              <div className="flex bg-[#292929] border border-[#444] rounded-lg overflow-hidden">
+              <div className="flex bg-[#17191c] border border-[#353940] rounded-lg overflow-hidden">
                 <button
                   type="button"
                   onClick={() => handleTipoClienteChange("registrado")}
@@ -1241,7 +1248,7 @@ const NuevoLoteMuestrasPage = () => {
           </div>
         </section>
 
-        <section className="bg-[#1a1a1a] border border-[#333] rounded-xl p-6 space-y-5">
+        <section className="go-card sample-batch-section space-y-5">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold">Muestras del Lote</h2>
@@ -1258,7 +1265,7 @@ const NuevoLoteMuestrasPage = () => {
             )}
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 bg-[#222] border border-[#333] rounded-xl p-2">
+          <div className="sample-mode-switch">
             <button
               type="button"
               onClick={() => setSamplesInputMode("manual")}
@@ -1288,14 +1295,14 @@ const NuevoLoteMuestrasPage = () => {
           {samplesInputMode === "manual" ? (
             <div className="space-y-4">
               {muestras.length > MANUAL_SAMPLE_PAGE_SIZE && (
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-[#333] bg-[#202020] px-4 py-3">
+                <div className="sample-page-controls">
                   <span className="text-sm text-gray-300">
                     Mostrando {manualStart + 1}-{Math.min(manualStart + MANUAL_SAMPLE_PAGE_SIZE, muestras.length)} de {muestras.length} muestras
                   </span>
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      className="px-3 py-2 rounded-lg border border-[#444] disabled:opacity-40"
+                      className="px-3 py-2 rounded-lg border border-[#353940] disabled:opacity-40"
                       disabled={safeManualPage <= 1}
                       onClick={() => setManualSamplePage((page) => Math.max(1, page - 1))}
                     >
@@ -1304,7 +1311,7 @@ const NuevoLoteMuestrasPage = () => {
                     <span className="px-3 py-2 text-sm text-gray-300">Página {safeManualPage} / {manualTotalPages}</span>
                     <button
                       type="button"
-                      className="px-3 py-2 rounded-lg border border-[#444] disabled:opacity-40"
+                      className="px-3 py-2 rounded-lg border border-[#353940] disabled:opacity-40"
                       disabled={safeManualPage >= manualTotalPages}
                       onClick={() => setManualSamplePage((page) => Math.min(manualTotalPages, page + 1))}
                     >
@@ -1327,6 +1334,8 @@ const NuevoLoteMuestrasPage = () => {
                   maquinas={maquinas}
                   maquinasFiltradas={maquinasFiltradas}
                   puntosFiltrados={puntosFiltrados}
+                  lubricantes={lubricantes}
+                  selectedCompanyId={selectedCompanyId}
                   dynamicTechnicalCatalogs={dynamicTechnicalCatalogs}
                   errors={errors}
                   loadingOptions={loadingOptions || loadingTechnicalCatalogs}
@@ -1348,7 +1357,7 @@ const NuevoLoteMuestrasPage = () => {
       <style jsx global>{`
         .input-dark {
           width: 100%;
-          background: #292929;
+          background: #17191c;
           border: 1px solid #444;
           color: white;
           border-radius: 0.5rem;
@@ -1378,6 +1387,8 @@ const MuestraRow = ({
   maquinas,
   maquinasFiltradas,
   puntosFiltrados,
+  lubricantes,
+  selectedCompanyId,
   dynamicTechnicalCatalogs,
   errors,
   loadingOptions,
@@ -1385,10 +1396,11 @@ const MuestraRow = ({
   const isAceite = muestra.tipo_muestra === "aceite";
   const isGrasa = muestra.tipo_muestra === "grasa";
   const isUsada = muestra.condicion === "usada";
+  const selectedPoint = puntosFiltrados.find((point) => String(point.id) === String(muestra.punto_muestreo));
   const getError = (field) => errors[`muestras.${index}.${field}`];
 
   return (
-    <div className="border border-[#333] rounded-xl bg-[#222] overflow-visible">
+    <div className="border border-white/[0.07] rounded-xl bg-[#222] overflow-visible">
       <div className="flex items-center justify-between px-4 py-3 bg-[#2f2f2f] border-b border-[#3a3a3a] rounded-t-xl">
         <div className="flex items-center gap-3">
           <span className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center font-bold">{index + 1}</span>
@@ -1428,6 +1440,23 @@ const MuestraRow = ({
           <input type="datetime-local" value={muestra.fecha_toma} onChange={(e) => updateMuestra(index, "fecha_toma", e.target.value)} className="input-dark" />
         </Field>
 
+        {isUsada && (
+          <div className="md:col-span-4 rounded-lg border border-[#353940] bg-[#141518] p-4">
+            <p className="mb-1 text-sm font-semibold text-gray-200">Contexto del activo</p>
+            <p className="mb-4 text-xs text-gray-500">Seleccione primero el equipo y el punto. Sus valores son predeterminados; puede cambiarlos solo para esta muestra.</p>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Field label="Identificación del equipo">
+                <div className="inline-flex overflow-hidden rounded-md border border-gray-600 bg-[#111]">
+                  <button type="button" onClick={() => updateMuestra(index, "equipo_modo", "catalogo")} className={`px-3 py-2 text-sm font-semibold ${muestra.equipo_modo !== "manual" ? "bg-red-600 text-white" : "text-gray-300"}`}>Equipo registrado</button>
+                  <button type="button" onClick={() => updateMuestra(index, "equipo_modo", "manual")} className={`px-3 py-2 text-sm font-semibold ${muestra.equipo_modo === "manual" ? "bg-red-600 text-white" : "text-gray-300"}`}>Identificación manual</button>
+                </div>
+              </Field>
+              {muestra.equipo_modo !== "manual" ? <Field label="Máquina"><select value={muestra.referencia_equipo} onChange={(e) => updateMuestra(index, "referencia_equipo", e.target.value)} className="input-dark"><option value="">Seleccione máquina</option>{maquinasFiltradas.map((machine) => <option key={machine.id} value={machine.id}>{machine.codigo_equipo || machine.nombre}</option>)}</select></Field> : <Field label="Máquina / identificación manual"><input value={muestra.equipo_placa} onChange={(e) => updateMuestra(index, "equipo_placa", e.target.value)} className="input-dark" placeholder="Ej: PKI203" /></Field>}
+              {muestra.equipo_modo !== "manual" ? <Field label="Punto de medida" error={getError("punto_muestreo")}><select value={muestra.punto_muestreo} onChange={(e) => updateMuestra(index, "punto_muestreo", e.target.value)} className="input-dark" disabled={!muestra.referencia_equipo || loadingOptions}><option value="">Seleccione punto de medida</option>{puntosFiltrados.filter((point) => String(point.maquina) === String(muestra.referencia_equipo)).map((point) => <option key={point.id} value={point.id}>{point.nombre}{point.lubricante ? ` · ${point.lubricante}` : ''}</option>)}</select>{selectedPoint && <span className="mt-1 block text-xs text-gray-400">Predeterminado: {selectedPoint.lubricante || 'sin lubricante'} · cambio {selectedPoint.frecuencia_cambio ? `${selectedPoint.frecuencia_cambio} ${selectedPoint.unidad_frecuencia_cambio}` : 'sin definir'} · análisis {selectedPoint.frecuencia_analisis ? `${selectedPoint.frecuencia_analisis} ${selectedPoint.unidad_frecuencia_analisis}` : 'sin definir'}.</span>}</Field> : <Field label="Punto de medida manual"><input value={muestra.punto_manual} onChange={(e) => updateMuestra(index, "punto_manual", e.target.value)} className="input-dark" placeholder="Ej: Reductor lado motor" /></Field>}
+            </div>
+          </div>
+        )}
+
         <div className="md:col-span-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
             <div>
@@ -1454,6 +1483,14 @@ const MuestraRow = ({
                 placeholder="Ej: Mobilgear 600 XP"
               />
             </Field>
+            <Field label="Lubricante registrado">
+              <select value={muestra.lubricante_catalogo} onChange={(e) => { const item = lubricantes.find((entry) => String(entry.id) === e.target.value); updateMuestra(index, "lubricante_catalogo", e.target.value); if (item) { updateMuestra(index, "fabricante", item.fabricante); updateMuestra(index, "referencia_marca", item.referencia); } }} className="input-dark">
+                <option value="">Seleccione un lubricante</option>
+                {lubricantes.map((item) => <option key={item.id} value={item.id}>{item.fabricante} · {item.referencia}</option>)}
+              </select>
+            </Field>
+            {isUsada && <Field label="Frecuencia de cambio para esta muestra"><div className="grid grid-cols-[1fr_110px] gap-2"><input type="number" min="0" value={muestra.frecuencia_cambio_muestra} onChange={(e) => updateMuestra(index, "frecuencia_cambio_muestra", e.target.value)} className="input-dark" placeholder="Predeterminada del punto" /><select value={muestra.unidad_frecuencia_cambio_muestra} onChange={(e) => updateMuestra(index, "unidad_frecuencia_cambio_muestra", e.target.value)} className="input-dark"><option value="horas">Horas</option><option value="dias">Días</option><option value="meses">Meses</option></select></div></Field>}
+            {isUsada && <Field label="Frecuencia de análisis para esta muestra"><div className="grid grid-cols-[1fr_110px] gap-2"><input type="number" min="0" value={muestra.frecuencia_analisis_muestra} onChange={(e) => updateMuestra(index, "frecuencia_analisis_muestra", e.target.value)} className="input-dark" placeholder="Predeterminada del punto" /><select value={muestra.unidad_frecuencia_analisis_muestra} onChange={(e) => updateMuestra(index, "unidad_frecuencia_analisis_muestra", e.target.value)} className="input-dark"><option value="horas">Horas</option><option value="dias">Días</option><option value="meses">Meses</option></select></div></Field>}
           </div>
         </div>
         <DynamicSampleTechnicalFields
@@ -1467,46 +1504,6 @@ const MuestraRow = ({
 
         {isUsada && (
           <>
-            <div className="md:col-span-2">
-              <span className="mb-2 block text-sm font-medium text-gray-200">Identificación del equipo</span>
-              <div className="inline-flex overflow-hidden rounded-md border border-gray-600 bg-[#111]">
-                <button
-                  type="button"
-                  onClick={() => updateMuestra(index, "equipo_modo", "catalogo")}
-                  className={`px-3 py-2 text-sm font-semibold ${
-                    muestra.equipo_modo !== "manual" ? "bg-red-600 text-white" : "text-gray-300"
-                  }`}
-                >
-                  Equipo registrado
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateMuestra(index, "equipo_modo", "manual")}
-                  className={`px-3 py-2 text-sm font-semibold ${
-                    muestra.equipo_modo === "manual" ? "bg-red-600 text-white" : "text-gray-300"
-                  }`}
-                >
-                  Identificación manual
-                </button>
-              </div>
-            </div>
-
-            {muestra.equipo_modo !== "manual" ? (
-              <Field label="Punto de medida" error={getError("punto_muestreo")}>
-                <select value={muestra.punto_muestreo} onChange={(e) => updateMuestra(index, "punto_muestreo", e.target.value)} className="input-dark" disabled={loadingOptions}>
-                  <option value="">Seleccione punto de medida</option>
-                  {puntosFiltrados.map((point) => (
-                    <option key={point.id} value={point.id}>{point.maquina_codigo || point.maquina_nombre} · {point.nombre}{point.lubricante ? ` · ${point.lubricante}` : ''}</option>
-                  ))}
-                </select>
-                <span className="mt-1 block text-xs text-gray-400">La máquina, lubricante y frecuencias se determinan desde el punto seleccionado.</span>
-              </Field>
-            ) : (
-              <Field label="Placa o identificación manual" error={getError("referencia_equipo")}>
-                <input value={muestra.equipo_placa} onChange={(e) => updateMuestra(index, "equipo_placa", e.target.value)} className="input-dark" placeholder="Ej: PKI203" />
-              </Field>
-            )}
-
             <Field label="Periodo aceite">
               <input type="number" min="0" value={muestra.periodo_servicio_aceite} onChange={(e) => updateMuestra(index, "periodo_servicio_aceite", e.target.value)} className="input-dark" placeholder="Ej: 250" />
             </Field>
@@ -1559,7 +1556,7 @@ const Field = ({ label, error, children }) => (
 );
 
 const SummaryCard = ({ title, value }) => (
-  <div className="bg-[#1a1a1a] border border-[#333] rounded-xl p-5">
+  <div className="bg-[#141518] border border-white/[0.07] rounded-xl p-5">
     <p className="text-gray-400 text-sm">{title}</p>
     <p className="text-3xl font-bold text-white mt-2">{value}</p>
   </div>

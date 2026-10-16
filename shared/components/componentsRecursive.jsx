@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react';
-import Button from 'react-bootstrap/Button';
-import Modal from 'react-bootstrap/Modal';
-import { ChevronRight, Eye, Folder, FolderPlus, Pencil, Trash2, Wrench, MapPin, ListFilter, Link2 } from 'lucide-react';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { ChevronRight, Eye, Folder, FolderPlus, Pencil, Trash2, Wrench, MapPin, ListFilter, Link2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 import ModalCreationFile from '@components/modals/modalCreationFile';
@@ -9,6 +7,18 @@ import { assetTreeService } from '@features/asset-tree/infrastructure/assetTreeS
 import { foldersService } from '@features/asset-tree/infrastructure/foldersService';
 import { machinesService } from '@features/machines/infrastructure/machinesService';
 import { sampleBatchesService } from '@features/samples/infrastructure/sampleBatchesService';
+import OverflowMenu from '@shared/ui/OverflowMenu';
+
+const ModalContext = createContext({ onHide: () => {} });
+function Modal({ show, onHide, size, children }) {
+  if (!show) return null;
+  return <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4" onMouseDown={(event) => event.target === event.currentTarget && onHide?.()}><ModalContext.Provider value={{ onHide }}><section className={`w-full ${size === 'lg' ? 'max-w-3xl' : 'max-w-lg'} max-h-[88vh] overflow-auto rounded-xl border border-white/[0.08] bg-[#191b1e] shadow-2xl`}>{children}</section></ModalContext.Provider></div>;
+}
+Modal.Header = function ModalHeader({ closeButton, children }) { const { onHide } = useContext(ModalContext); return <header className="flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-4"><div>{children}</div>{closeButton ? <button type="button" className="go-mini !h-8 !w-8 !p-0" onClick={onHide} aria-label="Cerrar"><X className="h-4 w-4" /></button> : null}</header>; };
+Modal.Title = function ModalTitle({ children }) { return <h2 className="m-0 text-lg font-semibold text-white">{children}</h2>; };
+Modal.Body = function ModalBody({ children, className = '' }) { return <div className={`p-5 ${className}`}>{children}</div>; };
+Modal.Footer = function ModalFooter({ children }) { return <footer className="flex flex-wrap justify-end gap-2 border-t border-white/[0.06] px-5 py-4">{children}</footer>; };
+function Button({ children, onClick, disabled, className = '', variant }) { return <button type="button" disabled={disabled} onClick={onClick} className={`${variant === 'danger' ? 'go-primary' : 'go-ghost'} ${className}`}>{children}</button>; }
 
 const transformStructure = (folders = []) =>
   folders.map((folder) => ({
@@ -127,63 +137,25 @@ const TreeNode = ({ node, reload }) => {
 
   return (
     <li className="list-none">
-      <div className="flex min-h-12 items-center gap-2 rounded px-2 py-2 hover:bg-[#333]">
-        <button
-          type="button"
-          title={hasChildren ? 'Expandir' : 'Sin elementos internos'}
-          className="grid h-8 w-8 place-items-center rounded hover:bg-[#444] disabled:opacity-30"
-          disabled={!hasChildren}
-          onClick={() => setOpen((value) => !value)}
-        >
+      <div className="flex min-h-11 items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/[0.025]">
+        <button type="button" title={hasChildren ? 'Expandir' : 'Sin elementos internos'} className="grid h-8 w-8 place-items-center rounded-md text-[#777d86] hover:bg-white/[0.05] hover:text-white disabled:opacity-25" disabled={!hasChildren} onClick={() => setOpen((value) => !value)}>
           <ChevronRight className={`h-4 w-4 transition-transform ${open ? 'rotate-90' : ''}`} />
         </button>
-
-        {node.type === 'machine' ? (
-          <Wrench className="h-5 w-5 text-emerald-400" />
-        ) : node.type === 'sampling-point' ? (
-          <MapPin className="h-5 w-5 text-amber-400" />
-        ) : (
-          <Folder className="h-5 w-5 text-sky-400" />
-        )}
-
-        <span className="min-w-0 flex-1 truncate text-sm text-white">{node.name}</span>
-
-        {canCreate && (
-          <button type="button" title="Crear carpeta o maquina" onClick={() => setCreateOpen(true)}>
-            <FolderPlus className="h-4 w-4 text-sky-400" />
-          </button>
-        )}
-        {['folder', 'root'].includes(node.type) ? <button type="button" title="Renombrar carpeta" onClick={renameFolder}><Pencil className="h-4 w-4 text-emerald-400" /></button> : null}
-        {node.type === 'machine' && (
-          <>
-            <button type="button" title="Ver lotes y muestras de esta maquina" onClick={openFilteredLots}>
-              <ListFilter className="h-4 w-4 text-amber-300" />
-            </button>
-            <button type="button" title="Crear punto de muestreo" onClick={() => setPointOpen(true)}>
-              <MapPin className="h-4 w-4 text-amber-400" />
-            </button>
-            <button type="button" title="Ver maquina" onClick={() => setDetailOpen(true)}>
-              <Eye className="h-4 w-4 text-blue-400" />
-            </button>
-            <button type="button" title="Editar maquina" onClick={editMachine}>
-              <Pencil className="h-4 w-4 text-emerald-400" />
-            </button>
-          </>
-        )}
-        {node.type === 'sampling-point' && (
-          <>
-            <button type="button" title="Ver lotes y muestras asociadas" onClick={openFilteredLots}>
-              <ListFilter className="h-4 w-4 text-sky-400" />
-            </button>
-            <button type="button" title="Organizar muestras en este punto" onClick={() => setOrganizeOpen(true)}>
-              <Link2 className="h-4 w-4 text-emerald-400" />
-            </button>
-            <button type="button" title="Editar punto de muestreo" onClick={() => setPointOpen(true)}>
-              <Pencil className="h-4 w-4 text-emerald-400" />
-            </button>
-          </>
-        )}
-        {node.type !== 'root' ? <button type="button" title={['sampling-point', 'machine'].includes(node.type) ? 'Desactivar' : 'Eliminar carpeta vacía'} onClick={removeNode}><Trash2 className="h-4 w-4 text-red-500" /></button> : null}
+        {node.type === 'machine' ? <Wrench className="h-[17px] w-[17px] text-[#7bca9b]" /> : node.type === 'sampling-point' ? <MapPin className="h-[17px] w-[17px] text-[#d9b36e]" /> : <Folder className="h-[17px] w-[17px] text-[#6f9fd8]" />}
+        <span className="min-w-0 flex-1 truncate text-sm text-[#e5e7ea]">{node.name}</span>
+        <OverflowMenu items={[
+          canCreate ? { label: 'Crear carpeta o máquina', icon: FolderPlus, onClick: () => setCreateOpen(true) } : null,
+          ['folder', 'root'].includes(node.type) ? { label: 'Renombrar carpeta', icon: Pencil, onClick: renameFolder } : null,
+          node.type === 'machine' ? { label: 'Ver lotes y muestras', icon: ListFilter, onClick: openFilteredLots } : null,
+          node.type === 'machine' ? { label: 'Crear punto de muestreo', icon: MapPin, onClick: () => setPointOpen(true) } : null,
+          node.type === 'machine' ? { label: 'Ver máquina', icon: Eye, onClick: () => setDetailOpen(true) } : null,
+          node.type === 'machine' ? { label: 'Editar máquina', icon: Pencil, onClick: editMachine } : null,
+          node.type === 'sampling-point' ? { label: 'Ver lotes y muestras', icon: ListFilter, onClick: openFilteredLots } : null,
+          node.type === 'sampling-point' ? { label: 'Organizar muestras', icon: Link2, onClick: () => setOrganizeOpen(true) } : null,
+          node.type === 'sampling-point' ? { label: 'Editar punto', icon: Pencil, onClick: () => setPointOpen(true) } : null,
+          node.type !== 'root' ? { separator: true } : null,
+          node.type !== 'root' ? { label: ['sampling-point', 'machine'].includes(node.type) ? 'Desactivar' : 'Eliminar carpeta', icon: Trash2, danger: true, onClick: removeNode } : null,
+        ]} />
       </div>
 
       <ModalCreationFile
@@ -227,7 +199,7 @@ const TreeNode = ({ node, reload }) => {
       />
 
       {open && hasChildren && (
-        <ul className="ml-6 border-l border-[#444] pl-2">
+        <ul className="ml-6 border-l border-white/[0.06] pl-2">
           {node.children.map((child) => (
             <TreeNode key={child.id} node={child} reload={reload} />
           ))}
@@ -269,33 +241,20 @@ export default function RecursiveFolderDocumentStructure() {
   };
 
   return (
-    <div className="min-h-screen bg-[#1a1a1a] px-4 py-8 text-white">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold">Estructura de activos</h1>
-            <p className="text-sm text-gray-400">Organizacion jerarquica de carpetas y maquinas.</p>
-          </div>
-          <Button variant="outline-warning" onClick={syncRoots}>
-            <FolderPlus className="mr-2 inline h-4 w-4" />
-            Sincronizar empresas
-          </Button>
-        </div>
-
-        <div className="rounded border border-[#333] bg-[#292929] p-4">
+    <main className="go-page">
+      <div className="go-shell max-w-[1180px]">
+        <header className="go-header">
+          <div><h1>Estructura de activos</h1><p>Organización jerárquica de empresas, carpetas, máquinas y puntos de muestreo.</p></div>
+          <button className="go-ghost" type="button" onClick={syncRoots}><FolderPlus className="h-4 w-4" /> Sincronizar empresas</button>
+        </header>
+        <section className="go-card !p-3">
           {loading && <TreeSkeleton />}
-          {!loading && error && <p className="p-4 text-red-400">{error}</p>}
-          {!loading && !error && tree.length === 0 && (
-            <p className="p-4 text-sm text-gray-400">No hay estructura registrada.</p>
-          )}
-          {!loading && !error && tree.length > 0 && (
-            <ul className="space-y-1">
-              {tree.map((node) => <TreeNode key={node.id} node={node} reload={reload} />)}
-            </ul>
-          )}
-        </div>
+          {!loading && error && <p className="p-4 text-[#e58b91]">{error}</p>}
+          {!loading && !error && tree.length === 0 && <div className="go-empty-state">No hay estructura registrada.</div>}
+          {!loading && !error && tree.length > 0 && <ul className="space-y-1">{tree.map((node) => <TreeNode key={node.id} node={node} reload={reload} />)}</ul>}
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -327,12 +286,12 @@ const SamplingPointModal = ({ show, machine, point, onHide, onSaved }) => {
       <Modal.Header closeButton className="bg-[#292929] text-white"><Modal.Title>{point ? 'Editar punto de muestreo' : 'Nuevo punto de muestreo'}</Modal.Title></Modal.Header>
       <Modal.Body className="space-y-3 bg-[#1a1a1a] text-white">
         <p className="text-sm text-gray-400">Quedara dentro de <strong>{machine?.nombre}</strong> y sera un nodo terminal.</p>
-        <input className="form-control bg-dark text-white" placeholder="Nombre *" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
-        <input className="form-control bg-dark text-white" placeholder="Codigo opcional" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} />
-        <input className="form-control bg-dark text-white" placeholder="Lubricante o tipo de aceite" value={form.lubricante} onChange={(e) => setForm({ ...form, lubricante: e.target.value })} />
-        <div className="row g-2"><div className="col"><input className="form-control bg-dark text-white" type="number" min="0" placeholder="Frecuencia de cambio" value={form.frecuencia_cambio} onChange={(e) => setForm({ ...form, frecuencia_cambio: e.target.value })} /></div><div className="col"><select className="form-select bg-dark text-white" value={form.unidad_frecuencia_cambio} onChange={(e) => setForm({ ...form, unidad_frecuencia_cambio: e.target.value })}><option value="horas">Horas</option><option value="km">Kilómetros</option><option value="dias">Días</option></select></div></div>
-        <div className="row g-2"><div className="col"><input className="form-control bg-dark text-white" type="number" min="0" placeholder="Frecuencia de análisis" value={form.frecuencia_analisis} onChange={(e) => setForm({ ...form, frecuencia_analisis: e.target.value })} /></div><div className="col"><select className="form-select bg-dark text-white" value={form.unidad_frecuencia_analisis} onChange={(e) => setForm({ ...form, unidad_frecuencia_analisis: e.target.value })}><option value="horas">Horas</option><option value="km">Kilómetros</option><option value="dias">Días</option></select></div></div>
-        <textarea className="form-control bg-dark text-white" placeholder="Descripcion opcional" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
+        <input className="w-full rounded-md border border-[#353940] bg-[#141518] px-3 py-2 text-sm text-white" placeholder="Nombre *" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+        <input className="w-full rounded-md border border-[#353940] bg-[#141518] px-3 py-2 text-sm text-white" placeholder="Codigo opcional" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} />
+        <input className="w-full rounded-md border border-[#353940] bg-[#141518] px-3 py-2 text-sm text-white" placeholder="Lubricante o tipo de aceite" value={form.lubricante} onChange={(e) => setForm({ ...form, lubricante: e.target.value })} />
+        <div className="grid grid-cols-2 gap-2"><div ><input className="w-full rounded-md border border-[#353940] bg-[#141518] px-3 py-2 text-sm text-white" type="number" min="0" placeholder="Frecuencia de cambio" value={form.frecuencia_cambio} onChange={(e) => setForm({ ...form, frecuencia_cambio: e.target.value })} /></div><div ><select className="w-full rounded-md border border-[#353940] bg-[#141518] px-3 py-2 text-sm text-white" value={form.unidad_frecuencia_cambio} onChange={(e) => setForm({ ...form, unidad_frecuencia_cambio: e.target.value })}><option value="horas">Horas</option><option value="km">Kilómetros</option><option value="dias">Días</option></select></div></div>
+        <div className="grid grid-cols-2 gap-2"><div ><input className="w-full rounded-md border border-[#353940] bg-[#141518] px-3 py-2 text-sm text-white" type="number" min="0" placeholder="Frecuencia de análisis" value={form.frecuencia_analisis} onChange={(e) => setForm({ ...form, frecuencia_analisis: e.target.value })} /></div><div ><select className="w-full rounded-md border border-[#353940] bg-[#141518] px-3 py-2 text-sm text-white" value={form.unidad_frecuencia_analisis} onChange={(e) => setForm({ ...form, unidad_frecuencia_analisis: e.target.value })}><option value="horas">Horas</option><option value="km">Kilómetros</option><option value="dias">Días</option></select></div></div>
+        <textarea className="w-full rounded-md border border-[#353940] bg-[#141518] px-3 py-2 text-sm text-white" placeholder="Descripcion opcional" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
       </Modal.Body>
       <Modal.Footer className="bg-[#1a1a1a]"><Button variant="secondary" onClick={onHide}>Cancelar</Button><Button variant="danger" disabled={saving} onClick={save}>{saving ? 'Guardando...' : point ? 'Guardar cambios' : 'Crear punto'}</Button></Modal.Footer>
     </Modal>
@@ -384,12 +343,12 @@ const OrganizePointModal = ({ show, point, machine, onHide, onSaved }) => {
       <Modal.Header closeButton className="bg-[#292929] text-white"><Modal.Title>Organizar muestras · {point?.nombre}</Modal.Title></Modal.Header>
       <Modal.Body className="bg-[#1a1a1a] text-white">
         <p className="text-sm text-gray-400">Solo se asociaran muestras cuya maquina sea <strong>{machine?.nombre}</strong>. Esto no modifica el ingreso del lote.</p>
-        <select className="form-select bg-dark text-white" value={batchId} onChange={(e) => selectBatch(e.target.value)} disabled={loading}>
+        <select className="w-full rounded-md border border-[#353940] bg-[#141518] px-3 py-2 text-sm text-white" value={batchId} onChange={(e) => selectBatch(e.target.value)} disabled={loading}>
           <option value="">Seleccione un lote de esta maquina</option>
           {batches.map((batch) => <option key={batch.id} value={batch.id}>{batch.id} · {batch.cliente_nombre || 'Sin cliente'} ({batch.muestras_coincidentes ?? batch.total_muestras} coinciden)</option>)}
         </select>
         {loading && <p className="mt-3 text-gray-400">Cargando...</p>}
-        {!loading && batchId && <div className="mt-3 max-h-64 overflow-auto rounded border border-[#444] p-2">
+        {!loading && batchId && <div className="mt-3 max-h-64 overflow-auto rounded-lg border border-white/[0.06] bg-[#151719] p-2">
           {samples.map((sample) => <label key={sample.id} className="flex items-center gap-3 border-b border-[#333] p-2 last:border-0">
             <input type="checkbox" checked={selected.includes(sample.id)} onChange={(e) => setSelected((items) => e.target.checked ? [...items, sample.id] : items.filter((id) => id !== sample.id))} />
             <span><strong>{sample.id}</strong><small className="block text-gray-400">{sample.punto_muestreo ? `Actualmente: ${sample.punto_muestreo.nombre}` : 'Sin punto asignado'}</small></span>

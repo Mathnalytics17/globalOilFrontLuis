@@ -1,49 +1,13 @@
-// pages/404.js
+import { Home } from 'lucide-react';
 import { useRouter } from 'next/router';
-import { Button, Typography, Box, Container } from '@mui/material';
-import HomeIcon from '@mui/icons-material/Home';
+import AuthShell from '@features/auth/presentation/AuthShell';
 
 export default function Custom404() {
   const router = useRouter();
-
-  const handleGoHome = () => {
-    router.push('/dashboard'); // Redirige al Home
-  };
-
   return (
-    <Container maxWidth="sm">
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-          textAlign: 'center',
-          gap: 3,
-        }}
-      >
-        {/* Título y mensaje */}
-        <Typography variant="h1" sx={{ fontSize: '4rem', fontWeight: 'bold' }}>
-          404
-        </Typography>
-        <Typography variant="h5" color="textSecondary">
-          ¡Página no encontrada!
-        </Typography>
-        <Typography variant="body1">
-          Lo sentimos, la página que buscas no existe o ha sido movida.
-        </Typography>
-
-        {/* Botón para regresar al Home */}
-        <Button
-          variant="contained"
-          startIcon={<HomeIcon />}
-          onClick={handleGoHome}
-          sx={{ mt: 3 }}
-        >
-          Volver al Inicio
-        </Button>
-      </Box>
-    </Container>
+    <AuthShell title="Página no encontrada" subtitle="La ruta que intentas abrir no existe o fue movida.">
+      <div className="mb-6 text-6xl font-semibold tracking-[-0.06em] text-[#30343a]">404</div>
+      <button type="button" className="go-primary" onClick={() => router.push('/dashboard')}><Home className="h-4 w-4" /> Volver al inicio</button>
+    </AuthShell>
   );
 }

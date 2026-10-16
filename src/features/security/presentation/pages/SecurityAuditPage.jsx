@@ -1,13 +1,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
-import { Refresh } from '@mui/icons-material';
+import { RefreshCcw as Refresh } from 'lucide-react';
 import { securityService } from '../../infrastructure/securityService';
 import { companiesService } from '@features/companies/infrastructure/companiesService';
-import { useAuth } from '@features/auth/application/AuthContext';
+import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import { isGlobalUser } from '@features/auth/application/sessionAccess';
-import SortableTableHeader from '@components/SortableTableHeader';
-import useTableSort from '@hooks/useTableSort';
+import SortableTableHeader from '@shared/ui/SortableTableHeader';
+import useTableSort from '@shared/hooks/useTableSort';
 import s from '../components/Security.module.css';
 import { BackLink, SearchBox, getErrorMessage, getId, getList, getName } from '../components/securityUi';
 

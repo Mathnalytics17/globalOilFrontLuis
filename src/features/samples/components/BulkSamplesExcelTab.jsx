@@ -1,8 +1,9 @@
-import React, { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Download, UploadCloud, FileSpreadsheet, AlertCircle, CheckCircle, Table2, RefreshCcw } from "lucide-react";
 import { toast } from "react-toastify";
 
 import { sampleBatchExcelService } from "@features/samples/infrastructure/sampleBatchExcelService";
+import { getApiErrorMessage } from '@shared/utils/errors';
 
 const MAX_EXCEL_SIZE_BYTES = 10 * 1024 * 1024;
 const PREVIEW_ROW_LIMIT = 300;
@@ -70,6 +71,7 @@ const normalizeImportedMuestra = (row) => {
 };
 
 const getErrorMessage = (error) => {
+  if (error?.response || error?.request) return getApiErrorMessage(error, "No se pudo procesar el archivo.");
   const data = error?.response?.data;
 
   if (!data) return "No se pudo procesar el archivo.";
@@ -77,7 +79,7 @@ const getErrorMessage = (error) => {
   if (typeof data.message === "string") return data.message;
   if (Array.isArray(data.message)) return data.message.join(" ");
 
-  return "No se pudo procesar el archivo. Revise la consola.";
+  return "No se pudo procesar el archivo. Revise los datos e inténtelo nuevamente.";
 };
 
 const formatRowError = (error) => {
@@ -175,7 +177,7 @@ const BulkSamplesExcelTab = ({ form, state, onStateChange, onUseRows }) => {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="bg-[#222] border border-[#333] rounded-xl p-5 lg:col-span-1">
+        <div className="bg-[#222] border border-white/[0.07] rounded-xl p-5 lg:col-span-1">
           <div className="w-11 h-11 rounded-xl bg-red-600/20 text-red-300 flex items-center justify-center mb-4">
             <FileSpreadsheet size={24} />
           </div>
@@ -194,8 +196,8 @@ const BulkSamplesExcelTab = ({ form, state, onStateChange, onUseRows }) => {
           </button>
         </div>
 
-        <div className="bg-[#222] border border-[#333] rounded-xl p-5 lg:col-span-2">
-          <div className="w-11 h-11 rounded-xl bg-blue-600/20 text-blue-300 flex items-center justify-center mb-4">
+        <div className="bg-[#222] border border-white/[0.07] rounded-xl p-5 lg:col-span-2">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/[0.07] bg-[#202328] text-[#aeb4bd] mb-4">
             <UploadCloud size={24} />
           </div>
           <h3 className="font-bold text-lg">2. Subir y validar</h3>
@@ -236,7 +238,7 @@ const BulkSamplesExcelTab = ({ form, state, onStateChange, onUseRows }) => {
               Seleccionar archivo
             </button>
 
-            <div className="flex-1 min-h-[48px] rounded-lg border border-[#444] bg-[#292929] px-4 py-3 text-sm text-gray-300 truncate">
+            <div className="flex-1 min-h-[48px] rounded-lg border border-[#353940] bg-[#17191c] px-4 py-3 text-sm text-gray-300 truncate">
               {selectedFile ? selectedFile.name : "Ningún archivo seleccionado"}
             </div>
 
@@ -254,8 +256,8 @@ const BulkSamplesExcelTab = ({ form, state, onStateChange, onUseRows }) => {
       </div>
 
       {preview && (
-        <div className="bg-[#222] border border-[#333] rounded-xl overflow-hidden">
-          <div className="p-5 border-b border-[#333] flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="bg-[#222] border border-white/[0.07] rounded-xl overflow-hidden">
+          <div className="p-5 border-b border-white/[0.07] flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <Table2 size={20} />
@@ -314,7 +316,7 @@ Volver a cargar filas válidas
               </thead>
               <tbody>
                 {visiblePreviewRows.map((row) => (
-                  <tr key={row.row_number} className="border-t border-[#333] hover:bg-[#2a2a2a]">
+                  <tr key={row.row_number} className="border-t border-white/[0.07] hover:bg-[#2a2a2a]">
                     <td className="px-3 py-3">{row.row_number}</td>
                     <td className="px-3 py-3">
                       {row.is_valid ? (

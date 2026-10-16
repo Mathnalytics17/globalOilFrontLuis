@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import TechnicalConfigShell from '../components/TechnicalConfigShell';
+import MetricStrip from '@shared/ui/MetricStrip';
+import { BookOpen, Braces, Link2, SlidersHorizontal } from 'lucide-react';
 import styles from '../components/TechnicalConfig.module.css';
 import technicalConfigService from '../../infrastructure/technicalConfigService';
 import { safeArray, parseError } from '../components/technicalConfigUtils';
@@ -33,15 +35,12 @@ export default function TechnicalConfigHomePage() {
       subtitle="Administre catálogos, items, equipos, métodos y la relación de límites. Este es el core técnico de laboratorio dentro del centro de configuración."
     >
       {error ? <div className={styles.alert}>{error}</div> : null}
+      <MetricStrip items={cards.map((card, index) => ({
+        label: card.title,
+        value: loading ? '…' : card.value,
+        icon: [BookOpen, Braces, SlidersHorizontal, Link2][index],
+      }))} />
       <section className={styles.grid}>
-        {cards.map((card) => (
-          <article key={card.title} className={`${styles.card} ${styles.col3}`}>
-            <h3>{card.title}</h3>
-            <div className={styles.statNumber}>{loading ? '...' : card.value}</div>
-            <p>{card.text}</p>
-          </article>
-        ))}
-
         <article className={`${styles.card} ${styles.col6}`}>
           <h2>Flujo recomendado</h2>
           <div className={styles.step}><span className={styles.stepNum}>1</span><p><b>Cree el catálogo técnico.</b><br />Ejemplo: Grado de viscosidad, Nivel de desempeño o Uso.</p></div>

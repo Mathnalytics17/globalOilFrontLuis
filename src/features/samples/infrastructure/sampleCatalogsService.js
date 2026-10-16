@@ -50,10 +50,11 @@ const normalizeCatalog = (entry) => {
 
 export const sampleCatalogsService = {
   async getBatchCreationOptions() {
-    const [companiesRes, machinesRes, pointsRes] = await Promise.allSettled([
+    const [companiesRes, machinesRes, pointsRes, lubricantsRes] = await Promise.allSettled([
       apiClient.get('/companies/'),
       apiClient.get('/machines/', { params: { page_size: 1000 } }),
       apiClient.get('/sampling-points/', { params: { page_size: 1000 } }),
+      apiClient.get('/lubricants/', { params: { page_size: 1000 } }),
     ]);
 
     return {
@@ -63,8 +64,10 @@ export const sampleCatalogsService = {
         machinesRes.status === 'fulfilled' ? asArray(machinesRes.value.data) : [],
       samplingPoints:
         pointsRes.status === 'fulfilled' ? asArray(pointsRes.value.data) : [],
+      lubricants:
+        lubricantsRes.status === 'fulfilled' ? asArray(lubricantsRes.value.data) : [],
       hasPartialFailure:
-        companiesRes.status === 'rejected' || machinesRes.status === 'rejected' || pointsRes.status === 'rejected',
+        companiesRes.status === 'rejected' || machinesRes.status === 'rejected' || pointsRes.status === 'rejected' || lubricantsRes.status === 'rejected',
     };
   },
 

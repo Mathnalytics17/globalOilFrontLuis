@@ -1,7 +1,7 @@
 .page {
   width: min(1480px, 100%);
   margin: 0 auto;
-  padding: 28px;
+  padding: 28px clamp(16px, 3vw, 40px) 32px;
   color: #f5f5f5;
   overflow-x: hidden;
 }
@@ -17,7 +17,7 @@
 .top h1,
 .heading h1 {
   margin: 14px 0 4px;
-  font-size: 38px;
+  font-size: clamp(28px, 3vw, 34px);
   letter-spacing: 0;
 }
 .top p,
@@ -47,7 +47,7 @@
   padding: 0 16px;
   border: 1px solid #42454d;
   border-radius: 7px;
-  background: #25272d;
+  background: #1b1d20;
   color: #fff;
   text-decoration: none;
   cursor: pointer;
@@ -106,7 +106,7 @@
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 8px;
-  margin: 28px 0 18px;
+  margin: 20px 0 16px;
 }
 .steps button {
   display: flex;
@@ -142,15 +142,15 @@
   cursor: pointer;
 }
 .panel {
-  border: 1px solid #383a42;
+  border: 1px solid rgba(255,255,255,.07);
   border-radius: 8px;
-  background: #18191d;
-  padding: 24px;
-  min-height: 420px;
+  background: #191b1e;
+  padding: 18px;
+  min-height: 360px;
 }
 .panel h2 {
   margin: 0 0 18px;
-  font-size: 24px;
+  font-size: 18px;
 }
 .panel label {
   display: flex;
@@ -165,7 +165,7 @@
   min-height: 44px;
   border: 1px solid #41444d;
   border-radius: 6px;
-  background: #0f1013;
+  background: #141518;
   color: #fff;
   padding: 0 13px;
 }
@@ -182,7 +182,7 @@
   padding: 18px;
   border: 1px solid #3d4048;
   border-radius: 7px;
-  background: #202126;
+  background: #1b1d20;
   color: #fff;
   text-align: left;
   cursor: pointer;
@@ -192,7 +192,7 @@
 }
 .sourceGrid .selectedSource {
   border-color: #f02a34;
-  box-shadow: inset 3px 0 #f02a34;
+  box-shadow: inset 2px 0 #ef2b32;
 }
 .checkGrid {
   display: grid;
@@ -205,7 +205,7 @@
   align-items: center;
   margin: 0;
   padding: 12px;
-  border: 1px solid #353840;
+  border: 1px solid rgba(255,255,255,.07);
   border-radius: 6px;
 }
 .checkGrid input {
@@ -219,7 +219,7 @@
 }
 .summary span {
   padding: 14px;
-  border: 1px solid #353840;
+  border: 1px solid rgba(255,255,255,.07);
   border-radius: 6px;
 }
 .summary small,
@@ -244,9 +244,9 @@
   display: grid;
   gap: 10px;
   padding: 13px;
-  border: 1px solid #373a42;
+  border: 1px solid rgba(255,255,255,.07);
   border-radius: 6px;
-  background: #202126;
+  background: #1b1d20;
 }
 .fieldCard label {
   flex-direction: row;
@@ -258,7 +258,7 @@
 }
 .matrix {
   overflow: auto;
-  border: 1px solid #373a42;
+  border: 1px solid rgba(255,255,255,.07);
   border-radius: 7px;
 }
 .matrixHead,
@@ -301,7 +301,7 @@
 }
 .weightGrid > div {
   padding: 14px;
-  border: 1px solid #373a42;
+  border: 1px solid rgba(255,255,255,.07);
   border-radius: 6px;
 }
 .weightGrid label {
@@ -327,7 +327,7 @@
   bottom: 0;
   margin-top: 16px;
   padding: 14px 0;
-  background: #18191d;
+  background: #191b1e;
 }
 .footer button:first-child {
   margin-left: auto;
@@ -417,7 +417,7 @@
 }
 .decisionTable {
   overflow: auto;
-  border: 1px solid #373a42;
+  border: 1px solid rgba(255,255,255,.07);
   border-radius: 7px;
 }
 .decisionHead,
@@ -468,7 +468,7 @@
 }
 .header h1 {
   margin: 12px 0 4px;
-  font-size: 38px;
+  font-size: clamp(28px, 3vw, 34px);
   letter-spacing: 0;
 }
 .header p,
@@ -483,6 +483,12 @@
   gap: 16px;
   margin-bottom: 18px;
 }
+.toolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .secondary {
   display: inline-flex;
   align-items: center;
@@ -492,7 +498,7 @@
   padding: 0 16px;
   border: 1px solid #42454d;
   border-radius: 7px;
-  background: #25272d;
+  background: #1b1d20;
   color: #fff;
   text-decoration: none;
   cursor: pointer;
@@ -540,7 +546,7 @@
   padding: 0;
   border: 1px solid #42454d;
   border-radius: 7px;
-  background: #25272d;
+  background: #1b1d20;
   color: #fff;
   cursor: pointer;
 }
@@ -556,9 +562,9 @@
   gap: 14px;
   min-height: 92px;
   padding: 16px;
-  border: 1px solid #373a42;
+  border: 1px solid rgba(255,255,255,.07);
   border-radius: 7px;
-  background: #202126;
+  background: #1b1d20;
   color: #fff;
   text-align: left;
   text-decoration: none;
@@ -588,6 +594,128 @@
   color: #fff;
   text-decoration: none;
 }
+.currentBadge,
+.historyBadge,
+.disabledBadge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border: 1px solid #326e49;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #79dfa2;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.historyBadge {
+  border-color: #545a65;
+  color: #c4c8d0;
+}
+.disabledBadge {
+  border-color: #6d4b4d;
+  color: #db999d;
+}
+.versionTableWrap,
+.historyTableWrap {
+  overflow-x: auto;
+}
+.versionTableWrap {
+  border: 1px solid #292c33;
+  border-radius: 10px;
+  background: #181a1e;
+}
+.versionTable,
+.historyTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+.versionTable {
+  min-width: 1020px;
+}
+.versionTable th,
+.historyTable th {
+  padding: 13px 16px;
+  border-bottom: 1px solid #30333b;
+  background: #22252b;
+  color: #aeb3bd;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.versionTable td {
+  padding: 15px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  color: #d8dbe1;
+  vertical-align: middle;
+}
+.versionTable tbody > tr:not(.historyRow):hover td {
+  background: rgba(255,255,255,.025);
+}
+.versionTable tbody > tr:last-child td {
+  border-bottom: 0;
+}
+.emptyTable {
+  padding: 34px 16px !important;
+  color: #aeb3bd !important;
+  text-align: center;
+}
+.testName {
+  display: block;
+  color: #fff;
+  font-size: 15px;
+}
+.tableActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.tableActions a,
+.tableActions button,
+.tableAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #42454d;
+  border-radius: 7px;
+  background: #202228;
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tableActions button:disabled { cursor: wait; opacity: .55; }
+.historyRow > td {
+  padding: 0 !important;
+  background: #141619;
+}
+.historyTableWrap {
+  padding: 12px 16px 16px;
+}
+.historyTable {
+  min-width: 740px;
+  border: 1px solid #292c33;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.historyTable th {
+  padding: 10px 12px;
+  background: #1d2025;
+  font-size: 11px;
+}
+.historyTable td {
+  padding: 11px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  color: #c9cdd5;
+  vertical-align: middle;
+}
+.historyTable tr:last-child td { border-bottom: 0; }
 .activeStep {
   color: #fff !important;
   border-color: #ef2932 !important;
@@ -624,7 +752,7 @@
 }
 .tableWrap {
   overflow: auto;
-  border: 1px solid #373a42;
+  border: 1px solid rgba(255,255,255,.07);
   border-radius: 7px;
 }
 .tableWrap table {
@@ -661,9 +789,9 @@
 .sourceGroup,
 .catalogPicker,
 .limitSection {
-  border: 1px solid #373a42;
+  border: 1px solid rgba(255,255,255,.07);
   border-radius: 7px;
-  background: #202126;
+  background: #1b1d20;
   padding: 16px;
 }
 .sourceGroup h3,
@@ -719,10 +847,10 @@
   display: flex;
   align-items: center;
   min-height: 40px;
-  padding: 0 12px;
-  border: 1px solid #41444d;
+  padding: 8px 12px;
+  border: 1px solid rgba(125, 158, 196, .35);
   border-radius: 6px;
-  background: #0f1013;
+  background: rgba(71, 102, 139, .12);
 }
 .decisionGrid,
 .previewGrid {
@@ -752,9 +880,9 @@
 .simpleDecision span,
 .previewGrid article {
   padding: 14px;
-  border: 1px solid #373a42;
+  border: 1px solid rgba(255,255,255,.07);
   border-radius: 7px;
-  background: #202126;
+  background: #1b1d20;
 }
 .previewGrid h3 {
   margin: 0 0 8px;
@@ -777,7 +905,7 @@
   gap: 5px 12px;
   align-items: center;
   padding: 12px;
-  border: 1px solid #373a42;
+  border: 1px solid rgba(255,255,255,.07);
   border-radius: 6px;
   background: #1b1c20;
 }
@@ -801,6 +929,22 @@
   align-items: center;
   max-width: 720px;
   margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+  .page { padding: 20px 16px 28px; }
+  .header, .toolbar { align-items: stretch; flex-direction: column; }
+  .toolbarActions { justify-content: stretch; }
+  .toolbarActions .secondary { flex: 1 1 180px; }
+  .sourceRow, .directGrid, .resultDecisionGrid, .previewGrid { grid-template-columns: 1fr; }
+  .steps { scrollbar-width: thin; }
+  .semaphoreEditor { min-width: 0; }
+}
+
+@media (max-width: 560px) {
+  .header h1 { font-size: 28px; }
+  .footer { gap: 8px; }
+  .footer button { flex: 1; padding: 0 12px; }
 }
 .directField {
   display: grid;

@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { useEffect } from 'react';
-import { useAuth } from '../application/AuthContext';
+import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import { canAccessAny, isGlobalUser } from '../application/sessionAccess';
 
 export default function RequirePermission({ permissionsAny = [], permissionsAll = [], children }) {

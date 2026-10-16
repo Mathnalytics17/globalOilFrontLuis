@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import RequirePermission from '@features/auth/presentation/RequirePermission';
-import PruebaForm from '../../../../shared/features/pruebas/PruebaForm';
+import PruebaForm from '@features/technical-config/presentation/components/PruebaForm';
 
 export default function EditarPruebaConfiguracionPage() {
   const router = useRouter();

@@ -1,8 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import {
-  ArrowLeft,
-  Download,
   FileSpreadsheet,
   Save,
   Search,
@@ -15,6 +13,7 @@ import { toast } from 'react-toastify';
 
 import { resultEntryService } from '@features/samples/infrastructure/resultEntryService';
 import technicalConfigService from '@features/technical-config/infrastructure/technicalConfigService';
+import withRequiredPermissions from '@shared/auth/withRequiredPermissions';
 
 const normalizeValueMap = (currentResult) => {
   const values = currentResult?.payload?.values || [];
@@ -44,7 +43,7 @@ const getStatusClass = (status) => {
 
 const isFilled = (value) => value !== undefined && value !== null && String(value).trim() !== '';
 
-export default function ResultEntryPage() {
+function ResultEntryPage() {
   const router = useRouter();
   const [batches, setBatches] = useState([]);
   const [selectedBatchId, setSelectedBatchId] = useState('');
@@ -580,10 +579,6 @@ export default function ResultEntryPage() {
       ) : null}
       <header className="resultTop">
         <div className="titleBlock">
-          <button type="button" className="iconBtn" onClick={() => router.push(`/muestras/asignacion-pruebas${selectedBatchId ? `?lote=${selectedBatchId}` : ''}`)}>
-            <ArrowLeft size={18} />
-          </button>
-          <div className="iconBtn static"><FileSpreadsheet size={20} /></div>
           <div>
             <h1>Ingreso de resultados</h1>
             <p>Ingrese resultados desde plataforma o valide una plantilla Excel oficial.</p>
@@ -614,22 +609,22 @@ export default function ResultEntryPage() {
               aria-expanded={excelMenuOpen}
               aria-haspopup="menu"
             >
-              <Download size={16} />
-              Plantillas de carga
+              <FileSpreadsheet size={16} />
+              Excel
             </button>
             {excelMenuOpen && (
               <div className="excelMenuPanel" role="menu">
-                <strong className="excelMenuTitle">Descargar plantilla para llenar</strong>
-                <button type="button" role="menuitem" onClick={() => downloadTemplate('consolidado')}>Todos los resultados en una hoja</button>
-                <button type="button" role="menuitem" onClick={() => downloadTemplate('por_muestra')}>Una hoja por muestra</button>
+                <strong className="excelMenuTitle">Plantilla de carga</strong>
+                <button type="button" role="menuitem" onClick={() => downloadTemplate('consolidado')}>Descargar · todos los resultados</button>
+                <button type="button" role="menuitem" onClick={() => downloadTemplate('por_muestra')}>Descargar · una hoja por muestra</button>
+                <div className="excelMenuDivider" />
+                <label className="excelUploadMenu" role="menuitem">
+                  <Upload size={15} /> Cargar archivo y validar
+                  <input type="file" accept=".xlsx" hidden onChange={previewExcel} />
+                </label>
               </div>
             )}
           </div>
-          <label className="btn red">
-            <Upload size={16} />
-            Cargar y validar
-            <input type="file" accept=".xlsx" hidden onChange={previewExcel} />
-          </label>
           <button
             type="button"
             className="btn secondary"
@@ -943,19 +938,19 @@ export default function ResultEntryPage() {
 
         .titleBlock h1 {
           margin: 0;
-          font-size: 26px;
+          font-size: 24px;
         }
 
         .titleBlock p {
           margin: 3px 0 0;
-          color: #c7c7c7;
-          font-size: 14px;
+          color: #aeb4bd;
+          font-size: 12.5px;
         }
 
         .iconBtn {
-          width: 42px;
-          height: 42px;
-          border-radius: 10px;
+          width: 36px;
+          height: 36px;
+          border-radius: 8px;
           border: 1px solid #444;
           background: #111;
           color: white;
@@ -1016,8 +1011,8 @@ export default function ResultEntryPage() {
         }
 
         .btn {
-          min-height: 40px;
-          border-radius: 10px;
+          min-height: 36px;
+          border-radius: 7px;
           border: 1px solid #444;
           background: #222;
           color: white;
@@ -1025,8 +1020,9 @@ export default function ResultEntryPage() {
           align-items: center;
           justify-content: center;
           gap: 8px;
-          padding: 0 14px;
-          font-weight: 800;
+          padding: 0 11px;
+          font-size: 12.5px;
+          font-weight: 650;
           cursor: pointer;
         }
 
@@ -1054,16 +1050,16 @@ export default function ResultEntryPage() {
         .leftList,
         .resultPanel {
           border: 1px solid #3a3a3a;
-          background: linear-gradient(180deg, rgba(27,27,27,.96), rgba(18,18,18,.96));
+          background: #191b1e;
           border-radius: 12px;
         }
 
         .lotLine {
           display: grid;
-          grid-template-columns: minmax(280px, 1.4fr) repeat(6, minmax(105px, 1fr));
-          gap: 12px;
+          grid-template-columns: minmax(220px, 1.4fr) repeat(6, minmax(92px, 1fr));
+          gap: 9px;
           align-items: center;
-          padding: 12px 14px;
+          padding: 10px 12px;
           margin-bottom: 10px;
         }
 
@@ -1084,8 +1080,8 @@ export default function ResultEntryPage() {
         .obsBox textarea,
         .searchBox input {
           width: 100%;
-          min-height: 38px;
-          border-radius: 8px;
+          min-height: 36px;
+          border-radius: 7px;
           border: 1px solid #454545;
           background: #080808;
           color: white;
@@ -1094,7 +1090,7 @@ export default function ResultEntryPage() {
         }
 
         .lotInfo .value {
-          font-size: 15px;
+          font-size: 13px;
         }
 
         .lockedLot {
@@ -1116,8 +1112,8 @@ export default function ResultEntryPage() {
         }
 
         .lotInfo .value.strong {
-          font-size: 20px;
-          font-weight: 950;
+          font-size: 15px;
+          font-weight: 700;
         }
 
         .excelPreview {
@@ -1144,7 +1140,7 @@ export default function ResultEntryPage() {
 
         .workGrid {
           display: grid;
-          grid-template-columns: 360px minmax(0, 1fr);
+          grid-template-columns: 300px minmax(0, 1fr);
           gap: 10px;
           align-items: start;
         }
@@ -1175,7 +1171,7 @@ export default function ResultEntryPage() {
 
         .sampleFilter {
           width: 100%;
-          min-height: 38px;
+          min-height: 36px;
           margin-bottom: 10px;
           border-radius: 8px;
           border: 1px solid #454545;
@@ -1244,8 +1240,8 @@ export default function ResultEntryPage() {
           border: 1px solid #333;
           background: #111;
           color: white;
-          border-radius: 9px;
-          padding: 10px;
+          border-radius: 7px;
+          padding: 8px 9px;
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -1315,12 +1311,13 @@ export default function ResultEntryPage() {
 
         .panelHeader h2 {
           margin: 0;
-          font-size: 22px;
+          font-size: 17px;
         }
 
         .panelHeader p {
-          margin: 4px 0 0;
-          color: #c0c0c0;
+          margin: 3px 0 0;
+          color: #aeb4bd;
+          font-size: 12px;
         }
 
         .resultTable {
@@ -1348,8 +1345,8 @@ export default function ResultEntryPage() {
 
         .executionGrid span {
           color: #cfcfcf;
-          font-weight: 800;
-          font-size: 13px;
+          font-weight: 650;
+          font-size: 12px;
         }
 
         .resultRow {
@@ -1482,3 +1479,5 @@ const LotInfo = ({ label, value, strong = false }) => (
     <div className={`value ${strong ? 'strong' : ''}`}>{value}</div>
   </div>
 );
+
+export default withRequiredPermissions(ResultEntryPage, ['resultados.ver', 'resultados.cargar']);

@@ -95,11 +95,7 @@ export default function TechnicalLimitCommentsPage() {
     <TechnicalConfigShell
       title="Comentarios técnicos"
       subtitle="Administre los textos que acompañan la interpretación de cada campo evaluable."
-      action={(
-        <button className={styles.iconButton} type="button" title="Recargar" onClick={reload} disabled={loading}>
-          <RefreshCw size={17} />
-        </button>
-      )}
+      action={null}
     >
       <div className={styles.commentLayout}>
         <section className={`${styles.card} ${styles.commentList}`}>

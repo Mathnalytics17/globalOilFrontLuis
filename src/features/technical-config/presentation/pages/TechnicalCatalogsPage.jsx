@@ -1,14 +1,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowDownToLine, ArrowLeft, ChevronRight, Edit3, FileUp, MoreHorizontal, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowLeft, ChevronRight, Pencil as Edit3, FileUp, MoreHorizontal, Plus, Search, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { technicalConfigService } from '../../infrastructure/technicalConfigService';
 import { apiErrorToText, slugify } from '../components/technicalConfigUtils';
 import ps from '../components/TechnicalPs5.module.css';
-import PaginationBar from '../../../../../src/components/pagination/PaginationBar';
-import SortableTableHeader from '@components/SortableTableHeader';
-import useTableSort from '@hooks/useTableSort';
+import PaginationBar from '@shared/ui/PaginationBar';
+import SortableTableHeader from '@shared/ui/SortableTableHeader';
+import useTableSort from '@shared/hooks/useTableSort';
 
 const EMPTY_CATALOG = {
   nombre: '',
@@ -49,7 +49,6 @@ export default function TechnicalCatalogsPage() {
   const fileInputRef = useRef(null);
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogPageSize, setCatalogPageSize] = useState(20);
-  const [catalogMeta, setCatalogMeta] = useState({ count: 0 });
   const [itemPage, setItemPage] = useState(1);
   const [itemPageSize, setItemPageSize] = useState(20);
   const [itemMeta, setItemMeta] = useState({ count: 0 });
@@ -71,7 +70,16 @@ export default function TechnicalCatalogsPage() {
     return map;
   }, [catalogs]);
 
-  const filteredCatalogs = catalogs;
+  const filteredCatalogs = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase('es');
+    if (!term) return catalogs;
+    return catalogs.filter((catalog) => [
+      catalog.nombre,
+      catalog.codigo,
+      catalog.descripcion,
+      appliesLabel(catalog.tipo_muestra),
+    ].filter(Boolean).join(' ').toLocaleLowerCase('es').includes(term));
+  }, [catalogs, search]);
   const selectedItems = items;
   const catalogSortColumns = useMemo(() => ({
     nombre: (row) => row.nombre,
@@ -84,6 +92,7 @@ export default function TechnicalCatalogsPage() {
     catalogSortColumns,
     { key: 'nombre', direction: 'asc' }
   );
+  const visibleCatalogs = sortedCatalogs.slice((catalogPage - 1) * catalogPageSize, catalogPage * catalogPageSize);
   const { sortedRows: sortedItems, sort: itemSort, requestSort: sortItems } = useTableSort(
     selectedItems,
     {
@@ -98,12 +107,12 @@ export default function TechnicalCatalogsPage() {
     try {
       const data = await technicalConfigService.pageCatalogs({
         incluir_eliminados: true,
-        page: catalogPage,
-        page_size: catalogPageSize,
-        search,
+        // La búsqueda se aplica de forma local: evita resultados falsos si
+        // una implementación del API ignora el parámetro `search`.
+        page: 1,
+        page_size: 1000,
       });
       setCatalogs(data.results || []);
-      setCatalogMeta({ count: data.count || 0 });
     } catch (error) {
       toast.error(apiErrorToText(error) || 'No se pudieron cargar los catálogos.');
     }
@@ -144,7 +153,8 @@ export default function TechnicalCatalogsPage() {
     await Promise.all([loadCatalogs(), loadVersions(), loadItems()]);
   };
 
-  useEffect(() => { loadCatalogs(); }, [catalogPage, catalogPageSize, search]);
+  useEffect(() => { loadCatalogs(); }, []);
+  useEffect(() => { setCatalogPage(1); }, [search]);
   useEffect(() => { loadVersions(); }, [selectedCatalogId]);
   useEffect(() => { loadItems(); }, [selectedCatalogId, selectedVersionId, itemPage, itemPageSize]);
   // La navegación interna nunca debe arrastrar un panel abierto a otra vista.
@@ -347,6 +357,7 @@ export default function TechnicalCatalogsPage() {
                 </button>
               </div>
             </header>
+
             <p className={ps.helpText}>Descargue la plantilla oficial, complete los ítems y vuelva a subirla. Si un código ya existe en esta versión, se actualiza.</p>
 
             <table className={ps.linearTable}>
@@ -453,7 +464,7 @@ export default function TechnicalCatalogsPage() {
               </tr>
             </thead>
             <tbody>
-              {sortedCatalogs.map((catalog, index) => (
+              {visibleCatalogs.map((catalog, index) => (
                 <tr key={catalog.id} className={index === 0 ? ps.selected : ''}>
                   <td>{catalog.nombre}</td>
                   <td>{appliesLabel(catalog.tipo_muestra)}</td>
@@ -472,7 +483,7 @@ export default function TechnicalCatalogsPage() {
             </tbody>
           </table>
 
-          <PaginationBar count={catalogMeta.count} page={catalogPage} pageSize={catalogPageSize} onPageChange={setCatalogPage} onPageSizeChange={(size) => { setCatalogPage(1); setCatalogPageSize(size); }} />
+          <PaginationBar count={filteredCatalogs.length} page={catalogPage} pageSize={catalogPageSize} onPageChange={setCatalogPage} onPageSizeChange={(size) => { setCatalogPage(1); setCatalogPageSize(size); }} />
 
           <footer className={ps.footerNote}>
             <span>© 2025 Global Oil. Todos los derechos reservados.</span>

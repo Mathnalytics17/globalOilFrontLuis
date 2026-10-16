@@ -1,9 +1,5 @@
-import RecursiveFolderDocumentStructure from '@components/componentsRecursive';
-import 'bootstrap/dist/css/bootstrap.min.css';
+import RecursiveFolderDocumentStructure from '@features/asset-tree/presentation/components/RecursiveFolderDocumentStructure';
 
-const ActivesTreeComponent = () => {
+export default function ActivesTreeComponent() {
   return <RecursiveFolderDocumentStructure />;
-};
-
-
-export default ActivesTreeComponent;
+}

@@ -6,8 +6,9 @@ import { toast } from 'react-toastify';
 import technicalConfigService from '../../infrastructure/technicalConfigService';
 import dynamicTechnicalConfigService from '../../infrastructure/dynamicTechnicalConfigService';
 import ps from '../components/TechnicalPs5.module.css';
-import SortableTableHeader from '@components/SortableTableHeader';
-import useTableSort from '@hooks/useTableSort';
+import SortableTableHeader from '@shared/ui/SortableTableHeader';
+import useTableSort from '@shared/hooks/useTableSort';
+import { getApiErrorMessage } from '@shared/utils/errors';
 
 const emptyUnit = { nombre: '', simbolo: '', magnitud: '', descripcion: '', activo: true };
 const emptyCondition = { nombre: '', magnitud: 'temperatura', valor: '', unidad: '', descripcion: '', activo: true };
@@ -19,12 +20,7 @@ const operators = [
   { nombre: 'Igual', simbolo: '=', categoria: 'Comparación', activo: true },
 ];
 
-const stringifyError = (err, fallback) => {
-  const data = err?.response?.data;
-  if (typeof data === 'string') return data;
-  if (data?.detail) return data.detail;
-  try { return JSON.stringify(data); } catch { return fallback; }
-};
+const stringifyError = (err, fallback) => getApiErrorMessage(err, fallback);
 
 export default function TechnicalUnitsConditionsPage() {
   const [tab, setTab] = useState('units');
