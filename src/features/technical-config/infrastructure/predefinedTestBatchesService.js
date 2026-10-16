@@ -1,5 +1,5 @@
 import apiClient from '@infrastructure/api/apiClient';
-import { normalizePaginated } from '@src/utils/pagination';
+import { normalizePaginated } from '@shared/utils/pagination';
 
 const BASE_URL = '/technical-catalogs/predefined-test-batches/';
 

@@ -51,7 +51,26 @@ export default function TechnicalComparisonScaleFormPage({ scaleId }) {
     catch (error) { toast.error(apiErrorToText(error)); }
   };
   return <TechnicalConfigShell title={editing ? `Editar escala: ${form.nombre}` : 'Nueva escala'} subtitle="El orden define la jerarquía: primero es mejor o menor; último es peor o mayor.">
-    <form className={styles.card} onSubmit={saveScale}><div className={styles.formGrid}><label>Nombre *<input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} required/></label><label>Código<input value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} placeholder="Se genera automáticamente"/></label><label className={styles.fullWidth}>Descripción<textarea value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })}/></label><label><input type="checkbox" checked={form.activo} onChange={(e) => setForm({ ...form, activo: e.target.checked })}/> Activa</label></div><button className={styles.primaryButton} disabled={saving}><Save size={17}/>{saving ? 'Guardando...' : 'Guardar escala'}</button></form>
-    {editing && <section className={styles.card}><h2>Valores ordenados</h2><p>Ejemplo: Excelente, Bueno, Regular, Malo. El sistema compara por esta posición.</p><div className={styles.inlineForm}><input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nuevo valor"/><button className={styles.primaryButton} type="button" onClick={addItem}>Agregar</button></div><div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Orden</th><th>Valor</th><th>Acciones</th></tr></thead><tbody>{items.map((item, index) => <tr key={item.id}><td>{index + 1}</td><td><input className={styles.input} defaultValue={item.etiqueta} onBlur={(event) => rename(item, event.target.value)}/></td><td><div className={styles.inlineActions}><button title="Subir" onClick={() => move(index, -1)}><ArrowUp size={16}/></button><button title="Bajar" onClick={() => move(index, 1)}><ArrowDown size={16}/></button><button title="Eliminar" onClick={() => remove(item)}><Trash2 size={16}/></button></div></td></tr>)}</tbody></table></div></section>}
+    <form className={`${styles.card} ${styles.formCard}`} onSubmit={saveScale}>
+      <div className={styles.formGrid}>
+        <label>Nombre *<input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} required /></label>
+        <label>Código<input value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} placeholder="Se genera automáticamente" /></label>
+        <label className={styles.fullWidth}>Descripción<textarea value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} /></label>
+        <label className={styles.toggleField}>
+          <input type="checkbox" checked={form.activo} onChange={(e) => setForm({ ...form, activo: e.target.checked })} />
+          <span><strong>Escala activa</strong><small>Disponible para la interpretación de resultados.</small></span>
+        </label>
+      </div>
+      <div className={styles.formActions}>
+        <button className={styles.primaryButton} disabled={saving}><Save size={16} />{saving ? 'Guardando...' : 'Guardar escala'}</button>
+      </div>
+    </form>
+    {editing && <section className={styles.card}>
+      <div className={styles.cardHeader}>
+        <div><h2>Valores ordenados</h2><p>Ejemplo: Excelente, Bueno, Regular, Malo. El sistema compara por esta posición.</p></div>
+      </div>
+      <div className={styles.inlineForm}><input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nuevo valor" /><button className={styles.primaryButton} type="button" onClick={addItem}>Agregar</button></div>
+      <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Orden</th><th>Valor</th><th>Acciones</th></tr></thead><tbody>{items.map((item, index) => <tr key={item.id}><td>{index + 1}</td><td><input className={styles.input} defaultValue={item.etiqueta} onBlur={(event) => rename(item, event.target.value)} /></td><td><div className={styles.inlineActions}><button className={styles.iconBtn} type="button" title="Subir" aria-label="Subir valor" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp size={16} /></button><button className={styles.iconBtn} type="button" title="Bajar" aria-label="Bajar valor" disabled={index === items.length - 1} onClick={() => move(index, 1)}><ArrowDown size={16} /></button><button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} type="button" title="Eliminar" aria-label="Eliminar valor" onClick={() => remove(item)}><Trash2 size={16} /></button></div></td></tr>)}</tbody></table></div>
+    </section>}
   </TechnicalConfigShell>;
 }

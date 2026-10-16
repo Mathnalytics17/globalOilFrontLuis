@@ -1,5 +1,5 @@
 import dynamicTechnicalConfigService from './dynamicTechnicalConfigService';
-import { normalizePaginated } from '../../../utils/pagination';
+import { normalizePaginated } from '@shared/utils/pagination';
 
 const unwrapList = (value) => {
   if (Array.isArray(value)) return value;

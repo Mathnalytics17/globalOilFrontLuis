@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
-import { Add, DeleteOutline, Edit, KeyboardArrowLeft, KeyboardArrowRight, Refresh, RestartAlt, Save, Search } from '@mui/icons-material';
+import { ChevronLeft as KeyboardArrowLeft, ChevronRight as KeyboardArrowRight, Pencil as Edit, Plus as Add, RefreshCcw as Refresh, RotateCcw as RestartAlt, Save, Search, Trash2 as DeleteOutline } from 'lucide-react';
 import RequirePermission from '@features/auth/presentation/RequirePermission';
 import { securityService } from '../../infrastructure/securityService';
 import s from '../components/Security.module.css';
@@ -250,7 +250,7 @@ function SecurityRolesPermissionsContent() {
                     <span>{visibleRoles.length}</span>
                     {selectedRole && !locked ? (
                       <button type="button" className={s.collapseButton} onClick={() => openRoleEditor(selectedRole)} title="Editar rol">
-                        <Edit fontSize="small" />
+                        <Edit />
                       </button>
                     ) : null}
                     <button
@@ -259,7 +259,7 @@ function SecurityRolesPermissionsContent() {
                       onClick={() => setRolesCollapsed(true)}
                       title="Ocultar roles"
                     >
-                      <KeyboardArrowLeft fontSize="small" />
+                      <KeyboardArrowLeft />
                     </button>
                   </div>
                 </div>
@@ -276,7 +276,7 @@ function SecurityRolesPermissionsContent() {
                         <strong>{role.nombre || role.name || role.code}</strong>
                         <span className={s.small}>{role.scope || role.tipo || 'COMPANY'} - {roleIsLocked(role) ? 'Protegido' : 'Editable'}</span>
                       </span>
-                      {!roleIsLocked(role) ? <span role="button" tabIndex={0} title={role.active === false ? 'Reactivar rol' : 'Desactivar rol'} onClick={(event) => { event.stopPropagation(); toggleRole(role); }} onKeyDown={() => {}}><DeleteOutline fontSize="small" /></span> : null}
+                      {!roleIsLocked(role) ? <span role="button" tabIndex={0} title={role.active === false ? 'Reactivar rol' : 'Desactivar rol'} onClick={(event) => { event.stopPropagation(); toggleRole(role); }} onKeyDown={() => {}}><DeleteOutline /></span> : null}
                     </button>
                   ))}
                 </div>
@@ -292,7 +292,7 @@ function SecurityRolesPermissionsContent() {
                       className={s.showRolesButton}
                       onClick={() => setRolesCollapsed(false)}
                     >
-                      <KeyboardArrowRight fontSize="small" />
+                      <KeyboardArrowRight />
                       Mostrar roles
                     </button>
                   ) : null}
@@ -308,7 +308,7 @@ function SecurityRolesPermissionsContent() {
 
               <div className={s.matrixToolbar}>
                 <label className={s.matrixSearch}>
-                  <Search fontSize="small" />
+                  <Search />
                   <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar permiso o código..." />
                 </label>
                 <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value)}>

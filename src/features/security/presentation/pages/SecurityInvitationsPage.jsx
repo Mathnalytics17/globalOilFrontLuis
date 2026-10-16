@@ -1,13 +1,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
-import { Cancel, Refresh, Send } from '@mui/icons-material';
+import { RefreshCcw as Refresh, Send, XCircle as Cancel } from 'lucide-react';
 import { securityService } from '../../infrastructure/securityService';
 import { companiesService } from '@features/companies/infrastructure/companiesService';
-import { useAuth } from '@features/auth/application/AuthContext';
+import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import { isGlobalUser } from '@features/auth/application/sessionAccess';
-import SortableTableHeader from '@components/SortableTableHeader';
-import useTableSort from '@hooks/useTableSort';
+import SortableTableHeader from '@shared/ui/SortableTableHeader';
+import useTableSort from '@shared/hooks/useTableSort';
 import s from '../components/Security.module.css';
 import {
   BackLink,
@@ -158,8 +158,8 @@ export default function SecurityInvitationsPage() {
                       <td>{getName(item.invited_by || item.enviado_por || item.created_by, '-')}</td>
                       <td>
                         <div className={s.actions}>
-                          {['PENDING', 'EXPIRED', 'REVOKED'].includes(effectiveStatus) ? <button className={s.iconButton} title="Reenviar" type="button" onClick={() => resend(item.id)}><Send fontSize="small" /></button> : null}
-                          {effectiveStatus === 'PENDING' ? <button className={s.iconButton} title="Revocar" type="button" onClick={() => revoke(item.id)}><Cancel fontSize="small" /></button> : null}
+                          {['PENDING', 'EXPIRED', 'REVOKED'].includes(effectiveStatus) ? <button className={s.iconButton} title="Reenviar" type="button" onClick={() => resend(item.id)}><Send /></button> : null}
+                          {effectiveStatus === 'PENDING' ? <button className={s.iconButton} title="Revocar" type="button" onClick={() => revoke(item.id)}><Cancel /></button> : null}
                           {effectiveStatus === 'ACCEPTED' ? <span className={s.muted}>Solo consulta</span> : null}
                         </div>
                       </td>

@@ -72,7 +72,8 @@ export const isAuthEndpoint = (url = '') => {
   return (
     url.includes('/users/login/') ||
     url.includes('/users/register/') ||
-    url.includes('/users/token/refresh/') ||
+    url.includes('/users/csrf/') ||
+    url.includes('/users/logout/') ||
     url.includes('/users/password-reset/') ||
     url.includes('/users/password-reset/confirm/') ||
     url.includes('/users/confirmUser/')

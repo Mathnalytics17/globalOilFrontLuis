@@ -1,35 +1,13 @@
-import React from 'react';
+import { ShieldOff } from 'lucide-react';
+import { useRouter } from 'next/router';
+import AuthShell from '@features/auth/presentation/AuthShell';
 
-const Unauthorized = () => {
-    return (
-        <div style={styles.container}>
-            <h1 style={styles.title}>Acceso no autorizado</h1>
-            <p style={styles.message}>
-                No tienes permiso para acceder a esta página. Por favor, verifica tus credenciales o contacta al administrador.
-            </p>
-        </div>
-    );
-};
-
-const styles = {
-    container: {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
-        backgroundColor: '#f8f9fa',
-        color: '#343a40',
-        textAlign: 'center',
-        padding: '20px',
-    },
-    title: {
-        fontSize: '2rem',
-        marginBottom: '1rem',
-    },
-    message: {
-        fontSize: '1rem',
-    },
-};
-
-export default Unauthorized;
+export default function Unauthorized() {
+  const router = useRouter();
+  return (
+    <AuthShell title="Acceso no autorizado" subtitle="Tu cuenta no tiene permisos para abrir esta vista.">
+      <div className="flex gap-3 rounded-lg border border-white/[0.07] bg-[#15171a] p-4 text-sm text-[#a5abb4]"><ShieldOff className="h-5 w-5 shrink-0 text-[#e45d65]" /><p className="m-0 leading-6">Verifica tus permisos o contacta al administrador de tu empresa si necesitas acceso.</p></div>
+      <button type="button" className="go-ghost mt-5" onClick={() => router.back()}>Volver</button>
+    </AuthShell>
+  );
+}

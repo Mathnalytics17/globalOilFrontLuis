@@ -1,8 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import {
-  ChevronDown,
-  ChevronRight,
   CheckCircle2,
   Download,
   Eye,
@@ -10,7 +8,6 @@ import {
   FileText,
   Filter,
   Mail,
-  Package,
   RefreshCw,
   Search,
   Settings,
@@ -19,19 +16,14 @@ import {
 import { toast } from 'react-toastify';
 
 import { reportsService } from '@features/reports/infrastructure/reportsService';
-import SortableTableHeader from '@components/SortableTableHeader';
-import useTableSort from '@hooks/useTableSort';
+import { companiesService } from '@features/companies/infrastructure/companiesService';
+import { machinesService } from '@features/machines/infrastructure/machinesService';
+import { assetTreeService } from '@features/asset-tree/infrastructure/assetTreeService';
+import DataTable from '@shared/ui/DataTable';
+import PageHeader from '@shared/ui/PageHeader';
+import MetricStrip from '@shared/ui/MetricStrip';
+import OverflowMenu from '@shared/ui/OverflowMenu';
 
-const REPORT_SORT_COLUMNS = {
-  empresa: (row) => row.empresa_nombre,
-  lote: (row) => row.lote_id,
-  muestra: (row) => row.muestra_id,
-  reporte: (row) => row.consecutivo,
-  generado: (row) => row.fecha_generacion || row.fecha_emision,
-  enviado: (row) => row.fecha_envio,
-  cliente: (row) => row.visible_cliente,
-  estado: (row) => row.estatus,
-};
 
 const fmt = (value) => {
   if (!value) return '-';
@@ -59,6 +51,9 @@ const statusClass = (value) => {
 export default function ReportsPage() {
   const router = useRouter();
   const [data, setData] = useState({ summary: {}, groups: [], results: [] });
+  const [companies, setCompanies] = useState([]);
+  const [machines, setMachines] = useState([]);
+  const [samplingPoints, setSamplingPoints] = useState([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [actionBusy, setActionBusy] = useState(null);
@@ -66,6 +61,9 @@ export default function ReportsPage() {
   const [filters, setFilters] = useState({
     lote: '',
     search: '',
+    client_id: '',
+    machine_id: '',
+    sampling_point_id: '',
     estado: '',
     visible_cliente: '',
     fecha_generacion_desde: '',
@@ -100,6 +98,18 @@ export default function ReportsPage() {
   }, []);
 
   useEffect(() => {
+    Promise.all([
+      companiesService.list({ page_size: 1000 }),
+      machinesService.list({ activo: true }),
+      assetTreeService.listSamplingPoints({ activo: true, page_size: 1000 }),
+    ]).then(([companyData, machineData, pointData]) => {
+      setCompanies(Array.isArray(companyData) ? companyData : companyData?.results || []);
+      setMachines(Array.isArray(machineData) ? machineData : machineData?.results || []);
+      setSamplingPoints(Array.isArray(pointData) ? pointData : pointData?.results || []);
+    }).catch(() => toast.error('No se pudieron cargar los filtros de activos.'));
+  }, []);
+
+  useEffect(() => {
     if (router.query?.lote) {
       const lotId = String(router.query.lote);
       setFilters((prev) => ({ ...prev, lote: lotId }));
@@ -116,16 +126,16 @@ export default function ReportsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [filters.estado, filters.visible_cliente, filters.search, filters.fecha_generacion_desde, filters.fecha_generacion_hasta]);
+  }, [filters.estado, filters.visible_cliente, filters.search, filters.client_id, filters.machine_id, filters.sampling_point_id, filters.fecha_generacion_desde, filters.fecha_generacion_hasta]);
 
   const updateFilter = (field, value) => setFilters((prev) => ({ ...prev, [field]: value }));
   const pageSize = 10;
   const reportRows = data.results || [];
-  const { sortedRows, sort, requestSort } = useTableSort(
-    reportRows,
-    REPORT_SORT_COLUMNS,
-    { key: 'generado', direction: 'desc' }
-  );
+  const sortedRows = useMemo(() => [...reportRows].sort((a, b) => {
+    const aDate = new Date(a.fecha_generacion || a.fecha_emision || 0).getTime();
+    const bDate = new Date(b.fecha_generacion || b.fecha_emision || 0).getTime();
+    return bDate - aDate;
+  }), [reportRows]);
   const lotGroups = useMemo(() => {
     const groups = new Map();
     sortedRows.forEach((report) => {
@@ -286,8 +296,13 @@ export default function ReportsPage() {
     }
   };
 
+  const reportPageSize = 12;
+  const reportTotalPages = Math.max(1, Math.ceil(sortedRows.length / reportPageSize));
+  const reportCurrentPage = Math.min(page, reportTotalPages);
+  const paginatedReports = sortedRows.slice((reportCurrentPage - 1) * reportPageSize, reportCurrentPage * reportPageSize);
+
   return (
-    <div className="reportsPage">
+    <div className="go-page reports-v2">
       {actionBusy ? (
         <div className="requestOverlay" role="status" aria-live="assertive" aria-busy="true">
           <div className="requestCard">
@@ -297,168 +312,171 @@ export default function ReportsPage() {
           </div>
         </div>
       ) : null}
-      <header className="reportsHeader">
-        <div className="titleBlock">
-          <div className="iconBox"><FileText size={22} /></div>
-          <div>
-            <h1>Reportes</h1>
-            <p>Biblioteca de informes generados. Ver, descargar, enviar y gestionar versiones.</p>
-          </div>
-        </div>
-        <button className="btn secondary" onClick={loadReports} disabled={loading}><RefreshCw size={16} /> Recargar</button>
-      </header>
 
-      <section className="summary">
-        <Metric label="Total reportes" value={data.summary?.total || 0} />
-        <Metric label="Enviados" value={data.summary?.enviados || 0} />
-        <Metric label="Pendientes envio" value={data.summary?.pendientes_envio || 0} />
-        <Metric label="Visibles cliente" value={data.summary?.visibles_cliente || 0} />
-      </section>
+      <div className="go-shell">
+        <PageHeader
+          title="Reportes"
+          subtitle="Biblioteca de informes generados. Ver, descargar, enviar y gestionar versiones."
+          actions={null}
+        />
 
-      <section className="filters">
-        <div className="searchField">
-          <Search size={16} />
-          <input value={filters.search} onChange={(e) => updateFilter('search', e.target.value)} placeholder="Buscar empresa, lote, muestra o consecutivo" />
-        </div>
-        <select value={filters.estado} onChange={(e) => updateFilter('estado', e.target.value)}>
-          <option value="">Estado</option>
-          <option value="generado">Generado</option>
-          <option value="enviado">Enviado</option>
-          <option value="anulado">Anulado</option>
-        </select>
-        <input value={filters.lote} onChange={(e) => updateFilter('lote', e.target.value)} placeholder="Lote (ej. L20260009)" />
-        <select value={filters.visible_cliente} onChange={(e) => updateFilter('visible_cliente', e.target.value)}>
-          <option value="">Visibilidad</option>
-          <option value="true">Visible cliente</option>
-          <option value="false">No visible</option>
-        </select>
-        <input type="date" value={filters.fecha_generacion_desde} onChange={(e) => updateFilter('fecha_generacion_desde', e.target.value)} />
-        <input type="date" value={filters.fecha_generacion_hasta} onChange={(e) => updateFilter('fecha_generacion_hasta', e.target.value)} />
-        <button className="btn red" onClick={loadReports}><Filter size={16} /> Filtrar</button>
-      </section>
+        <MetricStrip
+          items={[
+            { icon: FileText, label: 'Total reportes', value: data.summary?.total || 0 },
+            { icon: Mail, label: 'Enviados', value: data.summary?.enviados || 0 },
+            { icon: RefreshCw, label: 'Pendientes envío', value: data.summary?.pendientes_envio || 0 },
+            { icon: Eye, label: 'Visibles cliente', value: data.summary?.visibles_cliente || 0 },
+          ]}
+        />
 
-      {filters.lote ? (
-        <section className="batchActions">
-          <div><Package size={19} /><span><strong>Opciones del lote {filters.lote}</strong><small>Usan la última versión aprobada de cada muestra.</small></span></div>
-          <button className="btn secondary" onClick={() => downloadBatch('pdf')}><Download size={16} /> PDF consolidado</button>
-          <button className="btn secondary" onClick={() => downloadBatch('zip')}><Download size={16} /> ZIP individuales</button>
-          <button className="btn secondary" onClick={() => sendBatch('pdf')}><Mail size={16} /> Enviar PDF</button>
-          <button className="btn secondary" onClick={() => sendBatch('zip')}><Mail size={16} /> Enviar ZIP</button>
+        <section className="go-filterbar reports-filterbar">
+          <label className="go-search">
+            <Search size={16} />
+            <input value={filters.search} onChange={(e) => updateFilter('search', e.target.value)} placeholder="Empresa, lote, muestra, equipo o consecutivo..." />
+          </label>
+          <label className="go-field-inline">
+            <span>Cliente</span>
+            <select value={filters.client_id} onChange={(e) => updateFilter('client_id', e.target.value)}>
+              <option value="">Todos</option>
+              {companies.map((company) => <option key={company.id} value={company.id}>{company.nombre}</option>)}
+            </select>
+          </label>
+          <label className="go-field-inline">
+            <span>Equipo</span>
+            <select value={filters.machine_id} onChange={(e) => { updateFilter('machine_id', e.target.value); updateFilter('sampling_point_id', ''); }}>
+              <option value="">Todos</option>
+              {machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.nombre || machine.codigo_equipo || `Equipo ${machine.id}`}</option>)}
+            </select>
+          </label>
+          <label className="go-field-inline">
+            <span>Punto de medida</span>
+            <select value={filters.sampling_point_id} onChange={(e) => updateFilter('sampling_point_id', e.target.value)}>
+              <option value="">Todos</option>
+              {samplingPoints.filter((point) => !filters.machine_id || Number(point.maquina || point.maquina_id) === Number(filters.machine_id)).map((point) => <option key={point.id} value={point.id}>{point.nombre}</option>)}
+            </select>
+          </label>
+          <label className="go-field-inline">
+            <span>Estado</span>
+            <select value={filters.estado} onChange={(e) => updateFilter('estado', e.target.value)}>
+              <option value="">Todos</option>
+              <option value="generado">Generado</option>
+              <option value="aprobado">Aprobado</option>
+              <option value="enviado">Enviado</option>
+              <option value="anulado">Anulado</option>
+            </select>
+          </label>
+          <label className="go-field-inline">
+            <span>Lote</span>
+            <input value={filters.lote} onChange={(e) => updateFilter('lote', e.target.value)} placeholder="Ej. L20260009" />
+          </label>
+          <label className="go-field-inline">
+            <span>Visibilidad</span>
+            <select value={filters.visible_cliente} onChange={(e) => updateFilter('visible_cliente', e.target.value)}>
+              <option value="">Todos</option>
+              <option value="true">Visible cliente</option>
+              <option value="false">No visible</option>
+            </select>
+          </label>
+          <label className="go-field-inline report-date">
+            <span>Desde</span>
+            <input type="date" value={filters.fecha_generacion_desde} onChange={(e) => updateFilter('fecha_generacion_desde', e.target.value)} />
+          </label>
+          <label className="go-field-inline report-date">
+            <span>Hasta</span>
+            <input type="date" value={filters.fecha_generacion_hasta} onChange={(e) => updateFilter('fecha_generacion_hasta', e.target.value)} />
+          </label>
+          <button type="button" className="go-primary" onClick={loadReports}><Filter size={16} /> Filtrar</button>
         </section>
-      ) : null}
 
-      <section className="lotGroups">
-        {paginatedLots.length ? paginatedLots.map((group) => {
-          const expanded = expandedLots.has(group.id);
-          return (
-            <article className="lotCard" key={group.id}>
-              <button type="button" className="lotHeader" onClick={() => toggleLot(group.id)} aria-expanded={expanded}>
-                <span className="lotIdentity">
-                  {expanded ? <ChevronDown size={19} /> : <ChevronRight size={19} />}
-                  <Package size={19} />
-                  <strong>{group.id}</strong>
-                </span>
-                <span><small>Cliente</small><b>{group.empresa}</b></span>
-                <span><small>Muestras</small><b>{group.samples.size}</b></span>
-                <span><small>Reportes</small><b>{group.reports.length}</b></span>
-                <span><small>Enviados</small><b>{group.sent}</b></span>
-                <span><small>Último</small><b>{fmt(group.latest)}</b></span>
-              </button>
-
-              {expanded ? (
-                <div className="lotContent">
-                  <div className="lotActions">
-                    <button className="btn secondary" onClick={() => downloadBatch('pdf', group.id)}><Download size={15} /> PDF consolidado</button>
-                    <button className="btn secondary" onClick={() => downloadBatch('zip', group.id)}><Download size={15} /> ZIP</button>
-                    <button className="btn secondary" onClick={() => sendBatch('pdf', group.id)}><Mail size={15} /> Enviar PDF</button>
-                    <button className="btn secondary" onClick={() => sendBatch('zip', group.id)}><Mail size={15} /> Enviar ZIP</button>
-                  </div>
-                  <div className="tablePanel">
-                    <table>
-                      <thead>
-                        <tr>
-                          <SortableTableHeader columnKey="muestra" label="Muestra" sort={sort} onSort={requestSort} />
-                          <SortableTableHeader columnKey="reporte" label="Reporte" sort={sort} onSort={requestSort} />
-                          <SortableTableHeader columnKey="generado" label="Generado" sort={sort} onSort={requestSort} />
-                          <SortableTableHeader columnKey="enviado" label="Enviado" sort={sort} onSort={requestSort} />
-                          <SortableTableHeader columnKey="cliente" label="Cliente" sort={sort} onSort={requestSort} />
-                          <SortableTableHeader columnKey="estado" label="Estado" sort={sort} onSort={requestSort} />
-                          <th>Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {group.reports.map((report) => (
-                          <tr key={report.id}>
-                            <td data-label="Muestra"><strong>{report.muestra_id || '-'}</strong></td>
-                            <td data-label="Reporte"><strong>{report.consecutivo}</strong><small>v{report.version}</small></td>
-                            <td data-label="Generado">{fmt(report.fecha_generacion || report.fecha_emision)}</td>
-                            <td data-label="Enviado">{fmt(report.fecha_envio)}</td>
-                            <td data-label="Cliente">{report.visible_cliente ? 'Visible' : 'Oculto'}</td>
-                            <td data-label="Estado"><span className={`badge ${statusClass(report.estatus)}`}>{statusLabel(report.estatus)}</span></td>
-                            <td data-label="Acciones">
-                              <div className="actions">
-                                <button onClick={() => previewReport(report.id)} title="Vista previa"><Eye size={15} /></button>
-                                <button onClick={() => downloadReport(report.id, `${report.consecutivo}_v${report.version}`)} title="Descargar"><Download size={15} /></button>
-                                {!report.fecha_aprobacion && !['aprobado', 'enviado', 'anulado'].includes(report.estatus) ? (
-                                  <button className="approveButton" onClick={() => approveReport(report)} title="Aprobar reporte">
-                                    <CheckCircle2 size={15} /><span>Aprobar</span>
-                                  </button>
-                                ) : null}
-                                {report.fecha_aprobacion || ['aprobado', 'enviado'].includes(report.estatus) ? (
-                                  <>
-                                    <button onClick={() => sendReport(report)} title="Enviar"><Mail size={15} /></button>
-                                    <button onClick={() => togglePublish(report)} title={report.visible_cliente ? 'Ocultar al cliente' : 'Mostrar al cliente'}>
-                                      {report.visible_cliente ? <Eye size={15} /> : <EyeOff size={15} />}
-                                    </button>
-                                  </>
-                                ) : null}
-                                <button onClick={() => router.push(`/muestras/interpretacion?lote=${report.lote_id}&muestra=${report.muestra_id}&fromReport=${report.id}`)} title="Modificar desde interpretación"><Settings size={15} /></button>
-                                {!report.fecha_envio && !report.visible_cliente && report.estatus !== 'anulado' ? <button onClick={() => annulReport(report)} title="Anular reporte con motivo"><Trash2 size={15} /></button> : null}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : null}
-            </article>
-          );
-        }) : <div className="empty lotsEmpty">No hay reportes con los filtros actuales.</div>}
-        {lotGroups.length > pageSize ? (
-          <div className="pager">
-            <button type="button" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Anterior</button>
-            <span>Página {currentPage} / {totalPages}</span>
-            <button type="button" disabled={currentPage >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>Siguiente</button>
-          </div>
+        {filters.lote ? (
+          <section className="report-lot-actions">
+            <div className="min-w-0">
+              <strong>Opciones del lote {filters.lote}</strong>
+              <span>Usan la última versión aprobada de cada muestra.</span>
+            </div>
+            <OverflowMenu
+              label="Opciones del lote"
+              items={[
+                { label: 'Descargar PDF consolidado', icon: Download, onClick: () => downloadBatch('pdf') },
+                { label: 'Descargar ZIP individual', icon: Download, onClick: () => downloadBatch('zip') },
+                { separator: true },
+                { label: 'Enviar PDF', icon: Mail, onClick: () => sendBatch('pdf') },
+                { label: 'Enviar ZIP', icon: Mail, onClick: () => sendBatch('zip') },
+              ]}
+            />
+          </section>
         ) : null}
-      </section>
+
+        <section className="go-card reports-table-card">
+          <DataTable
+            data={paginatedReports}
+            pagination
+            minWidth={920}
+            defaultSort={{ field: 'fecha_generacion', order: 'desc' }}
+            emptyMessage="No hay reportes con los filtros actuales."
+            columns={[
+              { id: 'consecutivo', label: 'Consecutivo', mobileTitle: true, minWidth: 145, render: (report) => <div><strong>{report.consecutivo}</strong><small>v{report.version}</small></div> },
+              { id: 'empresa_nombre', label: 'Empresa', minWidth: 150, render: (report) => report.empresa_nombre || '-' },
+              { id: 'lote_id', label: 'Lote', minWidth: 120, render: (report) => report.lote_id || '-' },
+              { id: 'muestra_id', label: 'Muestra', minWidth: 105, render: (report) => report.muestra_id || '-' },
+              { id: 'estatus', label: 'Estado', width: 110, render: (report) => <span className={`go-badge ${statusClass(report.estatus) === 'ok' ? 'go-badge-success' : statusClass(report.estatus) === 'warn' ? 'go-badge-warning' : statusClass(report.estatus) === 'bad' ? 'go-badge-danger' : 'go-badge-neutral'}`}>{statusLabel(report.estatus)}</span> },
+              { id: 'fecha_generacion', label: 'Fecha', minWidth: 155, render: (report) => fmt(report.fecha_generacion || report.fecha_emision) },
+              { id: 'visible_cliente', label: 'Visibilidad', width: 115, render: (report) => report.visible_cliente ? <span className="go-badge go-badge-success">Visible</span> : <span className="go-badge go-badge-neutral">Oculto</span> },
+              {
+                id: 'acciones',
+                label: 'Acciones',
+                sortable: false,
+                searchable: false,
+                mobileHidden: true,
+                width: 72,
+                render: (report) => {
+                  const menu = [
+                    { label: 'Vista previa', icon: Eye, onClick: () => previewReport(report.id) },
+                    { label: 'Descargar PDF', icon: Download, onClick: () => downloadReport(report.id, `${report.consecutivo}_v${report.version}`) },
+                    !report.fecha_aprobacion && !['aprobado', 'enviado', 'anulado'].includes(report.estatus) ? { label: 'Aprobar reporte', icon: CheckCircle2, onClick: () => approveReport(report) } : null,
+                    report.fecha_aprobacion || ['aprobado', 'enviado'].includes(report.estatus) ? { label: 'Enviar por correo', icon: Mail, onClick: () => sendReport(report) } : null,
+                    report.fecha_aprobacion || ['aprobado', 'enviado'].includes(report.estatus) ? { label: report.visible_cliente ? 'Ocultar al cliente' : 'Mostrar al cliente', icon: report.visible_cliente ? EyeOff : Eye, onClick: () => togglePublish(report) } : null,
+                    { separator: true },
+                    { label: 'Modificar desde interpretación', icon: Settings, onClick: () => router.push(`/muestras/interpretacion?lote=${report.lote_id}&muestra=${report.muestra_id}&fromReport=${report.id}`) },
+                    !report.fecha_envio && !report.visible_cliente && report.estatus !== 'anulado' ? { label: 'Anular reporte', icon: Trash2, danger: true, onClick: () => annulReport(report) } : null,
+                  ];
+                  return <div className="flex justify-end"><OverflowMenu items={menu} /></div>;
+                },
+              },
+            ]}
+          />
+
+          {sortedRows.length > reportPageSize ? (
+            <div className="reports-pagination">
+              <span>Mostrando {(reportCurrentPage - 1) * reportPageSize + 1}-{Math.min(reportCurrentPage * reportPageSize, sortedRows.length)} de {sortedRows.length}</span>
+              <div>
+                <button type="button" className="go-mini" disabled={reportCurrentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Anterior</button>
+                <span className="go-pill">{reportCurrentPage} / {reportTotalPages}</span>
+                <button type="button" className="go-mini" disabled={reportCurrentPage >= reportTotalPages} onClick={() => setPage((value) => Math.min(reportTotalPages, value + 1))}>Siguiente</button>
+              </div>
+            </div>
+          ) : null}
+        </section>
+      </div>
 
       <style jsx global>{`
-        .reportsPage{width:100%;max-width:100%;overflow-x:hidden;background:transparent;color:#fff;padding:0 0 18px}
-        .reportsHeader{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:10px;min-width:0}
-        .titleBlock{display:flex;align-items:center;gap:12px;min-width:0}.titleBlock h1{margin:0;font-size:26px}.titleBlock p{margin:3px 0 0;color:#c8c8c8;overflow-wrap:anywhere}
-        .iconBox{width:44px;height:44px;flex:0 0 44px;border:1px solid #444;background:#111;border-radius:9px;display:grid;place-items:center}
-        .btn{min-height:38px;border-radius:8px;border:1px solid #444;background:#111;color:#fff;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 13px;font-weight:800;cursor:pointer;max-width:100%;white-space:normal;text-align:center}.btn.red{background:#ef232a;border-color:#ef232a}
-        .summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:10px}.metric{min-width:0;border:1px solid #383838;background:rgba(23,23,23,.72);border-radius:10px;padding:12px}.metric span{color:#aeb6c1;text-transform:uppercase;font-size:11px;letter-spacing:.08em}.metric strong{display:block;font-size:28px;margin-top:4px;overflow-wrap:anywhere}
-        .filters{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(4,minmax(120px,150px)) minmax(96px,110px);gap:8px;border:1px solid #383838;background:rgba(21,21,21,.72);border-radius:10px;padding:10px;margin-bottom:10px;max-width:100%;overflow-x:hidden}.filters input,.filters select{width:100%;min-width:0;height:38px;border:1px solid #404040;background:#080808;color:#fff;border-radius:8px;padding:0 10px}.searchField{min-width:0;display:grid;grid-template-columns:18px minmax(0,1fr);gap:8px;align-items:center;border:1px solid #404040;background:#080808;border-radius:8px;padding:0 10px}.searchField input{border:0;padding:0}
-        .lotGroups{display:grid;gap:9px}.lotCard{border:1px solid #383838;background:rgba(17,17,17,.78);border-radius:10px;overflow:hidden}.lotHeader{width:100%;min-height:64px;display:grid;grid-template-columns:minmax(170px,1.2fr) minmax(140px,1fr) repeat(3,minmax(80px,.55fr)) minmax(150px,1fr);gap:12px;align-items:center;border:0;background:#1d1e20;color:#fff;padding:11px 14px;text-align:left;cursor:pointer}.lotHeader:hover{background:#25272a}.lotHeader>span{min-width:0}.lotHeader small,.lotHeader b{display:block}.lotHeader small{color:#929baa;font-size:10px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px}.lotHeader b{overflow-wrap:anywhere}.lotIdentity{display:flex;align-items:center;gap:8px}.lotIdentity strong{font-size:18px}.lotContent{border-top:1px solid #383838}.lotActions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;padding:9px 10px;background:#151515}.lotsEmpty{border:1px solid #383838;border-radius:10px;background:#151515}
-        .tablePanel{max-width:100%;border:1px solid #383838;background:rgba(23,23,23,.72);border-radius:10px;overflow-x:hidden}.tablePanel table{width:100%;border-collapse:collapse;table-layout:fixed;min-width:0}.tablePanel th{background:#242424;color:#bdbdbd;text-transform:uppercase;font-size:12px;letter-spacing:.06em;text-align:left;padding:10px}.tablePanel td{padding:10px;border-top:1px solid #303030;vertical-align:middle;overflow-wrap:anywhere;word-break:break-word}.tablePanel small{display:block;color:#aaa;margin-top:2px}.badge{display:inline-flex;border-radius:999px;border:1px solid #444;background:#222;padding:4px 9px;font-size:12px;font-weight:900;white-space:normal}.badge.ok{color:#86efac;border-color:rgba(34,197,94,.45);background:rgba(22,101,52,.35)}.badge.warn{color:#fde68a;border-color:rgba(234,179,8,.45);background:rgba(113,63,18,.35)}.badge.bad{color:#fecaca;border-color:rgba(239,68,68,.45);background:rgba(127,29,29,.35)}
-        .actions{display:flex;gap:6px;flex-wrap:wrap}.actions button{width:31px;height:31px;flex:0 0 31px;border:1px solid #444;background:#111;color:#fff;border-radius:7px;display:grid;place-items:center;cursor:pointer}.actions .approveButton{width:auto;min-width:92px;grid-template-columns:auto auto;gap:6px;padding:0 10px;border-color:#15803d;background:rgba(22,101,52,.32);color:#86efac;font-weight:900}.empty{text-align:center;color:#aaa;padding:24px!important}.pager{display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:12px;border-top:1px solid #303030}.pager button{border:1px solid #444;background:#111;color:#fff;border-radius:8px;padding:8px 12px;font-weight:800}.pager button:disabled{opacity:.45;cursor:not-allowed}.pager span{color:#d1d5db;font-size:13px}
-        .requestOverlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.78);backdrop-filter:blur(3px);display:grid;place-items:center;padding:20px;cursor:wait}.requestCard{width:min(430px,92vw);min-height:210px;border:1px solid #494949;background:linear-gradient(180deg,#202020,#121212);border-radius:14px;box-shadow:0 30px 90px rgba(0,0,0,.7);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;text-align:center;padding:26px}.requestCard strong{font-size:18px;line-height:1.35}.requestCard span{color:#b8b8b8;font-size:13px}.requestSpinner{width:54px;height:54px;border:6px solid #454545;border-top-color:#ef232a;border-right-color:#ef232a;border-radius:50%;animation:requestSpin .8s linear infinite}@keyframes requestSpin{to{transform:rotate(360deg)}}
-        @media(max-width:1200px){.summary{grid-template-columns:repeat(2,minmax(0,1fr))}.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.lotHeader{grid-template-columns:repeat(3,minmax(0,1fr))}.reportsHeader{flex-direction:column;align-items:flex-start}.reportsHeader .btn{width:100%}}
-        @media(max-width:760px){.titleBlock{align-items:flex-start}.summary,.filters{grid-template-columns:1fr}.lotHeader{grid-template-columns:1fr 1fr}.lotIdentity{grid-column:1/3}.lotActions .btn{width:100%}.tablePanel{border:0;background:transparent}.tablePanel table,.tablePanel thead,.tablePanel tbody,.tablePanel tr,.tablePanel td{display:block;width:100%}.tablePanel thead{display:none}.tablePanel tr{border:1px solid #383838;background:rgba(23,23,23,.72);border-radius:10px;margin-bottom:10px;padding:8px}.tablePanel td{display:grid;grid-template-columns:minmax(96px,38%) minmax(0,1fr);gap:10px;border-top:0;padding:8px 6px}.tablePanel td::before{content:attr(data-label);color:#aeb6c1;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em}.tablePanel td.empty{display:block}.actions{justify-content:flex-start}.actions button{width:36px;height:36px;flex-basis:36px}}
-        @media(max-width:460px){.tablePanel td{grid-template-columns:1fr;gap:4px}.btn{width:100%}.metric strong{font-size:24px}}
-        .batchActions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border:1px solid #3d3d3d;background:rgba(17,17,17,.8);border-radius:10px;padding:10px;margin-bottom:10px}.batchActions>div{display:flex;align-items:center;gap:9px;margin-right:auto}.batchActions span strong,.batchActions span small{display:block}.batchActions span small{color:#aaa;margin-top:2px}
+        .reports-v2 .reports-filterbar{flex-wrap:wrap}
+        .reports-v2 .report-date{flex:0 1 145px}
+        .reports-table-card{padding:0;overflow:hidden}
+        .reports-flat-table{min-width:980px}
+        .reports-flat-table th:last-child,.reports-flat-table td:last-child{text-align:right;width:70px}
+        .reports-flat-table small{display:block;color:#747a83;font-size:10px;margin-top:3px}
+        .report-lot-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;padding:10px 12px;border:1px solid var(--go-border-soft);border-radius:var(--go-radius);background:#17191c}
+        .report-lot-actions strong,.report-lot-actions span{display:block}.report-lot-actions strong{font-size:12px;color:#d9dce0}.report-lot-actions span{margin-top:2px;font-size:11px;color:#777d86}
+        .reports-empty{min-height:270px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#777d86}
+        .reports-empty-icon{width:54px;height:54px;display:grid;place-items:center;margin-bottom:13px;border-radius:50%;background:#202329;color:#8f959e}
+        .reports-empty strong{color:#dadddf;font-size:15px}.reports-empty p{margin:7px 0 0;font-size:12px}
+        .reports-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;color:#777d86;font-size:11px}
+        .reports-pagination>div{display:flex;align-items:center;gap:7px}
+        .requestOverlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.72);backdrop-filter:blur(3px);display:grid;place-items:center;padding:20px;cursor:wait}
+        .requestCard{width:min(420px,92vw);min-height:190px;border:1px solid var(--go-border-soft);background:#191b1e;border-radius:var(--go-radius-lg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px}
+        .requestCard strong{font-size:16px}.requestCard span{color:#858b94;font-size:12px}.requestSpinner{width:46px;height:46px;border:4px solid #34383f;border-top-color:var(--go-red);border-radius:50%;animation:requestSpin .8s linear infinite}@keyframes requestSpin{to{transform:rotate(360deg)}}
       `}</style>
     </div>
   );
 }
-
-const Metric = ({ label, value }) => (
-  <div className="metric">
-    <span>{label}</span>
-    <strong>{value}</strong>
-  </div>
-);

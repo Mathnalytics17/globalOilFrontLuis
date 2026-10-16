@@ -1,51 +1,27 @@
-import React, { useState, useMemo } from 'react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TableSortLabel,
-  TablePagination,
-  Paper,
-  Checkbox,
-  IconButton,
-  Tooltip,
-  Collapse,
-  Box,
-  Typography,
-  TextField,
-  InputAdornment
-} from '@mui/material';
-import {
-  FilterList as FilterListIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Visibility as VisibilityIcon,
-  Search as SearchIcon
-} from '@mui/icons-material';
+import React, { useMemo, useState } from 'react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search } from 'lucide-react';
 
-const DataTable = ({
-  columns,
-  data,
+function valueFor(row, column) {
+  const value = row?.[column.id];
+  return value === undefined || value === null ? '' : value;
+}
+
+export default function DataTable({
+  columns = [],
+  data = [],
   nestedDataKey = null,
-  nestedColumns = null,
+  nestedColumns = [],
   actions = [],
   selectable = false,
   pagination = true,
   searchable = false,
   defaultSort = null,
-  sx = {}
-}) => {
+  emptyMessage = 'No hay registros para mostrar.',
+}) {
   const inferredSort = useMemo(() => {
     if (defaultSort?.field) return defaultSort;
     const dateColumn = columns.find((column) => /fecha|date|created|updated/i.test(column.id));
-    return dateColumn
-      ? { field: dateColumn.id, order: 'desc' }
-      : { field: columns[0]?.id || 'id', order: 'asc' };
+    return dateColumn ? { field: dateColumn.id, order: 'desc' } : { field: columns[0]?.id || 'id', order: 'asc' };
   }, [columns, defaultSort]);
   const [order, setOrder] = useState(inferredSort.order);
   const [orderBy, setOrderBy] = useState(inferredSort.field);
@@ -54,346 +30,58 @@ const DataTable = ({
   const [selected, setSelected] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedRows, setExpandedRows] = useState([]);
-  const [filters, setFilters] = useState({});
 
-  // Función para manejar el ordenamiento
-  const handleRequestSort = (property) => {
-    const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
-    setOrderBy(property);
-  };
-
-  // Función para manejar la selección de filas
-  const handleSelectAllClick = (event) => {
-    if (event.target.checked) {
-      const newSelected = data.map((n) => n.id);
-      setSelected(newSelected);
-      return;
-    }
-    setSelected([]);
-  };
-
-  const handleClick = (event, id) => {
-    const selectedIndex = selected.indexOf(id);
-    let newSelected = [];
-
-    if (selectedIndex === -1) {
-      newSelected = newSelected.concat(selected, id);
-    } else if (selectedIndex === 0) {
-      newSelected = newSelected.concat(selected.slice(1));
-    } else if (selectedIndex === selected.length - 1) {
-      newSelected = newSelected.concat(selected.slice(0, -1));
-    } else if (selectedIndex > 0) {
-      newSelected = newSelected.concat(
-        selected.slice(0, selectedIndex),
-        selected.slice(selectedIndex + 1)
-      );
-    }
-
-    setSelected(newSelected);
-  };
-
-  // Función para manejar la paginación
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
-  // Función para manejar filas expandibles
-  const handleExpandRow = (id) => {
-    const currentExpanded = expandedRows.includes(id);
-    const newExpanded = currentExpanded
-      ? expandedRows.filter((rowId) => rowId !== id)
-      : [...expandedRows, id];
-    setExpandedRows(newExpanded);
-  };
-
-  // Función para manejar búsqueda
-  const handleSearch = (event) => {
-    setSearchTerm(event.target.value);
-    setPage(0);
-  };
-
-  // Función para manejar filtros
-  const handleFilterChange = (columnId, value) => {
-    setFilters({ ...filters, [columnId]: value });
-    setPage(0);
-  };
-
-  // Filtrar y ordenar los datos
   const filteredData = useMemo(() => {
-    return data.filter((row) => {
-      // Búsqueda global
-      const matchesSearch = searchTerm === '' || 
-        columns.some((column) => {
-          const value = row[column.id];
-          return value && value.toString().toLowerCase().includes(searchTerm.toLowerCase());
-        });
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return data;
+    return data.filter((row) => columns.some((column) => String(valueFor(row, column)).toLowerCase().includes(term)));
+  }, [data, columns, searchTerm]);
 
-      // Filtros por columna
-      const matchesFilters = Object.keys(filters).every((key) => {
-        if (!filters[key]) return true;
-        const value = row[key];
-        return value && value.toString().toLowerCase().includes(filters[key].toLowerCase());
-      });
+  const sortedData = useMemo(() => [...filteredData].sort((a, b) => {
+    const av = valueFor(a, { id: orderBy });
+    const bv = valueFor(b, { id: orderBy });
+    const cmp = typeof av === 'number' && typeof bv === 'number'
+      ? av - bv
+      : String(av).localeCompare(String(bv), 'es', { numeric: true, sensitivity: 'base' });
+    return order === 'asc' ? cmp : -cmp;
+  }), [filteredData, orderBy, order]);
 
-      return matchesSearch && matchesFilters;
-    });
-  }, [data, searchTerm, filters, columns]);
-
-  const sortedData = useMemo(() => {
-    return [...filteredData].sort((a, b) => {
-      const aValue = a[orderBy];
-      const bValue = b[orderBy];
-      
-      if (aValue < bValue) {
-        return order === 'asc' ? -1 : 1;
-      }
-      if (aValue > bValue) {
-        return order === 'asc' ? 1 : -1;
-      }
-      return 0;
-    });
-  }, [filteredData, orderBy, order]);
-
-  // Datos paginados
-  const paginatedData = pagination
-    ? sortedData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-    : sortedData;
-
-  const isSelected = (id) => selected.indexOf(id) !== -1;
+  const pages = Math.max(1, Math.ceil(filteredData.length / rowsPerPage));
+  const safePage = Math.min(page, pages - 1);
+  const rows = pagination ? sortedData.slice(safePage * rowsPerPage, safePage * rowsPerPage + rowsPerPage) : sortedData;
+  const toggleSort = (id) => { setOrder((current) => orderBy === id && current === 'asc' ? 'desc' : 'asc'); setOrderBy(id); };
+  const toggleRow = (id) => setExpandedRows((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const toggleSelected = (id) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const allSelected = data.length > 0 && selected.length === data.length;
 
   return (
-    <Paper sx={{ width: '100%', overflow: 'hidden', ...sx }}>
-      {searchable && (
-        <Box sx={{ p: 2 }}>
-          <TextField
-            fullWidth
-            variant="outlined"
-            placeholder="Buscar..."
-            value={searchTerm}
-            onChange={handleSearch}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-          />
-        </Box>
-      )}
-
-      <TableContainer>
-        <Table aria-labelledby="tableTitle" size="medium">
-          <TableHead>
-            <TableRow>
-              {nestedDataKey && <TableCell padding="checkbox" />}
-              {selectable && (
-                <TableCell padding="checkbox">
-                  <Checkbox
-                    indeterminate={selected.length > 0 && selected.length < data.length}
-                    checked={data.length > 0 && selected.length === data.length}
-                    onChange={handleSelectAllClick}
-                  />
-                </TableCell>
-              )}
-              {columns.map((column) => (
-             
-                <TableCell
-                  key={column.id}
-                  align={column.align || 'left'}
-                  sortDirection={orderBy === column.id ? order : false}
-                  sx={{ minWidth: column.minWidth }}
-                >
-                  <TableSortLabel
-                    active={orderBy === column.id}
-                    direction={orderBy === column.id ? order : 'asc'}
-                    onClick={() => handleRequestSort(column.id)}
-                  >
-                    {column.label}
-                    {column.filterable && (
-                      <Box component="span" sx={{ ml: 1 }}>
-                        <TextField
-                          size="small"
-                          placeholder={`Filtrar ${column.label}`}
-                          value={filters[column.id] || ''}
-                          onChange={(e) => {  
-                            handleFilterChange(column.id, e.target.value)
-                          }}
-                          InputProps={{
-                            endAdornment: (
-                              <InputAdornment position="end">
-                                <FilterListIcon fontSize="small" />
-                              </InputAdornment>
-                            ),
-                          }}
-                          sx={{ width: 150 }}
-                        />
-                      </Box>
-                    )}
-                  </TableSortLabel>
-                </TableCell>
-              ))}
-              {actions.length > 0 && <TableCell align="right">Acciones</TableCell>}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {paginatedData.map((row) => {
-              const isItemSelected = isSelected(row.id);
-              const isExpanded = expandedRows.includes(row.id);
-
-              return (
-                <React.Fragment key={row.id}>
-                  <TableRow
-                    hover
-                    role="checkbox"
-                    aria-checked={isItemSelected}
-                    tabIndex={-1}
-                    selected={isItemSelected}
-                  >
-                    {nestedDataKey && (
-                      <TableCell>
-                        <IconButton
-                          aria-label="expand row"
-                          size="small"
-                          onClick={() => handleExpandRow(row.id)}
-                        >
-                          {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                        </IconButton>
-                      </TableCell>
-                    )}
-                    {selectable && (
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={isItemSelected}
-                          onChange={(event) => handleClick(event, row.id)}
-                        />
-                      </TableCell>
-                    )}
-                    {columns.map((column) => (
-                      <TableCell key={column.id} align={column.align || 'left'}>
-                        {column.render ? column.render(row) : row[column.id]}
-                      </TableCell>
-                    ))}
-                    {actions.length > 0 && (
-                       <TableCell 
-                       align="right"
-                       sx={{
-                         position: 'sticky',
-                         right: 0,
-                         backgroundColor: 'background.paper',
-                         borderLeft: '1px solid',
-                         borderLeftColor: 'divider'
-                       }}
-                     >
-                         <Box sx={{ 
-                          display: 'flex', 
-                          justifyContent: 'flex-end', 
-                          gap: '4px',
-                          '& .MuiIconButton-root': {
-                            padding: '6px',
-                            '&:hover': {
-                              backgroundColor: 'rgba(0, 0, 0, 0.04)'
-                            },
-                            '& svg': {
-                              fontSize: '1.2rem'
-                            }
-                          }
-                        }}>
-                        {actions.map((action) => {
-        const isDisabled = action.disabled && action.disabled(row);
-        return (
-          <Tooltip 
-            key={action.id} 
-            title={isDisabled ? 'Acción no disponible' : action.tooltip}
-          >
-            <span> {/* Wrap para tooltip con elemento deshabilitado */}
-              <IconButton
-                size="small"
-                color={action.color || 'primary'}
-                onClick={() => !isDisabled && action.handler(row)}
-                disabled={isDisabled}
-                sx={{
-                  opacity: isDisabled ? 0.5 : 1,
-                  transition: 'opacity 0.2s',
-                  ...action.buttonSx
-                }}
-              >
-                {React.cloneElement(action.icon, {
-                  sx: { 
-                    fontSize: '1.2rem',
-                    color: isDisabled ? 'text.disabled' : (action.color || 'inherit')
-                  }
-                })}
-              </IconButton>
-            </span>
-          </Tooltip>
-        );
-      })}
-                        </Box>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                  {nestedDataKey && row[nestedDataKey] && (
-                    <TableRow>
-                      <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6 + columns.length}>
-                        <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                          <Box sx={{ margin: 1 }}>
-                            <Typography variant="h6" gutterBottom component="div">
-                              Detalles
-                            </Typography>
-                            <Table size="small" aria-label="nested table">
-                              <TableHead>
-                                <TableRow>
-                                  {nestedColumns.map((column) => (
-                                    <TableCell key={column.id}>{column.label}</TableCell>
-                                  ))}
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {row[nestedDataKey].map((nestedRow, index) => (
-                                  <TableRow key={index}>
-                                    {nestedColumns.map((column) => (
-                                      <TableCell key={column.id}>
-                                        {column.render ? column.render(nestedRow) : nestedRow[column.id]}
-                                      </TableCell>
-                                    ))}
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </Box>
-                        </Collapse>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </React.Fragment>
-              );
+    <div className="w-full bg-[#17191c] text-[#d7dade]">
+      {searchable ? <div className="border-b border-white/[0.06] p-3"><label className="relative block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6f7680]" /><input className="h-10 w-full rounded-lg border border-white/[0.08] bg-[#141518] pl-10 pr-3 text-sm text-white outline-none focus:border-white/[0.2]" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }} placeholder="Buscar…" /></label></div> : null}
+      <div className="go-scrollbar overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse text-sm">
+          <thead><tr className="bg-[#1c1e22] text-[11px] uppercase tracking-[0.045em] text-[#8d939c]">
+            {nestedDataKey ? <th className="w-10 border-b border-white/[0.06] px-3 py-3" /> : null}
+            {selectable ? <th className="w-10 border-b border-white/[0.06] px-3 py-3"><input type="checkbox" checked={allSelected} onChange={() => setSelected(allSelected ? [] : data.map((row) => row.id))} /></th> : null}
+            {columns.map((column) => <th key={column.id} className="border-b border-white/[0.06] px-3 py-3 text-left font-semibold" style={{ minWidth: column.minWidth }}><button type="button" className="inline-flex items-center gap-1 bg-transparent text-inherit" onClick={() => toggleSort(column.id)}>{column.label}{orderBy === column.id ? order === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" /> : null}</button></th>)}
+            {actions.length ? <th className="w-24 border-b border-white/[0.06] px-3 py-3 text-right font-semibold">Acciones</th> : null}
+          </tr></thead>
+          <tbody>
+            {!rows.length ? <tr><td colSpan={columns.length + (nestedDataKey ? 1 : 0) + (selectable ? 1 : 0) + (actions.length ? 1 : 0)} className="px-4 py-10 text-center text-sm text-[#747a83]">{emptyMessage}</td></tr> : rows.map((row) => {
+              const expanded = expandedRows.includes(row.id);
+              return <React.Fragment key={row.id}>
+                <tr className="border-t border-white/[0.05] transition hover:bg-white/[0.025]">
+                  {nestedDataKey ? <td className="px-3 py-3"><button type="button" className="go-mini h-7 w-7 p-0" onClick={() => toggleRow(row.id)}>{expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</button></td> : null}
+                  {selectable ? <td className="px-3 py-3"><input type="checkbox" checked={selected.includes(row.id)} onChange={() => toggleSelected(row.id)} /></td> : null}
+                  {columns.map((column) => <td key={column.id} className="px-3 py-3 align-middle text-[#d7dade]">{column.render ? column.render(row) : valueFor(row, column)}</td>)}
+                  {actions.length ? <td className="px-3 py-3 text-right"><div className="flex justify-end gap-1">{actions.map((action) => { const disabled = Boolean(action.disabled?.(row)); return <button key={action.id} type="button" className={`go-mini h-8 w-8 p-0 ${action.color === 'error' ? '!border-red-500/20 !bg-red-500/[0.05] !text-[#e9898f]' : ''}`} disabled={disabled} onClick={() => !disabled && action.handler?.(row)} title={disabled ? 'Acción no disponible' : action.tooltip}>{action.icon}</button>; })}</div></td> : null}
+                </tr>
+                {nestedDataKey && expanded && Array.isArray(row[nestedDataKey]) ? <tr className="border-t border-white/[0.05] bg-[#141518]"><td colSpan={columns.length + 2} className="p-4"><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#747a83]">Detalles</div><table className="w-full border-collapse text-xs"><thead><tr>{nestedColumns.map((column) => <th key={column.id} className="border-b border-white/[0.06] px-2 py-2 text-left text-[#858b94]">{column.label}</th>)}</tr></thead><tbody>{row[nestedDataKey].map((nested, index) => <tr key={nested.id || index}>{nestedColumns.map((column) => <td key={column.id} className="border-b border-white/[0.04] px-2 py-2">{column.render ? column.render(nested) : nested[column.id]}</td>)}</tr>)}</tbody></table></td></tr> : null}
+              </React.Fragment>;
             })}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      {pagination && (
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
-          component="div"
-          count={filteredData.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-          labelRowsPerPage="Filas por página"
-          labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-        />
-      )}
-    </Paper>
+          </tbody>
+        </table>
+      </div>
+      {pagination && filteredData.length ? <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] px-3 py-3 text-xs text-[#858b94]"><span>Mostrando {safePage * rowsPerPage + 1}–{Math.min((safePage + 1) * rowsPerPage, filteredData.length)} de {filteredData.length}</span><div className="flex items-center gap-2"><select className="h-8 rounded-md border border-white/[0.08] bg-[#141518] px-2 text-xs text-[#c6cad0]" value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0); }}>{[5,10,25].map((value) => <option key={value} value={value}>{value}</option>)}</select><button type="button" className="go-mini h-8 w-8 p-0" disabled={safePage <= 0} onClick={() => setPage((current) => Math.max(0,current-1))}><ChevronLeft className="h-4 w-4" /></button><span className="min-w-8 text-center text-[#c6cad0]">{safePage + 1}</span><button type="button" className="go-mini h-8 w-8 p-0" disabled={safePage >= pages-1} onClick={() => setPage((current) => Math.min(pages-1,current+1))}><ChevronRight className="h-4 w-4" /></button></div></div> : null}
+    </div>
   );
-};
-
-export default DataTable;
+}

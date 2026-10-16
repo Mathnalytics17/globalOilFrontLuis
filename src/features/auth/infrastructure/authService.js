@@ -1,21 +1,25 @@
 import apiClient from '@infrastructure/api/apiClient';
 
 export const authService = {
+  initializeCsrf: async () => apiClient.get('/users/csrf/', { _skipSessionExpired: true }),
+
   login: async ({ email, password }) => {
+    await authService.initializeCsrf();
     const { data } = await apiClient.post(
       '/users/login/',
       { email, password },
-      { _skipAuthRefresh: true }
+      { _skipSessionExpired: true }
     );
 
     return data;
   },
 
   register: async (userData) => {
+    await authService.initializeCsrf();
     const { data } = await apiClient.post(
       '/users/register/',
       userData,
-      { _skipAuthRefresh: true }
+      { _skipSessionExpired: true }
     );
 
     return data;
@@ -31,31 +35,28 @@ export const authService = {
     return data;
   },
 
-  refreshToken: async (refresh) => {
-    const { data } = await apiClient.post(
-      '/users/token/refresh/',
-      { refresh },
-      { _skipAuthRefresh: true }
-    );
-
-    return data;
+  logout: async () => {
+    await authService.initializeCsrf();
+    await apiClient.post('/users/logout/');
   },
 
   forgotPassword: async (email) => {
+    await authService.initializeCsrf();
     const { data } = await apiClient.post(
       '/users/password-reset/',
       { email },
-      { _skipAuthRefresh: true }
+      { _skipSessionExpired: true }
     );
 
     return data;
   },
 
   resetPassword: async (payload) => {
+    await authService.initializeCsrf();
     const { data } = await apiClient.post(
       '/users/password-reset/confirm/',
       payload,
-      { _skipAuthRefresh: true }
+      { _skipSessionExpired: true }
     );
 
     return data;

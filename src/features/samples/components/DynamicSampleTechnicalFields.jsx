@@ -1,7 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
 
 const inputClass =
-  'w-full rounded-lg border border-[#444] bg-[#292929] p-3 text-white outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 disabled:cursor-not-allowed disabled:opacity-60';
+  'w-full rounded-lg border border-[#353940] bg-[#17191c] p-3 text-white outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 disabled:cursor-not-allowed disabled:opacity-60';
 
 const normalizeText = (value) =>
   String(value ?? '')
@@ -232,7 +232,7 @@ export default function DynamicSampleTechnicalFields({
   };
 
   return (
-    <div className="md:col-span-4 border-t border-[#333] pt-4">
+    <div className="md:col-span-4 border-t border-white/[0.07] pt-4">
       <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-sm font-semibold text-gray-300">

@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 
 import { sampleManagementTypesService } from '@features/samples/infrastructure/sampleManagementTypesService';
 import { getApiErrorMessage } from './apiErrors';
+import GlobalOilLoader from '@shared/ui/GlobalOilLoader';
 
 const getCompaniesLabel = (item) => {
   if (item.aplica_a_todos) return 'Todas las empresas';
@@ -172,7 +173,7 @@ export default function TipoGestionMuestraList() {
 
               <tbody>
                 {loading ? (
-                  <tr><td colSpan="6">Cargando...</td></tr>
+                  <tr><td colSpan="6"><GlobalOilLoader label="Cargando tipos de gestión..." /></td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan="6">No hay tipos de gestión registrados.</td></tr>
                 ) : (

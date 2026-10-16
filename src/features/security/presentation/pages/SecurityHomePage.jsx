@@ -1,15 +1,8 @@
 
-import {
-  AdminPanelSettings,
-  AssignmentInd,
-  ChevronRight,
-  History,
-  Lock,
-  People,
-} from '@mui/icons-material';
+import { History, Lock, ShieldCheck as AdminPanelSettings, UserPlus as AssignmentInd, Users as People } from 'lucide-react';
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '@features/auth/application/AuthContext';
+import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import { isGlobalUser } from '@features/auth/application/sessionAccess';
 import s from '../components/Security.module.css';
 import { SettingsRow } from '../components/securityUi';
@@ -42,32 +35,32 @@ export default function SecurityHomePage() {
           <div className={s.settingsList}>
             <SettingsRow
               href="/seguridad/usuarios"
-              icon={<People fontSize="large" />}
+              icon={<People />}
               title="Usuarios"
               description="Gestiona usuarios internos, usuarios de empresa, bloqueos y modo solo lectura."
             />
             <SettingsRow
               href="/seguridad/invitaciones"
-              icon={<AssignmentInd fontSize="large" />}
+              icon={<AssignmentInd />}
               title="Invitaciones"
               description="Invita usuarios, reenvía enlaces, revoca invitaciones y revisa estados."
             />
             <SettingsRow
               href="/seguridad/roles-permisos"
-              icon={<AdminPanelSettings fontSize="large" />}
+              icon={<AdminPanelSettings />}
               title="Roles y permisos"
               description="Configura la matriz de permisos por rol del sistema."
             />
             <SettingsRow
               href="/seguridad/auditoria"
-              icon={<History fontSize="large" />}
+              icon={<History />}
               title="Auditoría"
               description="Consulta acciones de usuarios, empresas, reportes y seguridad."
             />
           </div>
 
           <div style={{ marginTop: 28, color: '#8d8d8d', display: 'flex', gap: 12, alignItems: 'center' }}>
-            <Lock fontSize="small" />
+            <Lock />
             Sesión actual: {user?.email || 'usuario'} · {user?.profile?.role_code || user?.role || 'sin rol'}
           </div>
         </section>

@@ -1,98 +1,17 @@
-import { useState } from "react";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Box,
-  IconButton,
-  Typography
-} from "@mui/material";
-import { Close, Warning } from "@mui/icons-material";
+import { AlertTriangle, X } from 'lucide-react';
 
 export default function AdvertenciaModal({ onClose }) {
   return (
-    <Dialog
-      open={true}
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 2,
-          bgcolor: '#d9d9d9'
-        }
-      }}
-    >
-      {/* Header con botón de cerrar */}
-      <DialogTitle sx={{ 
-        pb: 1, 
-        position: 'relative',
-        textAlign: 'center'
-      }}>
-        <IconButton
-          onClick={onClose}
-          sx={{
-            position: 'absolute',
-            right: 8,
-            top: 8,
-            color: 'gray.600',
-            '&:hover': { color: 'black' }
-          }}
-        >
-          <Close />
-        </IconButton>
-      </DialogTitle>
-
-      <DialogContent sx={{ textAlign: 'center', px: 4 }}>
-        {/* Icono de advertencia */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-          <Warning sx={{ fontSize: 56, color: 'black' }} />
-        </Box>
-
-        {/* Título */}
-        <Typography 
-          variant="h5" 
-          component="h2" 
-          sx={{ 
-            color: 'error.main', 
-            fontWeight: 'bold', 
-            mb: 2 
-          }}
-        >
-          ¡ADVERTENCIA!
-        </Typography>
-
-        {/* Mensaje */}
-        <Typography 
-          variant="body2" 
-          sx={{ color: 'text.primary', lineHeight: 1.5 }}
-        >
-          Crear una cuenta no garantiza el acceso. Debes elegir la empresa
-          correcta y esperar la aprobación del administrador, quien también
-          definirá tu rol.
-        </Typography>
-      </DialogContent>
-
-      {/* Botón de acción */}
-      <DialogActions sx={{ justifyContent: 'center', pb: 3, px: 4 }}>
-        <Button
-          onClick={onClose}
-          variant="contained"
-          sx={{
-            bgcolor: '#3a3a3a',
-            color: 'white',
-            px: 4,
-            py: 1,
-            '&:hover': {
-              bgcolor: '#222222'
-            }
-          }}
-        >
-          Continuar
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="register-warning-title" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
+      <section className="w-full max-w-md rounded-xl border border-white/[0.1] bg-[#191b1e] p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/[0.07] text-[#d8a44c]"><AlertTriangle className="h-5 w-5" /></div>
+          <button type="button" className="go-mini h-8 w-8 p-0" aria-label="Cerrar" onClick={onClose}><X className="h-4 w-4" /></button>
+        </div>
+        <h2 id="register-warning-title" className="mt-5 text-lg font-semibold text-white">Antes de crear tu cuenta</h2>
+        <p className="mt-2 text-sm leading-6 text-[#9ba1aa]">Crear una cuenta no garantiza el acceso. Elige la empresa correcta y espera la aprobación de su administrador, quien también definirá tu rol.</p>
+        <div className="mt-6 flex justify-end"><button type="button" className="go-primary" onClick={onClose}>Continuar</button></div>
+      </section>
+    </div>
   );
 }

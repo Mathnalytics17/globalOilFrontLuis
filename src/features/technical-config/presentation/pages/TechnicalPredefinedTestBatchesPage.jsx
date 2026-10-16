@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Plus, RefreshCw, Save, Trash2, Wand2 } from 'lucide-react';
+import { Boxes, Layers, Pencil, Plus, RefreshCw, Save, Trash2, Wand2 } from 'lucide-react';
+import MetricStrip from '@shared/ui/MetricStrip';
+import OverflowMenu from '@shared/ui/OverflowMenu';
+import DataTable from '@shared/ui/DataTable';
 import TechnicalConfigShell from '../components/TechnicalConfigShell';
 import styles from '../components/TechnicalConfig.module.css';
 import { predefinedTestBatchesService } from '@features/technical-config/infrastructure/predefinedTestBatchesService';
@@ -195,16 +198,18 @@ export default function TechnicalPredefinedTestBatchesPage() {
       title="Lotes predefinidos de pruebas"
       subtitle="Plantillas de pruebas para asignación por lote."
       kicker="Plantillas de pruebas"
-      action={<button type="button" className={`${styles.btn} ${styles.secondary}`} onClick={load}><RefreshCw size={16} /> Recargar</button>}
+      action={null}
     >
       {error ? <div className={styles.alert}>{error}</div> : null}
       {message ? <div className={`${styles.alert} ${styles.success}`}>{message}</div> : null}
 
-      <section className={styles.grid}>
-        <article className={`${styles.card} ${styles.col3}`}><div className={styles.kicker}>Total</div><div className={styles.statNumber}>{counts.total}</div><p>Lotes activos.</p></article>
-        <article className={`${styles.card} ${styles.col3}`}><div className={styles.kicker}>Por gestión</div><div className={styles.statNumber}>{counts.gestion}</div><p>Ligados a tipo de gestión.</p></article>
-        <article className={`${styles.card} ${styles.col3}`}><div className={styles.kicker}>Personalizados</div><div className={styles.statNumber}>{counts.personalizados}</div><p>Independientes del flujo.</p></article>
+      <MetricStrip items={[
+        { label: 'Total', value: counts.total, icon: Boxes },
+        { label: 'Por gestión', value: counts.gestion, icon: Layers },
+        { label: 'Personalizados', value: counts.personalizados, icon: Boxes },
+      ]} />
 
+      <section className={styles.grid}>
         <article className={`${styles.card} ${styles.col5}`}>
           <div className={styles.sectionHeader}>
             <div>
@@ -270,34 +275,60 @@ export default function TechnicalPredefinedTestBatchesPage() {
               <h2>Plantillas registradas</h2>
             </div>
           </div>
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead><tr><th>Nombre</th><th>Tipo</th><th>Gestión</th><th># pruebas</th><th>Estado</th><th>Acciones</th></tr></thead>
-              <tbody>
-                {loading ? <tr><td colSpan={6}>Cargando...</td></tr> : bundles.length ? bundles.map((bundle) => (
-                  <tr key={bundle.id}>
-                    <td><strong>{bundle.nombre}</strong><div className={styles.help}>{bundle.es_default ? 'Lote por defecto' : 'Plantilla'}</div></td>
-                    <td>{bundle.tipo_lote}</td>
-                    <td>{bundle.tipo_gestion_nombre || '-'}</td>
-                    <td>{bundle.total_pruebas || 0}</td>
-                    <td><span className={bundle.activo !== false ? styles.badgeGreen : styles.badgeRed}>{bundle.activo !== false ? 'Activo' : 'Inactivo'}</span></td>
-                    <td><div className={styles.inlineActions}><button type="button" className={styles.iconBtn} onClick={() => handleEdit(bundle.id)}><Pencil size={14} /></button><button type="button" className={`${styles.iconBtn} ${styles.iconBtnDanger}`} onClick={() => handleDelete(bundle)}><Trash2 size={14} /></button></div></td>
-                  </tr>
-                )) : <tr><td colSpan={6}>No hay lotes creados todavía.</td></tr>}
-              </tbody>
-            </table>
-          </div>
+          {loading ? <div className={styles.empty}>Cargando plantillas de pruebas...</div> : (
+            <DataTable
+              data={bundles}
+              pagination
+              minWidth={660}
+              emptyMessage="No hay lotes creados todavía."
+              columns={[
+                {
+                  id: 'nombre',
+                  label: 'Nombre',
+                  mobileTitle: true,
+                  minWidth: 180,
+                  render: (bundle) => (
+                    <div>
+                      <strong>{bundle.nombre}</strong>
+                      <div className={styles.help}>{bundle.es_default ? 'Lote por defecto' : 'Plantilla'}</div>
+                    </div>
+                  ),
+                },
+                { id: 'tipo_lote', label: 'Tipo', minWidth: 120 },
+                { id: 'tipo_gestion_nombre', label: 'Gestión', minWidth: 120, render: (bundle) => bundle.tipo_gestion_nombre || '-' },
+                { id: 'total_pruebas', label: '# pruebas', width: 90, render: (bundle) => bundle.total_pruebas || 0 },
+                {
+                  id: 'activo',
+                  label: 'Estado',
+                  width: 100,
+                  render: (bundle) => <span className={bundle.activo !== false ? styles.badgeGreen : styles.badgeRed}>{bundle.activo !== false ? 'Activo' : 'Inactivo'}</span>,
+                },
+                {
+                  id: 'acciones',
+                  label: 'Acciones',
+                  sortable: false,
+                  searchable: false,
+                  mobileHidden: true,
+                  width: 72,
+                  render: (bundle) => <OverflowMenu items={[
+                    { label: 'Editar', icon: Pencil, onClick: () => handleEdit(bundle.id) },
+                    { label: 'Eliminar', icon: Trash2, danger: true, onClick: () => handleDelete(bundle) },
+                  ]} />,
+                },
+              ]}
+            />
+          )}
         </article>
       </section>
 
       <style jsx global>{`
         .detailRows { display: grid; gap: 12px; }
-        .detailRow { border: 1px solid #303746; border-radius: 16px; padding: 14px; background: rgba(15,18,26,.72); }
+        .detailRow { border-top: 1px solid rgba(255,255,255,.07); padding: 14px 0; background: transparent; }
         .detailRowHeader { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
         .detailRowGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
-        .detailRowGrid label { display: grid; gap: 6px; color: #dbeafe; font-size: 14px; font-weight: 700; }
-        .detailRowGrid input, .detailRowGrid select { width: 100%; min-height: 44px; border-radius: 12px; border: 1px solid #343a46; background: #101217; color: white; padding: 0 12px; }
-        .detailRowGrid input:focus, .detailRowGrid select:focus { outline: none; border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.12); }
+        .detailRowGrid label { display: grid; gap: 5px; color: #b8bdc5; font-size: 12px; font-weight: 600; }
+        .detailRowGrid input, .detailRowGrid select { width: 100%; min-height: 36px; border-radius: 7px; border: 1px solid var(--go-border-strong); background: #141518; color: white; padding: 0 10px; font-size: 13px; }
+        .detailRowGrid input:focus, .detailRowGrid select:focus { outline: none; border-color: #595f68; box-shadow: 0 0 0 2px rgba(255,255,255,.035); }
         @media (max-width: 1100px) { .detailRowGrid { grid-template-columns: 1fr; } }
       `}</style>
     </TechnicalConfigShell>

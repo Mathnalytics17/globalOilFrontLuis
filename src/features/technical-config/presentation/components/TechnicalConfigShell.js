@@ -1,44 +1,47 @@
-export default function TechnicalConfigShell({ children, title, subtitle, action, actions }) {
+import PageHeader from '@shared/ui/PageHeader';
+
+export default function TechnicalConfigShell({ children, title, subtitle, action, actions, kicker = 'Configuración técnica' }) {
   return (
-    <div style={styles.page}>
-      <header style={styles.header}>
-        <div>
-          <p style={styles.kicker}>CONFIGURACIÓN TÉCNICA</p>
-          <h1 style={styles.title}>{title}</h1>
-          {subtitle ? <p style={styles.subtitle}>{subtitle}</p> : null}
-        </div>
-        <div style={styles.actions}>{actions || action}</div>
-      </header>
+    <div className="go-page go-technical-page">
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        eyebrow={kicker}
+        actions={actions || action}
+        compact
+      />
       {children}
     </div>
   );
 }
 
+// Legacy export kept temporarily for screens that still import `styles` from this module.
+// New code should use the shared design-system classes/components instead.
 export const styles = {
-  page: { minHeight: 'auto', background: 'transparent', color: '#fff', padding: 0, fontFamily: 'inherit', maxWidth: '100%', overflowX: 'hidden' },
+  page: { minHeight: 'auto', background: 'transparent', color: 'var(--go-text)', padding: 0, fontFamily: 'inherit', maxWidth: '100%', overflowX: 'hidden' },
   nav: { display: 'none' },
-  navItem: { color: '#dbeafe', textDecoration: 'none', padding: '13px 18px', borderRadius: 12, fontWeight: 800 },
-  navItemActive: { background: '#e8272d', color: '#fff' },
-  header: { display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap' },
-  kicker: { color: '#ff4b55', letterSpacing: 4, fontWeight: 900, margin: 0, fontSize: 13 },
-  title: { margin: '8px 0 8px', fontSize: 'clamp(28px, 4vw, 44px)', lineHeight: 1.05 },
-  subtitle: { color: '#b8cee9', fontSize: 18, margin: 0, maxWidth: 880, lineHeight: 1.5 },
-  actions: { display: 'flex', gap: 10, flexWrap: 'wrap' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 18 },
-  card: { background: 'rgba(23,23,23,.72)', border: '1px solid #303030', borderRadius: 12, padding: 18, boxShadow: 'none', minWidth: 0 },
-  cardTitle: { margin: '0 0 8px', fontSize: 22, fontWeight: 900 },
-  muted: { color: '#a9bfdc', lineHeight: 1.5 },
-  btn: { border: 0, borderRadius: 12, padding: '12px 16px', fontWeight: 900, color: '#fff', background: '#e8272d', cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  btnGhost: { background: '#20222b', border: '1px solid #3a3d4b' },
-  btnBlue: { background: '#136bd8' },
-  input: { width: '100%', boxSizing: 'border-box', background: '#080c14', border: '1px solid #34425a', borderRadius: 12, color: '#fff', padding: '13px 14px', outline: 'none', minHeight: 48 },
-  label: { display: 'block', marginBottom: 6, fontWeight: 800, color: '#dbe7ff' },
-  field: { marginBottom: 14 },
-  tableWrap: { overflowX: 'hidden', border: '1px solid #2b394d', borderRadius: 14, maxWidth: '100%' },
-  table: { width: '100%', borderCollapse: 'collapse', minWidth: 0, tableLayout: 'fixed' },
-  th: { textAlign: 'left', padding: 14, color: '#aab6c6', borderBottom: '1px solid #2b394d', fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
-  td: { padding: 14, borderBottom: '1px solid #202c3d', verticalAlign: 'top', overflowWrap: 'anywhere', wordBreak: 'break-word' },
-  pill: { borderRadius: 999, padding: '6px 10px', background: '#17243a', color: '#b8d5ff', display: 'inline-block', fontSize: 12, fontWeight: 800 },
-  error: { background: '#3a1216', border: '1px solid #c22', color: '#ffd7d7', borderRadius: 12, padding: 12, marginBottom: 14 },
-  ok: { background: '#12351f', border: '1px solid #2ca45a', color: '#d8ffe5', borderRadius: 12, padding: 12, marginBottom: 14 },
+  navItem: { color: 'var(--go-text-soft)', textDecoration: 'none', padding: '8px 0', fontSize: 12, fontWeight: 600 },
+  navItemActive: { color: '#fff', borderBottom: '2px solid var(--go-accent)' },
+  header: { display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap' },
+  kicker: { color: 'var(--go-muted)', letterSpacing: 1.1, fontWeight: 650, margin: '0 0 6px', fontSize: 10.5, textTransform: 'uppercase' },
+  title: { margin: 0, fontSize: 'clamp(24px, 2.5vw, 30px)', lineHeight: 1.1, fontWeight: 650, letterSpacing: '-.03em' },
+  subtitle: { color: 'var(--go-muted)', fontSize: 13, margin: '6px 0 0', maxWidth: 880, lineHeight: 1.5 },
+  actions: { display: 'flex', gap: 7, flexWrap: 'wrap' },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 },
+  card: { background: 'var(--go-surface)', border: '1px solid var(--go-border-soft)', borderRadius: 10, padding: 16, boxShadow: 'none', minWidth: 0 },
+  cardTitle: { margin: '0 0 7px', fontSize: 16, fontWeight: 650 },
+  muted: { color: 'var(--go-muted)', lineHeight: 1.45, fontSize: 12 },
+  btn: { border: '1px solid var(--go-accent)', borderRadius: 7, minHeight: 36, padding: '0 11px', fontSize: 12.5, fontWeight: 650, color: '#fff', background: 'var(--go-accent)', cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  btnGhost: { background: 'var(--go-surface-raised)', border: '1px solid var(--go-border-strong)', color: 'var(--go-text-soft)' },
+  btnBlue: { background: 'var(--go-surface-raised)', border: '1px solid var(--go-border-strong)', color: 'var(--go-text-soft)' },
+  input: { width: '100%', boxSizing: 'border-box', background: '#141518', border: '1px solid var(--go-border-strong)', borderRadius: 7, color: '#fff', padding: '7px 10px', outline: 'none', minHeight: 36, fontSize: 13 },
+  label: { display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 12, color: '#b8bdc5' },
+  field: { marginBottom: 12 },
+  tableWrap: { overflowX: 'auto', border: '1px solid var(--go-border-soft)', borderRadius: 9, maxWidth: '100%' },
+  table: { width: '100%', borderCollapse: 'collapse', minWidth: 680 },
+  th: { textAlign: 'left', padding: '9px 11px', color: 'var(--go-muted)', background: 'var(--go-surface-raised)', borderBottom: '1px solid var(--go-border-soft)', fontSize: 10.5, fontWeight: 650, letterSpacing: '.04em', textTransform: 'uppercase' },
+  td: { padding: 10, borderBottom: '1px solid var(--go-border-soft)', color: 'var(--go-text-soft)', fontSize: 12.5, verticalAlign: 'middle' },
+  pill: { borderRadius: 999, padding: '3px 7px', background: 'var(--go-surface-raised)', border: '1px solid var(--go-border-strong)', color: 'var(--go-text-soft)', display: 'inline-block', fontSize: 10.5, fontWeight: 600 },
+  error: { background: 'rgba(228,93,101,.08)', border: '1px solid rgba(228,93,101,.25)', color: '#f3b5b8', borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 12 },
+  ok: { background: 'rgba(79,181,122,.08)', border: '1px solid rgba(79,181,122,.25)', color: '#9dd6b4', borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 12 },
 };

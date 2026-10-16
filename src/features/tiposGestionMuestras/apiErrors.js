@@ -1,20 +1,7 @@
-export const getApiErrorMessage = (error, fallback = 'Ocurrió un error inesperado') => {
-  const data = error?.response?.data;
+import { getApiErrorMessage as getSharedApiErrorMessage } from '@shared/utils/errors';
 
-  if (!data) return error?.message || fallback;
-  if (typeof data === 'string') return data;
-  if (data.detail) return data.detail;
-  if (data.message) return Array.isArray(data.message) ? data.message.join(' ') : data.message;
-
-  const firstKey = Object.keys(data)[0];
-  if (firstKey) {
-    const value = data[firstKey];
-    if (Array.isArray(value)) return `${firstKey}: ${value.join(' ')}`;
-    if (typeof value === 'string') return `${firstKey}: ${value}`;
-  }
-
-  return fallback;
-};
+export const getApiErrorMessage = (error, fallback = 'No se pudo completar la operación.') =>
+  getSharedApiErrorMessage(error, fallback);
 
 export const getApiFieldErrors = (error) => {
   const data = error?.response?.data;

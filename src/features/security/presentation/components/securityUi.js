@@ -1,11 +1,7 @@
 
 import Link from 'next/link';
-import {
-  ArrowBack,
-  ChevronRight,
-  Close,
-  Search,
-} from '@mui/icons-material';
+import { ChevronRight, Search, X as Close } from 'lucide-react';
+import { getApiErrorMessage } from '@shared/utils/errors';
 import s from './Security.module.css';
 
 export const getList = (payload) => {
@@ -77,13 +73,10 @@ export function StatusPill({ status }) {
   );
 }
 
-export function BackLink({ href = '/seguridad', children = 'Volver' }) {
-  return (
-    <Link href={href} className={s.back}>
-      <ArrowBack fontSize="small" />
-      {children}
-    </Link>
-  );
+export function BackLink() {
+  // Navigation is intentionally centralized in the persistent breadcrumb.
+  // Keeping another back link inside every page makes layouts inconsistent.
+  return null;
 }
 
 export function SearchBox({ value, onChange, placeholder = 'Buscar...' }) {
@@ -123,13 +116,5 @@ export function SettingsRow({ href, icon, title, description }) {
   );
 }
 
-export const getErrorMessage = (error, fallback = 'No se pudo completar la acción.') => {
-  const data = error?.response?.data;
-  if (typeof data === 'string') return data;
-  if (data?.detail) return data.detail;
-  if (data?.error) return data.error;
-  try {
-    if (data) return JSON.stringify(data);
-  } catch {}
-  return fallback;
-};
+export const getErrorMessage = (error, fallback = 'No se pudo completar la acción.') =>
+  getApiErrorMessage(error, fallback);

@@ -1,10 +1,9 @@
-import Head from "next/head";
 import { useEffect, useState } from "react";
 import  RegisterComponent  from "./components";
 import { companiesService } from "@features/companies/infrastructure/companiesService";
 
 export default function SignUpIndex() {
-  const [companies, setCompanies] = useState(null);
+  const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -23,7 +22,7 @@ export default function SignUpIndex() {
       try {
         setLoading(true);
         const data = await GetCompanies();
-        setCompanies(data);
+        setCompanies(Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : []);
       } catch (err) {
         setError(err.message);
       } finally {

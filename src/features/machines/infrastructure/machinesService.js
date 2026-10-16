@@ -1,5 +1,5 @@
 import apiClient from '@infrastructure/api/apiClient';
-import { normalizePaginated } from '../../../utils/pagination';
+import { normalizePaginated } from '@shared/utils/pagination';
 
 export const machinesService = {
   async list(params = {}) {

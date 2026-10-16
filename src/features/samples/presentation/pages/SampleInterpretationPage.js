@@ -1,24 +1,26 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import {
   BarChart3,
   Eye,
   FileSpreadsheet,
   FileText,
-  Menu,
   Save,
   Search,
   Settings2,
   X,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { reviewInterpretationService } from '@features/samples/infrastructure/reviewInterpretationService';
 import { reportsService } from '@features/reports/infrastructure/reportsService';
 import { resultEntryService } from '@features/samples/infrastructure/resultEntryService';
-import { useAuth } from '@features/auth/application/AuthContext';
-import { presentLimitBands } from '@utils/limitPresentation';
+import { useAuth } from '@features/auth/presentation/context/AuthContext';
+import withRequiredPermissions from '@features/auth/presentation/withRequiredPermissions';
+import { presentLimitBands } from '@shared/utils/limitPresentation';
 
+import OverflowMenu from '@shared/ui/OverflowMenu';
 const fmtDate = (value) => {
   if (!value) return '-';
   const date = new Date(value);
@@ -29,6 +31,7 @@ const fmtDate = (value) => {
 const statusClass = (value = '') => {
   const v = String(value).toLowerCase();
   if (v.includes('normal') || v.includes('interpret') || v.includes('revis')) return 'ok';
+  if (v.includes('sin límites contratados') || v.includes('sin limites contratados')) return 'neutral';
   if (v.includes('crítico') || v.includes('critico')) return 'critical';
   if (v.includes('alert') || v.includes('fuera') || v.includes('no deseado')) return 'alert';
   if (v.includes('sin criterio') || v.includes('sin info') || v.includes('sin límite') || v.includes('sin limite')) return 'warning';
@@ -106,6 +109,11 @@ const criterionDisplay = (test) => {
   return value && !value.includes('Resultado principal') ? value : 'Configuración de la prueba';
 };
 
+const isStructuredLimit = (value) => (
+  Boolean(value && typeof value === 'object')
+  || (typeof value === 'string' && value.includes('{'))
+);
+
 const buildEvaluationTest = (test) => {
   const details = test.limite_detalles || test.evaluacion_limite?.details || [];
   const hierarchy = test.evaluacion_limite?.result_outcomes
@@ -159,21 +167,27 @@ const buildEvaluationTest = (test) => {
     ? `${dominantFields.length} campo${dominantFields.length === 1 ? '' : 's'} determina${dominantFields.length === 1 ? '' : 'n'} el estado: ${dominantFields.map((field) => field.label).join(', ')}.`
     : '');
 
+  const fallbackLimit = test.limite_resumen || test.evaluacion_limite?.summary || 'No aplica';
+  const criterion = criterionDisplay(test);
+  const summarySource = isStructuredLimit(criterion) ? criterion : fallbackLimit;
   return {
     id: test.id,
     acronym: test.prueba?.acronimo || test.prueba?.nombre_variable || '-',
     name: test.prueba?.nombre_variable || '',
     condition: test.prueba?.condicion || '',
-    criterion: criterionDisplay(test),
+    criterion: isStructuredLimit(criterion) ? fallbackLimit : criterion,
     status,
     decision,
     groups,
     fallbackResult: test.resultado_resumen || '-',
-    fallbackLimit: test.limite_resumen || test.evaluacion_limite?.summary || 'No aplica',
+    fallbackLimit,
+    summaryRule: isStructuredLimit(summarySource)
+      ? presentLimitBands({ limit_value: summarySource })
+      : null,
   };
 };
 
-export default function InterpretationPage() {
+function InterpretationPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [batchId, setBatchId] = useState('');
@@ -182,6 +196,7 @@ export default function InterpretationPage() {
   const [sampleData, setSampleData] = useState(null);
   const [trends, setTrends] = useState([]);
   const [trendGroups, setTrendGroups] = useState([]);
+  const [trendScope, setTrendScope] = useState('máquina');
   const [search, setSearch] = useState('');
   const [conclusion, setConclusion] = useState('');
   const [predefinedComments, setPredefinedComments] = useState([]);
@@ -257,6 +272,7 @@ export default function InterpretationPage() {
     setSelectedGraphs([]);
     setTrends([]);
     setTrendGroups([]);
+    setTrendScope('máquina');
     loadSample(selectedSampleId, { silent: true });
   }, [selectedSampleId]);
 
@@ -382,6 +398,7 @@ export default function InterpretationPage() {
       if (selectedSampleIdRef.current === sampleId && activeTrendKeyRef.current === key) {
         setTrends(cached.series || []);
         setTrendGroups(cached.groups || []);
+        setTrendScope(cached.alcance || 'máquina');
       }
       return cached;
     }
@@ -396,6 +413,7 @@ export default function InterpretationPage() {
       if (selectedSampleIdRef.current === sampleId && activeTrendKeyRef.current === key) {
         setTrends(data.series || []);
         setTrendGroups(data.groups || []);
+        setTrendScope(data.alcance || 'máquina');
       }
       return data;
     } catch (error) {
@@ -403,6 +421,7 @@ export default function InterpretationPage() {
       if (selectedSampleIdRef.current === sampleId && activeTrendKeyRef.current === key) {
         setTrends([]);
         setTrendGroups([]);
+        setTrendScope('máquina');
       }
       return null;
     } finally {
@@ -734,32 +753,26 @@ export default function InterpretationPage() {
       ) : null}
       <header className="interpTop">
         <div className="titleBox">
-          <div className="miniIcon"><Menu size={20} /></div>
           <div>
             <h1>Preparación de reportes</h1>
-            <p>Revise el pre-reporte, agregue el criterio técnico y genere reportes por muestra o por lote.</p>
+            <p>Revise el pre-reporte, agregue criterio técnico y genere reportes por muestra o por lote.</p>
           </div>
         </div>
 
         <div className="topActions">
-          <div className="exportMenu">
-            <button type="button" className="btn secondary" onClick={() => setExportMenuOpen((open) => !open)} disabled={saving || !batchId}>
-              <FileSpreadsheet size={17} /> Excel de resultados
-            </button>
-            {exportMenuOpen ? (
-              <div className="exportMenuPanel">
-                <strong>Exportar para análisis</strong>
-                <button type="button" onClick={() => downloadResultsExcel('por_muestra_columnas', selectedSampleId)}>Muestra seleccionada</button>
-                <button type="button" onClick={() => downloadResultsExcel('consolidado')}>Lote en una hoja</button>
-                <button type="button" onClick={() => downloadResultsExcel('por_muestra')}>Lote por hojas</button>
-              </div>
-            ) : null}
-          </div>
-          <button type="button" className="btn secondary" onClick={previewReport} disabled={saving}><Eye size={17} /> Previsualizar esta muestra</button>
-          <button type="button" className="btn secondary" onClick={saveInterpretation} disabled={saving || !selectedSampleId}><Save size={17} /> Guardar esta muestra</button>
           <button type="button" className="btn red" onClick={openGenerateReport} disabled={saving || !selectedSampleId}>
             <FileText size={17} /> Crear reporte(s)
           </button>
+          <OverflowMenu
+            items={[
+              { label: 'Previsualizar esta muestra', icon: Eye, disabled: saving, onClick: previewReport },
+              { label: 'Guardar esta muestra', icon: Save, disabled: saving || !selectedSampleId, onClick: saveInterpretation },
+              { separator: true },
+              { label: 'Excel · muestra seleccionada', icon: FileSpreadsheet, disabled: saving || !batchId, onClick: () => downloadResultsExcel('por_muestra_columnas', selectedSampleId) },
+              { label: 'Excel · lote en una hoja', icon: FileSpreadsheet, disabled: saving || !batchId, onClick: () => downloadResultsExcel('consolidado') },
+              { label: 'Excel · lote por hojas', icon: FileSpreadsheet, disabled: saving || !batchId, onClick: () => downloadResultsExcel('por_muestra') },
+            ]}
+          />
         </div>
       </header>
 
@@ -782,6 +795,7 @@ export default function InterpretationPage() {
         </label>
         <Info label="Cliente" value={batch?.cliente_nombre || sampleData?.muestra?.cliente_nombre || '-'} />
         <Info label="Máquina / Equipo" value={sampleData?.muestra?.equipo || selectedSample?.equipo || '-'} />
+        <Info label="Punto de medición" value={sampleData?.muestra?.punto_muestreo?.nombre || 'Sin clasificar'} />
         <Info label="Muestras del lote" value={batch?.muestras?.length || 0} />
       </section>
 
@@ -829,8 +843,14 @@ export default function InterpretationPage() {
                       <span>{test.name}{test.condition ? ` · ${test.condition}` : ''}</span>
                     </div>
                     <div className="criterionSummary">
-                      <small>Límite según</small>
-                      <strong>{test.criterion}</strong>
+                      <small>{test.summaryRule ? 'Bandas de evaluación' : 'Límite según'}</small>
+                      {test.summaryRule ? (
+                        <div className="limitBands criterionBands">
+                          <span className="limitBand acceptable"><i />Aceptable <b>{test.summaryRule.acceptable}</b></span>
+                          {test.summaryRule.warning ? <span className="limitBand warning"><i />Alerta <b>{test.summaryRule.warning}</b></span> : null}
+                          <span className="limitBand critical"><i />Crítico <b>{test.summaryRule.critical || 'Fuera de la banda aceptable'}</b></span>
+                        </div>
+                      ) : <strong>{test.criterion}</strong>}
                     </div>
                     <div className="testDecision">
                       <span className={`pill ${statusClass(test.status)}`}>{test.status}</span>
@@ -872,7 +892,16 @@ export default function InterpretationPage() {
                   )) : expandedTests.includes(test.id) ? (
                     <div className="evaluationFallback">
                       <span><small>Resultado</small><strong>{test.fallbackResult}</strong></span>
-                      <span><small>Límite</small><strong>{test.fallbackLimit}</strong></span>
+                      <span>
+                        <small>Límite</small>
+                        {test.summaryRule ? (
+                          <div className="limitBands criterionBands">
+                            <span className="limitBand acceptable"><i />Aceptable <b>{test.summaryRule.acceptable}</b></span>
+                            {test.summaryRule.warning ? <span className="limitBand warning"><i />Alerta <b>{test.summaryRule.warning}</b></span> : null}
+                            <span className="limitBand critical"><i />Crítico <b>{test.summaryRule.critical || 'Fuera de la banda aceptable'}</b></span>
+                          </div>
+                        ) : <strong>{test.fallbackLimit}</strong>}
+                      </span>
                     </div>
                   ) : null}
                 </article>
@@ -938,7 +967,7 @@ export default function InterpretationPage() {
 
           <section className="trendBox">
             <div className="trendTop">
-              <div className="blockTitle">3. Tendencias históricas</div>
+              <div className="blockTitle">3. Tendencias históricas <small>Alcance: {trendScope}</small></div>
               <label className="switchLine">
                 <input type="checkbox" checked={graphsEnabled} onChange={(e) => setGraphsEnabled(e.target.checked)} />
                 Activar gráficas
@@ -1085,21 +1114,21 @@ export default function InterpretationPage() {
       <style jsx global>{`
         .interpPage{background:transparent;color:#fff;padding:0 0 18px}
         .interpTop{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:10px}
-        .titleBox{display:flex;gap:12px;align-items:center}.titleBox h1{font-size:24px;margin:0}.titleBox p{color:#c8c8c8;margin:3px 0 0}
+        .titleBox{display:flex;gap:10px;align-items:center}.titleBox h1{font-size:24px;margin:0}.titleBox p{color:#aeb4bd;margin:3px 0 0;font-size:12.5px}
         .miniIcon{width:42px;height:42px;border:1px solid #444;background:#111;border-radius:9px;display:grid;place-items:center}
-        .topActions{display:flex;gap:10px}.btn{min-height:40px;border-radius:8px;border:1px solid #444;background:#111;color:#fff;display:inline-flex;align-items:center;gap:8px;padding:0 14px;font-weight:800;cursor:pointer}.btn.red{background:#ef232a;border-color:#ef232a}
+        .topActions{display:flex;gap:8px}.btn{min-height:36px;border-radius:7px;border:1px solid #3a3f46;background:#1b1d20;color:#fff;display:inline-flex;align-items:center;gap:7px;padding:0 11px;font-size:12.5px;font-weight:650;cursor:pointer}.btn.red{background:#ef232a;border-color:#ef232a}
         .exportMenu{position:relative}.exportMenuPanel{position:absolute;right:0;top:calc(100% + 6px);z-index:60;width:240px;border:1px solid #3b3d43;background:#17181b;padding:6px;box-shadow:0 14px 32px rgba(0,0,0,.45)}.exportMenuPanel strong{display:block;padding:8px 10px 5px;color:#fca5a5;font-size:12px}.exportMenuPanel button{width:100%;border:0;background:transparent;color:#f3f3f3;padding:9px 10px;text-align:left;cursor:pointer}.exportMenuPanel button:hover{background:#292b30}
-        .summaryLine{display:grid;grid-template-columns:1.2fr 1.2fr repeat(3,1fr);gap:0;border:1px solid #383838;background:linear-gradient(180deg,#1b1b1b,#111);border-radius:10px;overflow:hidden;margin-bottom:10px}.summaryLine>label,.summaryLine>.info{padding:12px 14px;border-left:1px solid #303030}.summaryLine>:first-child{border-left:0}.summaryLine span,.info label{display:block;color:#aeb6c1;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}.summaryLine select{height:36px;width:100%;border:1px solid #444;background:#111;color:#fff;border-radius:7px;padding:0 9px}.lockedLot{min-height:36px;border-radius:7px;border:1px solid #444;background:#111;color:#fff;padding:0 9px;display:inline-flex;align-items:center;font-weight:900}.lockedLot.action{cursor:pointer;color:#fecaca;border-color:rgba(239,35,42,.45)}.info .value{font-weight:900}
-        .mainGrid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:10px}.samplePane,.contentPane section{border:1px solid #383838;background:linear-gradient(180deg,rgba(27,27,27,.98),rgba(16,16,16,.98));border-radius:10px}.samplePane{padding:12px}.samplePane h2{font-size:16px;margin:0 0 10px}.searchBox{height:36px;border:1px solid #404040;background:#080808;border-radius:7px;display:grid;grid-template-columns:18px 1fr 18px;align-items:center;gap:8px;padding:0 9px;margin-bottom:10px}.searchBox input{border:0;background:transparent;color:#fff;outline:0}.sampleList{max-height:670px;overflow:auto}.sampleItem{width:100%;min-height:52px;border:0;border-bottom:1px solid #2d2d2d;background:transparent;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;padding:8px;cursor:pointer}.sampleItem.active{background:#2a2d31;border-left:3px solid #ef232a}.sampleItem strong,.sampleItem small{display:block}.sampleItem small{color:#aaa}
+        .summaryLine{display:grid;grid-template-columns:1.2fr 1.2fr repeat(3,1fr);gap:0;border:1px solid #383838;background:#17191c;border-radius:10px;overflow:hidden;margin-bottom:10px}.summaryLine>label,.summaryLine>.info{padding:12px 14px;border-left:1px solid #303030}.summaryLine>:first-child{border-left:0}.summaryLine span,.info label{display:block;color:#aeb6c1;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}.summaryLine select{height:36px;width:100%;border:1px solid #444;background:#111;color:#fff;border-radius:7px;padding:0 9px}.lockedLot{min-height:36px;border-radius:7px;border:1px solid #444;background:#111;color:#fff;padding:0 9px;display:inline-flex;align-items:center;font-weight:900}.lockedLot.action{cursor:pointer;color:#fecaca;border-color:rgba(239,35,42,.45)}.info .value{font-weight:900}
+        .mainGrid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:10px}.samplePane,.contentPane section{border:1px solid #383838;background:#191b1e;border-radius:10px}.samplePane{padding:12px}.samplePane h2{font-size:16px;margin:0 0 10px}.searchBox{height:36px;border:1px solid #404040;background:#080808;border-radius:7px;display:grid;grid-template-columns:18px 1fr 18px;align-items:center;gap:8px;padding:0 9px;margin-bottom:10px}.searchBox input{border:0;background:transparent;color:#fff;outline:0}.sampleList{max-height:670px;overflow:auto}.sampleItem{width:100%;min-height:52px;border:0;border-bottom:1px solid #2d2d2d;background:transparent;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;padding:8px;cursor:pointer}.sampleItem.active{background:#2a2d31;border-left:3px solid #ef232a}.sampleItem strong,.sampleItem small{display:block}.sampleItem small{color:#aaa}
         .pill{display:inline-flex;align-items:center;border-radius:999px;border:1px solid #444;background:#222;color:#e5e7eb;padding:4px 9px;font-size:12px;font-weight:800}.pill.ok{color:#86efac;border-color:rgba(34,197,94,.45);background:rgba(22,101,52,.35)}.pill.critical{color:#fecaca;border-color:rgba(239,35,42,.6);background:rgba(127,29,29,.32)}.pill.alert{color:#fde047;border-color:rgba(234,179,8,.5);background:rgba(113,63,18,.28)}.pill.warning{color:#facc15;border-color:rgba(250,204,21,.5);background:rgba(113,63,18,.25)}.pill.pending,.pill.neutral{color:#d1d5db}
         .contentPane{display:grid;grid-template-columns:minmax(720px,2fr) 300px;gap:10px;min-width:0}.contentPane section{padding:12px}.resultsLimits{grid-column:1;overflow:hidden}.diagnostic{grid-column:2;grid-row:1}.commentsBox,.trendBox{grid-column:1/3}.blockTitle{font-size:18px;font-weight:900;margin-bottom:10px}
-        .testEvaluations{border:1px solid #333;border-radius:8px;overflow:hidden}.testEvaluation{border-top:1px solid #343434;background:#111}.testEvaluation:first-child{border-top:0}.testEvaluationHead{display:grid;grid-template-columns:minmax(130px,.75fr) minmax(160px,1fr) minmax(180px,1.2fr) auto;gap:12px;align-items:center;padding:12px 14px;background:#202124}.detailsToggle{min-height:32px;border:1px solid #454545;background:#111;color:#fff;border-radius:7px;padding:0 9px;font-weight:800;cursor:pointer;white-space:nowrap}.testEvaluationHead>div:first-child strong{font-size:16px}.testEvaluationHead>div:first-child span{display:block;color:#aeb6c1;font-size:12px;margin-top:2px}.criterionSummary{border-left:1px solid #383838;padding-left:12px}.criterionSummary small{display:block;color:#8f98a5;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}.criterionSummary strong{font-size:12px;line-height:1.35}.testDecision{display:flex;align-items:flex-start;gap:8px}.testDecision small{color:#b8c0cc;font-size:11px;line-height:1.3}
+        .testEvaluations{border:1px solid #333;border-radius:8px;overflow:hidden}.testEvaluation{border-top:1px solid #343434;background:#111}.testEvaluation:first-child{border-top:0}.testEvaluationHead{display:grid;grid-template-columns:minmax(130px,.75fr) minmax(210px,1.15fr) minmax(180px,1.2fr) auto;gap:12px;align-items:center;padding:12px 14px;background:#202124}.detailsToggle{min-height:32px;border:1px solid #454545;background:#111;color:#fff;border-radius:7px;padding:0 9px;font-weight:800;cursor:pointer;white-space:nowrap}.testEvaluationHead>div:first-child strong{font-size:16px}.testEvaluationHead>div:first-child span{display:block;color:#aeb6c1;font-size:12px;margin-top:2px}.criterionSummary{border-left:1px solid #383838;padding-left:12px}.criterionSummary small{display:block;color:#8f98a5;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}.criterionSummary strong{font-size:12px;line-height:1.35}.criterionBands{display:grid;gap:4px}.testDecision{display:flex;align-items:flex-start;gap:8px}.testDecision small{color:#b8c0cc;font-size:11px;line-height:1.3}
         .evaluationGroup{padding:9px 14px!important;border:0!important;border-radius:0!important;background:transparent!important}.evaluationGroupHead{display:flex;align-items:center;gap:8px;margin-bottom:6px}.evaluationGroupHead h4{margin:0!important}.evaluationGroupHead small{color:#8f98a5;font-size:9px}.evaluationGroup h4{margin:0 0 6px;color:#e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:.06em}.evaluationField{display:grid;grid-template-columns:minmax(80px,.65fr) minmax(75px,.55fr) minmax(220px,1.9fr) minmax(160px,1.25fr);gap:10px;align-items:center;padding:7px 0;border-top:1px solid #2c2f34}.evaluationField.fieldLabels{padding:0 0 5px;border-top:0;color:#7f8996;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}.evaluationField.fieldLabels+.evaluationField{border-top:0}.fieldName{font-size:11px;text-transform:uppercase;color:#d9dee7}.fieldValue{font-size:15px}.limitBands{display:flex;flex-wrap:wrap;gap:5px 10px}.limitBand{display:inline-flex;align-items:center;gap:4px;color:#9ca3af;font-size:10px;line-height:1.25}.limitBand i{width:7px;height:7px;border-radius:2px;background:#22c55e;flex:0 0 auto}.limitBand b{color:#e5e7eb}.limitBand.warning i{background:#eab308}.limitBand.critical i{background:#ef232a}.fieldOutcome{display:flex;align-items:flex-start;gap:7px}.fieldOutcome small{color:#aeb6c1;font-size:10px;line-height:1.25}.fieldPill{display:inline-flex;border:1px solid #444;border-radius:999px;padding:3px 7px;font-size:9px;font-weight:900;white-space:nowrap}.fieldPill.ok{color:#86efac;border-color:rgba(34,197,94,.45);background:rgba(22,101,52,.25)}.fieldPill.alert{color:#fde047;border-color:rgba(234,179,8,.5);background:rgba(113,63,18,.25)}.fieldPill.critical{color:#fecaca;border-color:rgba(239,35,42,.55);background:rgba(127,29,29,.25)}.fieldPill.neutral,.fieldPill.pending{color:#d1d5db}.evaluationFallback{display:grid;grid-template-columns:1fr 2fr;gap:12px;padding:12px 14px}.evaluationFallback span small{display:block;color:#8f98a5;font-size:9px;text-transform:uppercase;margin-bottom:3px}.emptyEvaluation{padding:30px;text-align:center;color:#9ca3af}
         .diagRow{min-height:52px;border:1px solid #333;border-left:3px solid #6b7280;border-radius:7px;margin-bottom:8px;padding:9px 10px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 10px}.diagRow span{font-weight:900}.diagRow strong{font-size:20px}.diagRow small{grid-column:1/3;color:#9ca3af}.diagRow.ok{border-left-color:#22c55e}.diagRow.warning{border-left-color:#eab308}.diagRow.critical{border-left-color:#ef232a}.diagRow.neutral{border-left-color:#9ca3af}
         .commentsTable{border:1px solid #333;border-radius:8px;overflow:hidden}.commentsHead{height:28px;background:#e6edf8;color:#111;padding:5px 9px;font-weight:800}.commentRow{display:grid;grid-template-columns:42px 1fr 28px;align-items:center;min-height:28px;background:#dbe7f5;color:#111;border-top:1px solid #bed0e5}.commentRow span{text-align:center;font-weight:900}.commentRow p{margin:0}.commentRow button{background:transparent;border:0;cursor:pointer}.providerComment{display:grid;gap:6px;margin-top:10px}.providerComment span{font-weight:800}.providerComment textarea{min-height:82px;border:1px solid #404040;background:#080808;color:#fff;border-radius:8px;padding:10px;resize:vertical}.providerComment em{text-align:right;color:#aaa;font-style:normal}.sampleWorkActions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid #333}.sampleWorkActions span{color:#9ca3af;font-size:12px}
-        .trendTop{display:grid;grid-template-columns:220px 160px 1fr;align-items:center;gap:12px}.switchLine{display:flex;align-items:center;gap:8px}.chips{display:flex;gap:7px;flex-wrap:wrap}.chip{height:28px;border:1px solid #444;background:#252525;color:#ddd;border-radius:7px;padding:0 10px;cursor:pointer}.chip.active{background:#3b3b3b;border-color:#666;color:#fff}.chartsGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}.chartCard,.emptyChart{min-height:220px;border:1px solid #333;background:#111;border-radius:8px;padding:12px}.chartCard h3{margin:0 0 8px}.lineChart{width:100%;height:150px;display:block;background:linear-gradient(180deg,rgba(255,255,255,.025),transparent);border-bottom:1px solid #555}.trendLine{fill:none;stroke:#d1d5db;stroke-width:2.2}.trendPoint{fill:#d1d5db;stroke:#111;stroke-width:1.5}.trendPoint.actual{fill:#ef232a;stroke:#fff}.axisLabel{fill:#9ca3af;font-size:10px}.emptyChart{display:grid;place-items:center;color:#aaa;text-align:center}.chartFoot{color:#aaa;font-size:12px;margin-top:7px}
+        .trendTop{display:grid;grid-template-columns:220px 160px 1fr;align-items:center;gap:12px}.trendTop .blockTitle small{display:block;color:#aeb6c1;font-size:10px;font-weight:500;margin-top:3px}.switchLine{display:flex;align-items:center;gap:8px}.chips{display:flex;gap:7px;flex-wrap:wrap}.chip{height:28px;border:1px solid #444;background:#252525;color:#ddd;border-radius:7px;padding:0 10px;cursor:pointer}.chip.active{background:#3b3b3b;border-color:#666;color:#fff}.chartsGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}.chartCard,.emptyChart{min-height:280px;border:1px solid #333;background:#111;border-radius:8px;padding:12px}.chartCard h3{margin:0 0 8px}.interactiveChart{height:220px;border:1px solid #30333b;border-radius:7px;background:#151719;padding:4px;cursor:crosshair}.emptyChart{display:grid;place-items:center;color:#aaa;text-align:center}.chartFoot{color:#aaa;font-size:12px;margin-top:7px}
         .resultUnit{display:inline-flex!important;margin:0 0 0 8px!important;padding:2px 6px;border:1px solid #46505d;border-radius:999px;color:#cbd5e1!important;font-size:9px!important;font-weight:800;letter-spacing:0;text-transform:none;vertical-align:middle}
-        .requestOverlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.78);backdrop-filter:blur(3px);display:grid;place-items:center;padding:20px;cursor:wait}.requestCard{width:min(430px,92vw);min-height:210px;border:1px solid #494949;background:linear-gradient(180deg,#202020,#121212);border-radius:14px;box-shadow:0 30px 90px rgba(0,0,0,.7);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;text-align:center;padding:26px}.requestCard strong{font-size:18px;line-height:1.35}.requestCard span{color:#b8b8b8;font-size:13px}.requestSpinner{width:54px;height:54px;border:6px solid #454545;border-top-color:#ef232a;border-right-color:#ef232a;border-radius:50%;animation:requestSpin .8s linear infinite}@keyframes requestSpin{to{transform:rotate(360deg)}}
+        .requestOverlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.78);backdrop-filter:blur(3px);display:grid;place-items:center;padding:20px;cursor:wait}.requestCard{width:min(430px,92vw);min-height:210px;border:1px solid #494949;background:#191b1e;border-radius:14px;box-shadow:0 30px 90px rgba(0,0,0,.7);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;text-align:center;padding:26px}.requestCard strong{font-size:18px;line-height:1.35}.requestCard span{color:#b8b8b8;font-size:13px}.requestSpinner{width:54px;height:54px;border:6px solid #454545;border-top-color:#ef232a;border-right-color:#ef232a;border-radius:50%;animation:requestSpin .8s linear infinite}@keyframes requestSpin{to{transform:rotate(360deg)}}
 
         .trendGroups{display:grid;gap:12px;margin-top:10px}.trendTest{padding:0!important;overflow:hidden;background:#111!important}.trendTest>header{display:flex;align-items:baseline;gap:10px;padding:10px 12px;background:#232323;border-bottom:1px solid #383838}.trendTest>header strong{font-size:16px}.trendTest>header span{color:#aeb6c1;font-size:12px}.trendResult{padding:10px 12px;border-top:1px solid #303030}.trendResult:first-of-type{border-top:0}.trendResult>h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;color:#d7dce4}.categoricalGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}.historyCard{border:1px solid #333;background:#111;border-radius:8px;padding:10px;min-width:0}.historyCard h3{font-size:14px;margin:0 0 8px}.historyTable{width:100%;border-collapse:collapse;font-size:12px}.historyTable th,.historyTable td{padding:7px 8px;border-top:1px solid #303030;text-align:left}.historyTable th{color:#9ca3af;text-transform:uppercase;font-size:9px}.historyTable tr.current td{color:#fff;font-weight:800;background:#242424}.savedContent{color:#86efac!important;font-size:10px!important;margin-top:2px}
         .sampleStepBar{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #383838;background:#151515;border-radius:10px;padding:9px 12px;margin-bottom:10px}.sampleStepBar button{height:34px;border:1px solid #444;background:#111;color:#fff;border-radius:7px;padding:0 10px;cursor:pointer}.sampleStepBar span{font-weight:900;color:#ddd}
@@ -1109,7 +1138,7 @@ export default function InterpretationPage() {
 
         @media(max-width:1400px){.contentPane{grid-template-columns:1fr}.diagnostic,.resultsLimits,.commentsBox,.trendBox{grid-column:1}.diagnostic{grid-row:auto}}
         .modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.62);display:grid;place-items:center;z-index:100;padding:20px}
-        .signatureModal{width:min(560px,96vw);border:1px solid #3d3d3d;background:linear-gradient(180deg,#1b1b1b,#101010);border-radius:12px;box-shadow:0 28px 80px rgba(0,0,0,.55);padding:18px;color:#fff}
+        .signatureModal{width:min(560px,96vw);border:1px solid #3d3d3d;background:#191b1e;border-radius:12px;box-shadow:0 28px 80px rgba(0,0,0,.55);padding:18px;color:#fff}
         .modalHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.modalHead h3{margin:0;font-size:22px}.modalHead button{background:transparent;border:0;color:#fff;font-size:24px;cursor:pointer}
         .modalIntro{color:#c8c8c8;line-height:1.45;margin:0 0 14px}.signatureField{display:grid;gap:6px;margin-bottom:12px}.signatureField span{font-weight:900;color:#e5e7eb}.signatureField input{min-height:40px;border:1px solid #404040;background:#080808;color:#fff;border-radius:8px;padding:0 10px}
         .reportScope{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px}.reportScope label{display:flex;align-items:flex-start;gap:9px;border:1px solid #444;background:#101010;border-radius:9px;padding:11px;cursor:pointer}.reportScope label.active{border-color:#ef232a;background:rgba(127,29,29,.22)}.reportScope input{margin-top:3px;accent-color:#ef232a}.reportScope strong,.reportScope small{display:block}.reportScope small{color:#aeb6c1;margin-top:3px}.scopeHint{border-left:3px solid #eab308;background:rgba(113,63,18,.2);color:#fde68a;padding:9px 10px;margin:0 0 12px;font-size:12px;line-height:1.4}
@@ -1120,7 +1149,7 @@ export default function InterpretationPage() {
         .drawSignatureBox{display:grid;gap:8px}.drawSignatureBox canvas{width:100%;height:150px;border:1px dashed #666;border-radius:8px;background:#fff;touch-action:none;cursor:crosshair}.clearSignature{height:34px;border:1px solid #444;background:#151515;color:#fff;border-radius:8px;cursor:pointer;font-weight:800}
 
 
-        @media(max-width:1200px){.summaryLine{grid-template-columns:repeat(2,1fr)}.mainGrid{grid-template-columns:1fr}.chartsGrid,.categoricalGrid{grid-template-columns:1fr}.trendTop{grid-template-columns:1fr}.evaluationField{grid-template-columns:minmax(75px,.6fr) minmax(70px,.5fr) minmax(200px,1.7fr) minmax(145px,1.2fr)}}@media(max-width:800px){.interpTop{flex-direction:column;align-items:flex-start}.summaryLine{grid-template-columns:1fr}.topActions{width:100%;justify-content:stretch}.topActions .btn{flex:1 1 100%;max-width:none}.testEvaluationHead{grid-template-columns:1fr}.criterionSummary{border-left:0;border-top:1px solid #383838;padding:9px 0 0}.testDecision{border-top:1px solid #383838;padding-top:9px}.evaluationGroup{overflow-x:auto}.evaluationField{min-width:650px}.sampleStepBar{align-items:stretch;flex-direction:column}.sampleStepBar span{text-align:center}}
+        @media(max-width:1200px){.summaryLine{grid-template-columns:repeat(2,1fr)}.mainGrid{grid-template-columns:1fr}.chartsGrid,.categoricalGrid{grid-template-columns:1fr}.trendTop{grid-template-columns:1fr}.evaluationField{grid-template-columns:minmax(75px,.6fr) minmax(70px,.5fr) minmax(200px,1.7fr) minmax(145px,1.2fr)}}@media(max-width:800px){.interpTop{flex-direction:column;align-items:flex-start}.summaryLine{grid-template-columns:1fr}.topActions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.topActions .btn{width:100%;max-width:none}.testEvaluationHead{grid-template-columns:1fr}.criterionSummary{border-left:0;border-top:1px solid #383838;padding:9px 0 0}.testDecision{border-top:1px solid #383838;padding-top:9px}.evaluationGroup{overflow-x:auto}.evaluationField{min-width:650px}.sampleStepBar{align-items:stretch;flex-direction:column}.sampleStepBar span{text-align:center}}
       `}</style>
     </div>
   );
@@ -1143,45 +1172,37 @@ const MiniChart = ({ serie }) => {
     );
   }
 
-  const width = 520;
-  const height = 150;
-  const padX = 28;
-  const padY = 18;
-  const values = points.map((point) => point.y);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max === min ? 1 : max - min;
-
-  const coords = points.map((point, index) => {
-    const x = padX + (index * (width - padX * 2)) / Math.max(points.length - 1, 1);
-    const y = height - padY - ((point.y - min) / range) * (height - padY * 2);
-    return { ...point, x, y };
-  });
-
-  const polyline = coords.map((point) => `${point.x},${point.y}`).join(' ');
+  const chartData = points.map((point) => ({
+    ...point,
+    fecha: point.fecha ? new Date(point.fecha).toLocaleDateString('es-CO') : point.muestra,
+  }));
 
   return (
     <div className="chartCard">
       <h3>{serie.campo || serie.prueba} {serie.unidad ? `(${serie.unidad})` : ''}</h3>
-      <svg className="lineChart" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-        <line x1={padX} y1={height - padY} x2={width - padX} y2={height - padY} stroke="#4b5563" strokeWidth="1" />
-        <line x1={padX} y1={padY} x2={padX} y2={height - padY} stroke="#374151" strokeWidth="1" />
-        <text x={padX} y={13} className="axisLabel">{max}</text>
-        <text x={padX} y={height - 4} className="axisLabel">{min}</text>
-        <polyline points={polyline} className="trendLine" />
-        {coords.map((point) => (
-          <circle
-            key={`${point.muestra}-${point.fecha}`}
-            cx={point.x}
-            cy={point.y}
-            r={point.actual ? 5 : 3.5}
-            className={`trendPoint ${point.actual ? 'actual' : ''}`}
-          >
-            <title>{`${point.muestra}: ${point.valor} ${serie.unidad || ''}`}</title>
-          </circle>
-        ))}
-      </svg>
-      <div className="chartFoot">Tendencia histórica del mismo equipo. La muestra actual se muestra en rojo.</div>
+      <div className="interactiveChart">
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={chartData} margin={{ top: 10, right: 12, bottom: 4, left: 0 }}>
+            <CartesianGrid stroke="#30333b" strokeDasharray="3 3" />
+            <XAxis dataKey="fecha" stroke="#aeb4c0" tick={{ fontSize: 10 }} minTickGap={22} />
+            <YAxis stroke="#aeb4c0" tick={{ fontSize: 10 }} width={48} />
+            <Tooltip
+              formatter={(value) => [`${value}${serie.unidad ? ` ${serie.unidad}` : ''}`, 'Medición']}
+              labelFormatter={(_, payload) => {
+                const point = payload?.[0]?.payload;
+                return `${point?.muestra || 'Muestra'} · ${point?.fecha || ''}`;
+              }}
+              contentStyle={{ background: '#202126', border: '1px solid #42464f', borderRadius: 8, color: '#fff' }}
+              cursor={{ stroke: '#ef232a', strokeDasharray: '3 3' }}
+            />
+            <Line type="monotone" dataKey="y" name="Medición" stroke="#d1d5db" strokeWidth={2.3} dot={(props) => {
+              const point = props.payload;
+              return <circle key={`${point.muestra}-${point.fecha}`} cx={props.cx} cy={props.cy} r={point.actual ? 5 : 3} fill={point.actual ? '#ef232a' : '#d1d5db'} stroke={point.actual ? '#fff' : '#111'} strokeWidth={point.actual ? 1.5 : 1} />;
+            }} activeDot={{ r: 6, fill: '#ef232a', stroke: '#fff' }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="chartFoot">Pase el cursor por la curva para ver fecha, muestra y valor. La muestra actual está en rojo.</div>
     </div>
   );
 };
@@ -1206,3 +1227,5 @@ const CategoricalHistory = ({ serie }) => {
     </div>
   );
 };
+
+export default withRequiredPermissions(InterpretationPage, ['interpretacion.ver']);
