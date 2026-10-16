@@ -20,7 +20,7 @@ import { sampleManagementTypesService } from '@features/samples/infrastructure/s
 import { predefinedTestBatchesService } from '@features/technical-config/infrastructure/predefinedTestBatchesService';
 import technicalConfigService from '@features/technical-config/infrastructure/technicalConfigService';
 import { presentLimitBands } from '@shared/utils/limitPresentation';
-import withRequiredPermissions from '@shared/auth/withRequiredPermissions';
+import withRequiredPermissions from '@features/auth/presentation/withRequiredPermissions';
 
 const createRow = () => ({
   key: `row_${Math.random().toString(36).slice(2)}`,

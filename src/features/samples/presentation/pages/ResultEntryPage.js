@@ -13,7 +13,7 @@ import { toast } from 'react-toastify';
 
 import { resultEntryService } from '@features/samples/infrastructure/resultEntryService';
 import technicalConfigService from '@features/technical-config/infrastructure/technicalConfigService';
-import withRequiredPermissions from '@shared/auth/withRequiredPermissions';
+import withRequiredPermissions from '@features/auth/presentation/withRequiredPermissions';
 
 const normalizeValueMap = (currentResult) => {
   const values = currentResult?.payload?.values || [];

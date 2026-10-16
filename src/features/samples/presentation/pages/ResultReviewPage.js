@@ -26,7 +26,7 @@ import { presentLimitBands } from '@shared/utils/limitPresentation';
 
 import OverflowMenu from '@shared/ui/OverflowMenu';
 import PaginationBar from '@shared/ui/PaginationBar';
-import withRequiredPermissions from '@shared/auth/withRequiredPermissions';
+import withRequiredPermissions from '@features/auth/presentation/withRequiredPermissions';
 const fmtDate = (value) => {
   if (!value) return '-';
   const date = new Date(value);

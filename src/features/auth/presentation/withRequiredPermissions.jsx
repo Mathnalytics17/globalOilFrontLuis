@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 
-import { useAuth } from '@features/auth/presentation/context/AuthContext';
+import { useAuth } from './context/AuthContext';
 
-// The UI gate prevents a deep link from mounting a protected workspace. The
-// API remains authoritative and validates the same access server-side.
+// This access gate belongs to the authentication feature. Keeping it here
+// prevents shared UI primitives from depending on a feature implementation.
 export default function withRequiredPermissions(Page, permissions = [], fallback = '/muestras/lotes') {
   function PermissionProtectedPage(props) {
     const router = useRouter();

@@ -17,7 +17,7 @@ import { reviewInterpretationService } from '@features/samples/infrastructure/re
 import { reportsService } from '@features/reports/infrastructure/reportsService';
 import { resultEntryService } from '@features/samples/infrastructure/resultEntryService';
 import { useAuth } from '@features/auth/presentation/context/AuthContext';
-import withRequiredPermissions from '@shared/auth/withRequiredPermissions';
+import withRequiredPermissions from '@features/auth/presentation/withRequiredPermissions';
 import { presentLimitBands } from '@shared/utils/limitPresentation';
 
 import OverflowMenu from '@shared/ui/OverflowMenu';
