@@ -40,18 +40,38 @@ jobs:
                       git switch master
                       git reset --hard origin/master
 
-                      docker compose -f docker-compose.prod.yml up -d --build --force-recreate --remove-orphans frontend
+                      echo "=== Construyendo imagen frontend ==="
+                      docker compose -f docker-compose.prod.yml build frontend
 
+                      echo "=== Deteniendo frontend anterior ==="
+                      docker compose -f docker-compose.prod.yml stop frontend || true
+
+                      echo "=== Eliminando contenedor frontend anterior ==="
+                      docker compose -f docker-compose.prod.yml rm -f frontend || true
+
+                      echo "=== Verificando puerto 3000 antes del arranque ==="
+                      sudo ss -ltnp | grep :3000 || true
+
+                      echo "=== Levantando nuevo frontend ==="
+                      docker compose -f docker-compose.prod.yml up -d --no-build --remove-orphans frontend
+
+                      echo "=== Estado del frontend ==="
                       docker compose -f docker-compose.prod.yml ps frontend
+
+                      echo "=== Últimos logs del frontend ==="
+                      docker compose -f docker-compose.prod.yml logs --tail=50 frontend || true
 
                       # Do not prune volumes: they may hold data from other
                       # services. This only removes stopped containers, unused
                       # images and stale build cache older than seven days.
                       retention="${DOCKER_PRUNE_UNTIL:-168h}"
-                      echo "Docker usage before cleanup:"
+
+                      echo "=== Docker usage before cleanup ==="
                       docker system df || true
+
                       docker container prune --force --filter "until=${retention}" || true
                       docker image prune --all --force --filter "until=${retention}" || true
                       docker builder prune --all --force --filter "until=${retention}" || true
-                      echo "Docker usage after cleanup:"
+
+                      echo "=== Docker usage after cleanup ==="
                       docker system df || true
