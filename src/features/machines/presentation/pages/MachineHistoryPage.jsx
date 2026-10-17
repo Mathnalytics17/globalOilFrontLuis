@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
-import { FileBarChart2, Search } from 'lucide-react';
+import { Activity, Database, FileBarChart2, Search, TestTube2, Wrench } from 'lucide-react';
 import {
   CartesianGrid,
   Line,
@@ -16,6 +16,7 @@ import { machinesService } from '@features/machines/infrastructure/machinesServi
 import PageHeader from '@shared/ui/PageHeader';
 import MetricStrip from '@shared/ui/MetricStrip';
 import DataTable from '@shared/ui/DataTable';
+import PaginationBar from '@shared/ui/PaginationBar';
 
 function formatDate(value) {
   if (!value) return '-';
@@ -140,6 +141,9 @@ function TrendCard({ series }) {
 }
 
 function buildRows(machines) {
+  // El endpoint de histórico ya entrega filas normalizadas. Se conserva la
+  // conversión antigua únicamente para compatibilidad con datos en memoria.
+  if (machines.every((item) => item?.seriesId)) return machines;
   return machines.flatMap((machine) => (
     (machine.muestras || []).flatMap((sample) => {
       const tests = sample.pruebas_asignadas || sample.resultados || [];
@@ -233,17 +237,23 @@ function buildRows(machines) {
 export default function MachineHistoryPage() {
   const router = useRouter();
   const [machines, setMachines] = useState([]);
+  const [historyRows, setHistoryRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [companyFilter, setCompanyFilter] = useState('');
   const [machineFilter, setMachineFilter] = useState('');
   const [pointFilter, setPointFilter] = useState('');
   const [testFilter, setTestFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [includeInvalid, setIncludeInvalid] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(25);
+  const [historyMeta, setHistoryMeta] = useState({ count: 0, next: null, previous: null });
 
   const load = async () => {
     setLoading(true);
     try {
-      const data = await machinesService.list({ include_muestras: 1 });
+      const data = await machinesService.list();
       setMachines(data);
     } catch (error) {
       console.error(error);
@@ -257,7 +267,43 @@ export default function MachineHistoryPage() {
     load();
   }, []);
 
-  const rows = useMemo(() => buildRows(machines), [machines]);
+  useEffect(() => {
+    if (!machineFilter) {
+      setHistoryRows([]);
+      setHistoryMeta({ count: 0, next: null, previous: null });
+      return;
+    }
+    let cancelled = false;
+    setHistoryLoading(true);
+    machinesService.history(machineFilter, {
+      page: historyPage,
+      page_size: historyPageSize,
+      point: pointFilter || undefined,
+      test: testFilter || undefined,
+      include_invalid: includeInvalid || undefined,
+    })
+      .then((data) => {
+        if (!cancelled) {
+          setHistoryRows(data.results || []);
+          setHistoryMeta({ count: data.count || 0, next: data.next || null, previous: data.previous || null });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHistoryRows([]);
+          setHistoryMeta({ count: 0, next: null, previous: null });
+          toast.error('No se pudo cargar el histórico del equipo.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [machineFilter, pointFilter, testFilter, includeInvalid, historyPage, historyPageSize]);
+
+  useEffect(() => { setHistoryPage(1); }, [machineFilter, pointFilter, testFilter, includeInvalid, historyPageSize]);
+
+  const rows = useMemo(() => buildRows(historyRows), [historyRows]);
 
   const companyOptions = useMemo(() => {
     const map = new Map();
@@ -310,8 +356,6 @@ export default function MachineHistoryPage() {
     const term = search.trim().toLowerCase();
     if (!companyFilter || !machineFilter) return [];
     return machineRows.filter((row) => {
-      if (pointFilter && row.pointId !== pointFilter) return false;
-      if (testFilter && row.testId !== testFilter) return false;
       if (!term) return true;
       return [row.machineName, row.sampleId, row.testName, row.value, row.status]
         .filter(Boolean)
@@ -334,7 +378,7 @@ export default function MachineHistoryPage() {
         actions={canShowHistory ? (
           <button
             type="button"
-            className="go-button go-button-secondary"
+            className="go-button go-button-primary reportAction"
             onClick={() => router.push({
               pathname: '/machines/historico/reporte',
               query: { machine: machineFilter, point: pointFilter || undefined, test: testFilter || undefined },
@@ -345,7 +389,15 @@ export default function MachineHistoryPage() {
         ) : null}
       />
 
-      <section className="filters">
+      <section className="filtersPanel">
+        <div className="filtersHeading">
+          <div>
+            <span>Explorar histórico</span>
+            <p>Seleccione el equipo y refine las series que desea comparar.</p>
+          </div>
+          {machineFilter ? <button type="button" className="clearFilters" onClick={() => { setPointFilter(''); setTestFilter(''); setSearch(''); setIncludeInvalid(false); }}>Limpiar filtros</button> : null}
+        </div>
+        <div className="filters">
         <label>
           Empresa
           <select
@@ -400,13 +452,18 @@ export default function MachineHistoryPage() {
           Buscar
           <span><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Muestra, prueba, estado..." disabled={!machineFilter} /></span>
         </label>
+        <label className="invalidToggle">
+          <input type="checkbox" checked={includeInvalid} onChange={(event) => setIncludeInvalid(event.target.checked)} disabled={!machineFilter} />
+          Incluir muestras invalidadas
+        </label>
+        </div>
       </section>
 
       <MetricStrip items={[
-        { label: 'Máquinas de empresa', value: companyFilter ? machineOptions.length : 0 },
-        { label: 'Muestras con pruebas', value: new Set(filteredRows.map((row) => row.sampleId)).size },
-        { label: 'Resultados', value: filteredRows.length },
-        { label: 'Series numéricas', value: trendSeries.filter((series) => series.type === 'numeric').length },
+        { label: 'Máquinas disponibles', value: companyFilter ? machineOptions.length : 0, icon: Wrench },
+        { label: 'Muestras visibles', value: new Set(filteredRows.map((row) => row.sampleId)).size, icon: Database },
+        { label: 'Resultados visibles', value: filteredRows.length, icon: TestTube2 },
+        { label: 'Series visibles', value: trendSeries.length, icon: Activity },
       ]} />
 
       {!canShowHistory ? (
@@ -417,11 +474,17 @@ export default function MachineHistoryPage() {
       ) : null}
 
       {canShowHistory ? <section className="panel">
-        <div className="panelTitle">
-          <h2>{testFilter ? 'Evolución de la prueba' : 'Evolución por campo'}</h2>
-          <strong>{selectedMachine?.nombre || selectedMachine?.codigo_equipo || ''}</strong>
-          {pointFilter ? <em>{pointOptions.find((point) => point.id === pointFilter)?.label}</em> : null}
-          <span>{trendSeries.length} serie(s)</span>
+        <div className="panelTitle panelTitle--stacked">
+          <div>
+            <span className="sectionEyebrow">Tendencias</span>
+            <h2>{testFilter ? 'Evolución de la prueba' : 'Evolución por campo'}</h2>
+            <p>Compare la evolución histórica de cada resultado medido.</p>
+          </div>
+          <div className="contextChips">
+            <strong>{selectedMachine?.nombre || selectedMachine?.codigo_equipo || ''}</strong>
+            {pointFilter ? <em>{pointOptions.find((point) => point.id === pointFilter)?.label}</em> : null}
+            <span>{trendSeries.length} serie{trendSeries.length === 1 ? '' : 's'}</span>
+          </div>
         </div>
         <div className="trendGrid">
           {trendSeries.length ? (
@@ -431,17 +494,20 @@ export default function MachineHistoryPage() {
       </section> : null}
 
       {canShowHistory ? <section className="panel">
-        <div className="panelTitle">
-          <h2>Registro historico</h2>
-          <span>{filteredRows.length} resultado(s)</span>
+        <div className="panelTitle panelTitle--stacked">
+          <div>
+            <span className="sectionEyebrow">Detalle</span>
+            <h2>Registro histórico</h2>
+            <p>Consulte los resultados que alimentan las tendencias mostradas arriba.</p>
+          </div>
+          <span className="resultCount">{historyMeta.count} registro{historyMeta.count === 1 ? '' : 's'}</span>
         </div>
         <DataTable
-          data={loading ? [] : filteredRows}
+          data={loading || historyLoading ? [] : filteredRows}
           rowKey="id"
-          pagination
-          initialRowsPerPage={15}
+          pagination={false}
           minWidth={760}
-          emptyMessage={loading ? 'Cargando histórico…' : 'No hay resultados para los filtros seleccionados.'}
+          emptyMessage={loading || historyLoading ? 'Cargando histórico…' : 'No hay resultados para los filtros seleccionados.'}
           defaultSort={{ field: 'date', order: 'desc' }}
           columns={[
             { id: 'date', label: 'Fecha', render: (row) => formatDate(row.date) },
@@ -453,48 +519,94 @@ export default function MachineHistoryPage() {
             { id: 'status', label: 'Estado', render: (row) => <span className="status">{row.status}</span> },
           ]}
         />
+        <PaginationBar
+          count={historyMeta.count}
+          page={historyPage}
+          pageSize={historyPageSize}
+          pageSizeOptions={[10, 25, 50, 100]}
+          onPageChange={setHistoryPage}
+          onPageSizeChange={(size) => { setHistoryPageSize(size); setHistoryPage(1); }}
+        />
       </section> : null}
 
       <style jsx global>{`
         .historyPage { min-height: 0; background: transparent; color: #fff; }
-        .filters { border: 1px solid var(--go-border-soft); background: #191b1e; border-radius: var(--go-radius); padding: 14px; display: grid; grid-template-columns:minmax(170px,1fr) minmax(230px,1.35fr) minmax(230px,1.35fr) minmax(150px,.85fr) minmax(230px,1.35fr); gap: 12px; margin-bottom: 14px; }
-        .historyPage label { color: #aeb4c0; display: grid; gap: 5px; font-size: 11.5px; font-weight: 600; }
-        .historyPage select, .historyPage input { height: 36px; border: 1px solid #3a3f46; background: #141518; color: #fff; border-radius: 7px; padding: 0 10px; outline: 0; font-size: 12.5px; }
-        .searchBox span { display: flex; align-items: center; gap: 8px; border: 1px solid #3a3d45; background: #0f1014; border-radius: 7px; padding: 0 10px; }
-        .searchBox input { border: 0; flex: 1; padding: 0; }
-        .panel { border: 1px solid var(--go-border-soft); background: #191b1e; border-radius: var(--go-radius); }
-        .panel { padding: 16px; margin-bottom: 14px; }
-        .panelTitle { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 12px; }
-        .panelTitle h2 { margin: 0; font-size: 16px; font-weight: 650; }
-        .panelTitle strong { color: #fff; margin-right: auto; }
-        .panelTitle em { color: #b9c5d7; font-size: 13px; font-style: normal; }
-        .panelTitle span { color: #aeb4c0; }
+        .historyPage .go-page-heading { align-items: flex-end; margin-bottom: 20px; }
+        .historyPage .reportAction { min-height: 40px; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
+
+        .filtersPanel { border: 1px solid #292c32; background: linear-gradient(180deg, #191b1f 0%, #17191c 100%); border-radius: 12px; margin-bottom: 18px; overflow: visible; }
+        .filtersHeading { min-height: 58px; padding: 13px 16px 11px; border-bottom: 1px solid #292c32; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+        .filtersHeading span, .sectionEyebrow { display: block; color: #f5f6f8; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+        .filtersHeading p { margin: 4px 0 0; color: #8f97a3; font-size: 12.5px; font-weight: 400; }
+        .clearFilters { appearance: none; border: 0; background: transparent; color: #b9c0ca; font-size: 12px; font-weight: 650; cursor: pointer; padding: 7px 9px; border-radius: 7px; }
+        .clearFilters:hover { background: #23262b; color: #fff; }
+        .filters { padding: 14px 16px 16px; display: grid; grid-template-columns: minmax(0,.8fr) minmax(0,1.55fr) minmax(0,1.25fr) minmax(0,.72fr) minmax(0,1.15fr); gap: 12px; align-items: end; }
+        .filters > label { min-width: 0; max-width: 100%; }
+        .historyPage label { color: #aeb4c0; display: grid; gap: 6px; font-size: 11.5px; font-weight: 650; }
+        .historyPage select, .historyPage input { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; height: 39px; border: 1px solid #353941; background: #121417; color: #f7f8fa; border-radius: 8px; padding: 0 34px 0 11px; outline: 0; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; transition: border-color .16s ease, box-shadow .16s ease; }
+        .historyPage select:focus, .historyPage input:focus { border-color: #5e6672; box-shadow: 0 0 0 2px rgba(255,255,255,.04); }
+        .searchBox span { display: flex; min-width: 0; max-width: 100%; align-items: center; gap: 8px; height: 39px; border: 1px solid #353941; background: #121417; border-radius: 8px; padding: 0 10px; color: #929aa6; box-sizing: border-box; overflow: hidden; }
+        .searchBox input { width: auto; border: 0; height: 37px; flex: 1; min-width: 0; padding: 0; background: transparent; box-shadow: none !important; overflow: hidden; text-overflow: ellipsis; }
+        .invalidToggle { grid-column: 1 / -1; display: inline-flex; grid-template-columns: auto 1fr; align-items: center; justify-content: start; gap: 8px; color: #c8ced8; font-size: 12px; cursor: pointer; width: fit-content; }
+        .invalidToggle input { width: 16px; height: 16px; accent-color: #ff3045; }
+
+        .historyPage .go-metric-strip { margin-bottom: 18px; border-top-color: #26292f; border-bottom-color: #26292f; }
+        .historyPage .go-metric-value { font-size: 20px; }
+        .historyPage .go-metric-icon { color: #9aa2ae; }
+
+        .panel { border: 1px solid #292c32; background: #17191c; border-radius: 12px; padding: 18px; margin-bottom: 18px; overflow: hidden; }
+        .panelTitle { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 16px; }
+        .panelTitle--stacked { align-items: flex-start; }
+        .panelTitle h2 { margin: 3px 0 0; font-size: 17px; line-height: 1.2; font-weight: 750; color: #f4f5f7; }
+        .panelTitle p { margin: 5px 0 0; color: #8f97a3; font-size: 12.5px; }
+        .contextChips { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 7px; max-width: 58%; }
+        .contextChips strong, .contextChips em, .contextChips span, .resultCount { max-width: 100%; border: 1px solid #32363e; background: #202329; border-radius: 999px; padding: 6px 10px; color: #cfd4dc; font-size: 11.5px; font-style: normal; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .contextChips strong { color: #fff; }
+        .sectionEyebrow { color: #8f97a3; font-size: 10.5px; }
+        .emptyState { padding: 30px 22px; text-align: center; }
         .emptyState h2 { margin: 0 0 6px; font-size: 16px; }
-        .emptyState p { margin: 0; color: #aeb4c0; }
-        .trendGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 14px; }
-        .trendCard { border: 1px solid #30333b; border-radius: 8px; background: #202126; padding: 14px; min-width: 0; }
-        .trendHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-        .trendHead h3 { margin: 0 0 4px; font-size: 17px; font-weight: 700; }
-        .trendHead p { margin: 0 0 4px; color: #e5e7eb; font-size: 13px; }
-        .trendHead span { color: #aeb4c0; font-size: 13px; }
-        .trendHead strong { border: 1px solid #3a3d45; border-radius: 999px; padding: 5px 9px; color: #cfd5de; }
-        .miniChart { height: 220px; min-width: 0; }
-        .trendLegend{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:#b7bec8}.trendLegend span{display:inline-flex;align-items:center;gap:5px}.trendLegend i{width:8px;height:8px;border-radius:50%}
-        .categoryHistory { display: grid; max-height: 220px; overflow: auto; border-top: 1px solid #30333b; }
-        .categoryHistory > div { display: grid; grid-template-columns: 90px minmax(100px, 1fr); gap: 4px 12px; padding: 10px 2px; border-bottom: 1px solid #30333b; }
-        .categoryHistory span, .categoryHistory small { color: #aeb4c0; font-size: 12px; }
+        .emptyState p { margin: 0; color: #8f97a3; }
+
+        .trendGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .trendCard { border: 1px solid #2f333a; border-radius: 10px; background: #1d2025; padding: 15px; min-width: 0; box-shadow: inset 0 1px rgba(255,255,255,.015); }
+        .trendCard:hover { border-color: #3a3f47; }
+        .trendHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; min-height: 70px; }
+        .trendHead h3 { margin: 0 0 5px; font-size: 16px; line-height: 1.25; font-weight: 750; color: #f5f6f8; }
+        .trendHead p { margin: 0 0 4px; color: #cdd2d9; font-size: 12.5px; line-height: 1.35; }
+        .trendHead span { color: #8f97a3; font-size: 12px; }
+        .trendHead strong { flex: 0 0 auto; min-width: 34px; text-align: center; border: 1px solid #353a42; background: #24272d; border-radius: 999px; padding: 5px 8px; color: #d8dce3; font-size: 12px; }
+        .miniChart { height: 275px; min-width: 0; padding-top: 4px; }
+        .trendLegend { display: flex; gap: 10px; flex-wrap: wrap; margin: 7px 0 0 4px; font-size: 10.5px; color: #aeb4be; }
+        .trendLegend span { display: inline-flex; align-items: center; gap: 5px; }
+        .trendLegend i { width: 7px; height: 7px; border-radius: 50%; }
+        .categoryHistory { display: grid; max-height: 270px; overflow: auto; border-top: 1px solid #2e3238; scrollbar-width: thin; }
+        .categoryHistory > div { display: grid; grid-template-columns: 100px minmax(100px, 1fr); gap: 4px 12px; padding: 11px 2px; border-bottom: 1px solid #292d33; }
+        .categoryHistory span, .categoryHistory small { color: #929aa6; font-size: 11.5px; }
+        .categoryHistory strong { color: #f1f3f5; }
         .categoryHistory small { grid-column: 2; }
-        .status { display: inline-flex; border: 1px solid #3a3d45; border-radius: 999px; padding: 5px 9px; color: #cfd5de; }
-        .empty { color: #aeb4c0; text-align: center; padding: 28px; }
+        .status { display: inline-flex; border: 1px solid #353a42; background: #202329; border-radius: 999px; padding: 4px 8px; color: #cfd5de; font-size: 11.5px; }
+        .empty { grid-column: 1 / -1; color: #929aa6; text-align: center; padding: 40px 20px; }
+
+        .historyPage .go-pagination { margin-top: 14px; padding-top: 14px; border-top: 1px solid #292c32; }
+
+        @media (max-width: 1380px) {
+          .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .trendGrid { grid-template-columns: 1fr; }
+        }
         @media (max-width: 980px) {
+          .historyPage .go-page-heading { align-items: flex-start; }
           .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .contextChips { max-width: 100%; margin-left: 0; justify-content: flex-start; }
+          .panelTitle--stacked { flex-direction: column; }
         }
         @media (max-width: 640px) {
-          .filters { grid-template-columns: 1fr; padding: 8px; }
-          .panel { padding: 12px; }
-          .panelTitle { align-items: flex-start; flex-wrap: wrap; }
-          .trendGrid { grid-template-columns: 1fr; }
-          .trendCard { padding: 10px; }
+          .filtersHeading { align-items: flex-start; }
+          .filters { grid-template-columns: 1fr; padding: 12px; }
+          .filtersPanel { border-radius: 9px; }
+          .panel { padding: 12px; border-radius: 9px; }
+          .trendCard { padding: 11px; }
+          .miniChart { height: 235px; }
+          .historyPage .reportAction { width: 100%; justify-content: center; }
         }
       `}</style>
     </main>

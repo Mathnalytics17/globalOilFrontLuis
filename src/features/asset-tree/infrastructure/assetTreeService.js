@@ -25,6 +25,10 @@ export const assetTreeService = {
     const { data } = await apiClient.post(`/sampling-points/${id}/reactivate/`);
     return data;
   },
+  async samplingPointActivity(id, params = {}) {
+    const { data } = await apiClient.get(`/sampling-points/${id}/activity/`, { params });
+    return Array.isArray(data) ? { results: data, count: data.length } : data;
+  },
 
   async listSamplingPoints(params = {}) {
     const { data } = await apiClient.get('/sampling-points/', { params });

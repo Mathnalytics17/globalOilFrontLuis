@@ -25,7 +25,7 @@ import { resultsService } from '@features/samples/infrastructure/resultsService'
 import { presentLimitBands } from '@shared/utils/limitPresentation';
 
 import OverflowMenu from '@shared/ui/OverflowMenu';
-import PaginationBar from '@shared/ui/PaginationBar';
+import DataTable from '@shared/ui/DataTable';
 import withRequiredPermissions from '@features/auth/presentation/withRequiredPermissions';
 const fmtDate = (value) => {
   if (!value) return '-';
@@ -205,8 +205,6 @@ function ReviewResultsPage() {
   const [sampleRulesOpen, setSampleRulesOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [testsPage, setTestsPage] = useState(1);
-  const [testsPageSize, setTestsPageSize] = useState(15);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
 
@@ -266,20 +264,9 @@ function ReviewResultsPage() {
 
   const selectedSample = useMemo(() => (batch?.muestras || []).find((sample) => sample.id === selectedSampleId), [batch, selectedSampleId]);
   const selectedTests = useMemo(() => getSampleTests(batch, selectedSampleId), [batch, selectedSampleId]);
-  const testsPages = Math.max(1, Math.ceil(selectedTests.length / testsPageSize));
-  const visibleTests = useMemo(
-    () => selectedTests.slice((testsPage - 1) * testsPageSize, testsPage * testsPageSize),
-    [selectedTests, testsPage, testsPageSize],
-  );
-
   useEffect(() => {
-    setTestsPage(1);
     setSampleRulesOpen(false);
   }, [selectedSampleId]);
-
-  useEffect(() => {
-    if (testsPage > testsPages) setTestsPage(testsPages);
-  }, [testsPage, testsPages]);
 
   const progress = useMemo(() => {
     const total = batch?.muestras?.length || 0;
@@ -544,69 +531,93 @@ function ReviewResultsPage() {
             </div>
           </div>
 
-          <div className="resultsTable">
-            <div className="resultsRow head">
-              <div>Ensayo</div>
-              <div>Resultados por campo</div>
-              <div>Revisión y acciones</div>
-            </div>
-            {visibleTests.length ? visibleTests.map((row) => {
-              const technicalStatus = normalizeStatusLabel(row);
-              const details = row.limite_detalles || row.evaluacion_limite?.details || [];
-              const groups = groupEvaluationDetails(details);
-              return (
-              <div className="resultsRow" key={row.id}>
-                <div className="testIdentity">
-                  <strong>{row.prueba?.acronimo || row.prueba?.nombre_variable}</strong>
-                  <small>{row.prueba?.nombre_variable}{row.prueba?.condicion ? ` · ${row.prueba.condicion}` : ''}</small>
-                  {row.metodo && row.metodo !== '-' ? <small>Método: {row.metodo}</small> : null}
-                </div>
-                <div className="evaluationCell">
-                  {groups.length ? groups.map((group, groupIndex) => {
-                    const status = groupTechnicalStatus(group.details);
+          <div className="reviewResultsTable">
+            <DataTable
+              data={selectedTests}
+              rowKey="id"
+              preserveOrder
+              pagination
+              resetPageKey={selectedSampleId}
+              initialRowsPerPage={10}
+              pageSizeOptions={[5, 10, 15, 25]}
+              minWidth={980}
+              density="comfortable"
+              mobileCards={false}
+              emptyMessage="Seleccione una muestra con resultados."
+              columns={[
+                {
+                  id: 'ensayo',
+                  label: 'Ensayo',
+                  minWidth: 170,
+                  render: (row) => (
+                    <div className="testIdentity tableTestIdentity">
+                      <strong>{row.prueba?.acronimo || row.prueba?.nombre_variable}</strong>
+                      <small>{row.prueba?.nombre_variable}{row.prueba?.condicion ? ` · ${row.prueba.condicion}` : ''}</small>
+                      {row.metodo && row.metodo !== '-' ? <small>Método: {row.metodo}</small> : null}
+                    </div>
+                  ),
+                },
+                {
+                  id: 'resultados',
+                  label: 'Resultados por campo',
+                  minWidth: 460,
+                  render: (row) => {
+                    const details = row.limite_detalles || row.evaluacion_limite?.details || [];
+                    const groups = groupEvaluationDetails(details);
+                    return groups.length ? (
+                      <div className="tableResultGroups">
+                        {groups.map((group, groupIndex) => {
+                          const status = groupTechnicalStatus(group.details);
+                          return (
+                            <section className="compactGroup resultGroupCompact tableResultGroup" key={`${row.id}-result-${group.label}-${groupIndex}`}>
+                              <div className="resultGroupCompactHead">
+                                <strong>{group.label}{group.unit ? <span className="resultUnit">Unidad: {group.unit}</span> : null}</strong>
+                                <span className={`fieldStatus ${statusClass(status)}`}>{detailStatusLabel({ estado: status })}</span>
+                              </div>
+                              <span className="fieldNames">{group.details.map(fieldLabel).join(' / ')}</span>
+                              <div className="joinedValues">
+                                {resultSummary(group).map((item, itemIndex) => (
+                                  <span className={`measurement ${statusClass(item.status)}`} key={`${item.label}-${itemIndex}`}><b>{item.label}:</b> {item.value}</span>
+                                ))}
+                              </div>
+                            </section>
+                          );
+                        })}
+                      </div>
+                    ) : <strong>{row.resultado_resumen || '-'}</strong>;
+                  },
+                },
+                {
+                  id: 'acciones',
+                  label: 'Revisión y acciones',
+                  minWidth: 250,
+                  sortable: false,
+                  render: (row) => {
+                    const technicalStatus = normalizeStatusLabel(row);
                     return (
-                      <section className="compactGroup resultGroupCompact" key={`${row.id}-result-${group.label}-${groupIndex}`}>
-                        <div className="resultGroupCompactHead">
-                          <strong>{group.label}{group.unit ? <span className="resultUnit">Unidad: {group.unit}</span> : null}</strong>
-                          <span className={`fieldStatus ${statusClass(status)}`}>{detailStatusLabel({ estado: status })}</span>
+                      <div className="reviewAndActions tableReviewActions">
+                        <div className="statusStack">
+                          <span className={`pill ${statusClass(technicalStatus)}`}>{technicalStatus}</span>
+                          <span className={`pill ${statusClass(row.is_revisada ? 'revisada' : 'pendiente')}`}>{row.is_revisada ? 'Revisado' : 'Pendiente'}</span>
                         </div>
-                        <span className="fieldNames">{group.details.map(fieldLabel).join(' / ')}</span>
-                        <div className="joinedValues">{resultSummary(group).map((item, itemIndex) => <span className={`measurement ${statusClass(item.status)}`} key={`${item.label}-${itemIndex}`}><b>{item.label}:</b> {item.value}</span>)}</div>
-                      </section>
+                        <div className="rowActions tableActions">
+                          <button className="rulesButton" title="Ver reglas, límites y decisión" type="button" onClick={() => setLimitsModal(row)}><Eye size={15} /><span>Reglas</span></button>
+                          <button title="Editar resultado" type="button" onClick={() => openEdit(row)}><Pencil size={15} /></button>
+                          <button title="Ver historial" type="button" onClick={() => openHistory(row)}><History size={15} /></button>
+                          <button title="Invalidar resultado" type="button" onClick={() => invalidateResult(row)} disabled={!row?.resultado?.id || row?.resultado?.estatus === 'rechazado'}><ShieldOff size={15} /></button>
+                          {row.is_revisada ? (
+                            <span className="reviewedMini" title="Revisado"><Check size={14} /></span>
+                          ) : (
+                            <button title="Marcar revisado" type="button" onClick={() => markReviewed(row)}><Check size={15} /></button>
+                          )}
+                        </div>
+                      </div>
                     );
-                  }) : <strong>{row.resultado_resumen || '-'}</strong>}
-                </div>
-                <div className="reviewAndActions">
-                  <div className="statusStack">
-                    <span className={`pill ${statusClass(technicalStatus)}`}>{technicalStatus}</span>
-                    <span className={`pill ${statusClass(row.is_revisada ? 'revisada' : 'pendiente')}`}>{row.is_revisada ? 'Revisado' : 'Pendiente'}</span>
-                  </div>
-                  <div className="rowActions compact">
-                    <button className="rulesButton" title="Ver reglas, límites y decisión" type="button" onClick={() => setLimitsModal(row)}><Eye size={15} /><span>Reglas</span></button>
-                    <button title="Editar resultado" type="button" onClick={() => openEdit(row)}><Pencil size={15} /></button>
-                    <button title="Ver historial" type="button" onClick={() => openHistory(row)}><History size={15} /></button>
-                    <button title="Invalidar resultado" type="button" onClick={() => invalidateResult(row)} disabled={!row?.resultado?.id || row?.resultado?.estatus === 'rechazado'}><ShieldOff size={15} /></button>
-                    {row.is_revisada ? (
-                      <span className="reviewedMini" title="Revisado"><Check size={14} /></span>
-                    ) : (
-                      <button title="Marcar revisado" type="button" onClick={() => markReviewed(row)}><Check size={15} /></button>
-                    )}
-                  </div>
-                </div>
-              </div>
-              );
-            }) : (
-              <div className="empty big">Seleccione una muestra con resultados.</div>
-            )}
+                  },
+                },
+              ]}
+            />
           </div>
-          <PaginationBar
-            count={selectedTests.length}
-            page={testsPage}
-            pageSize={testsPageSize}
-            pageSizeOptions={[10, 15]}
-            onPageChange={setTestsPage}
-            onPageSizeChange={(size) => { setTestsPage(1); setTestsPageSize(size); }}
-          />
         </main>
       </section>
 
@@ -755,7 +766,8 @@ function ReviewResultsPage() {
         .modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;z-index:100;padding:24px}.historyModal,.editModal{width:min(900px,96vw);max-height:86vh;overflow:auto;border:1px solid #3d3d3d;background:#191b1e;border-radius:10px;box-shadow:0 28px 80px rgba(0,0,0,.55);padding:16px}.editModal{width:min(620px,96vw)}.modalHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.modalHead h3{margin:0}.modalHead button{background:transparent;border:0;color:#fff;cursor:pointer}
         .historySummary{display:flex;align-items:baseline;gap:10px;border:1px solid #333;background:#111;border-radius:8px;padding:10px 12px;margin-bottom:10px}.historySummary span{color:#aaa;text-transform:uppercase;font-size:12px;letter-spacing:.08em}.historySummary strong{font-size:22px;color:#ff4b52}.historySummary small{color:#bbb}.historyTable{border:1px solid #333;border-radius:8px;overflow:auto}.historyRow{display:grid;grid-template-columns:.85fr 1fr 1fr 1.3fr 1.7fr;border-top:1px solid #303030}.historyRow:first-child{border-top:0}.historyRow>div{padding:11px}.historyRow.head{background:#242424;color:#bdbdbd;font-size:12px;text-transform:uppercase;font-weight:800}.historyType{display:inline-flex;border-radius:999px;border:1px solid #444;background:#222;padding:4px 8px;font-size:12px;font-weight:800}.historyType.correction{border-color:rgba(239,35,42,.45);color:#fecaca;background:rgba(127,29,29,.25)}.historyType.revision{border-color:rgba(34,197,94,.45);color:#86efac;background:rgba(22,101,52,.25)}
         .editFields{display:grid;gap:12px}.editFields label{display:grid;gap:6px}.editFields span{color:#d1d5db;font-weight:800}.unitInput{display:grid;grid-template-columns:1fr 80px}.unitInput input,.editFields textarea{min-height:40px;border:1px solid #454545;background:#080808;color:#fff;border-radius:8px 0 0 8px;padding:0 10px}.unitInput em{display:grid;place-items:center;border:1px solid #454545;border-left:0;border-radius:0 8px 8px 0;color:#ddd;font-style:normal}.editFields textarea{border-radius:8px;min-height:95px;padding:10px;resize:vertical}.modalActions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
-        .reviewGrid,.reviewContent,.samplesPane,.resultsTable{min-width:0}.resultsRow>div{overflow-wrap:anywhere}.rowActions.compact{display:grid!important;grid-template-columns:1fr;align-items:center}.rowActions button,.reviewedMini{justify-content:center;min-width:0;text-align:center}.sampleMeta .info{min-width:0}.info .value{overflow-wrap:anywhere}.historyRow>div{overflow-wrap:anywhere}
+        .reviewGrid,.reviewContent,.samplesPane,.resultsTable{min-width:0}
+        .reviewResultsTable{min-width:0}.reviewResultsTable :global(.go-data-table){background:#151719;border-color:#30343a;border-radius:10px}.reviewResultsTable :global(.go-table-scroll){overflow-x:auto;overflow-y:visible}.reviewResultsTable :global(.go-data-table-element){table-layout:fixed}.reviewResultsTable :global(.go-data-table-element th){background:#1c1e22}.reviewResultsTable :global(.go-data-table-element td){vertical-align:top;padding:14px 14px}.reviewResultsTable :global(.go-data-pagination){background:#17191c}.tableTestIdentity{min-height:74px}.tableResultGroups{display:flex;flex-direction:column;gap:8px}.tableResultGroup{padding:0!important;border:0!important}.tableReviewActions{min-height:74px;justify-content:flex-start!important;border-left:0!important}.tableActions{display:flex!important;flex-wrap:wrap!important;align-items:center!important}.tableActions button,.tableActions .reviewedMini{flex:0 0 auto}.statusStack{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.joinedValues{display:flex;flex-wrap:wrap;gap:5px 10px;margin-top:6px}.fieldNames{display:block;color:#929aa6;font-size:10px;margin-top:3px}.resultsRow>div{overflow-wrap:anywhere}.rowActions.compact{display:grid!important;grid-template-columns:1fr;align-items:center}.rowActions button,.reviewedMini{justify-content:center;min-width:0;text-align:center}.sampleMeta .info{min-width:0}.info .value{overflow-wrap:anywhere}.historyRow>div{overflow-wrap:anywhere}
         .fieldStatus.alert,.fieldStatus.warning{color:#fde047;border-color:rgba(234,179,8,.5);background:rgba(113,63,18,.25)}.fieldStatus.critical{color:#fecaca;border-color:rgba(239,35,42,.55);background:rgba(127,29,29,.25)}
         @media(max-width:1400px){.reviewTop{align-items:flex-start;flex-direction:column}.sampleMeta{grid-template-columns:repeat(2,1fr)}.reviewGrid{grid-template-columns:minmax(0,1fr)}}
         @media(max-width:1250px){

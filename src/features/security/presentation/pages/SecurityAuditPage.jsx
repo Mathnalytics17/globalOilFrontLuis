@@ -1,12 +1,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
-import { RefreshCcw as Refresh } from 'lucide-react';
+import { Eye, RefreshCcw as Refresh } from 'lucide-react';
 import { securityService } from '../../infrastructure/securityService';
 import { companiesService } from '@features/companies/infrastructure/companiesService';
 import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import { isGlobalUser } from '@features/auth/application/sessionAccess';
-import SortableTableHeader from '@shared/ui/SortableTableHeader';
+import DataTable from '@shared/ui/DataTable';
+import Modal from '@shared/ui/Modal';
 import useTableSort from '@shared/hooks/useTableSort';
 import s from '../components/Security.module.css';
 import { BackLink, SearchBox, getErrorMessage, getId, getList, getName } from '../components/securityUi';
@@ -18,6 +19,7 @@ export default function SecurityAuditPage() {
   const [companies, setCompanies] = useState([]);
   const [filters, setFilters] = useState({ search: '', empresa: '', action: '', date_from: '', date_to: '' });
   const [loading, setLoading] = useState(false);
+  const [selectedLog, setSelectedLog] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -41,10 +43,11 @@ export default function SecurityAuditPage() {
     const q = filters.search.trim().toLowerCase();
     return logs.filter((log) => {
       const actor = log.actor || log.user || log.usuario || {};
-      const company = log.empresa_info || log.company_info || log.empresa || {};
-      const text = `${getName(actor)} ${actor.email || ''} ${getName(company)} ${log.action || log.accion} ${log.module || log.modulo} ${log.detail || log.detalle}`.toLowerCase();
+      const companyId = log.empresa_efectiva_id || getId(log.empresa_info || log.company_info || log.empresa || {});
+      const companyName = log.empresa_efectiva_nombre || getName(log.empresa_info || log.company_info || log.empresa || {});
+      const text = `${log.actor_nombre || getName(actor)} ${log.actor_email || ''} ${companyName} ${log.action || log.accion} ${log.module || log.modulo} ${log.detail || log.detalle}`.toLowerCase();
       if (q && !text.includes(q)) return false;
-      if (filters.empresa && String(getId(company)) !== String(filters.empresa)) return false;
+      if (filters.empresa && String(companyId) !== String(filters.empresa)) return false;
       if (filters.action && !String(log.action || log.accion || '').toLowerCase().includes(filters.action.toLowerCase())) return false;
       return true;
     });
@@ -52,11 +55,8 @@ export default function SecurityAuditPage() {
 
   const auditSortColumns = useMemo(() => ({
     date: (log) => log.created_at || log.fecha,
-    actor: (log) => {
-      const actor = log.actor || log.user || log.usuario || {};
-      return getName(actor, actor.email || '-');
-    },
-    company: (log) => getName(log.empresa_info || log.company_info || log.empresa || {}, '-'),
+    actor: (log) => log.actor_nombre || log.actor_email || '-',
+    company: (log) => log.empresa_efectiva_nombre || getName(log.empresa_info || log.company_info || log.empresa || {}, '-'),
     module: (log) => log.module || log.modulo,
     action: (log) => log.action || log.accion,
     detail: (log) => log.detail || log.detalle || log.message,
@@ -76,7 +76,7 @@ export default function SecurityAuditPage() {
             <div>
               <div className={s.kicker}>Seguridad</div>
               <h1 className={s.title}>Auditoría</h1>
-              <p className={s.subtitle}>Consulta acciones de usuarios, empresas, roles, reportes y seguridad.</p>
+              <p className={s.subtitle}>Bitácora de accesos, usuarios, permisos y empresas. Para cambios operativos de muestras, resultados y límites use Trazabilidad y control.</p>
             </div>
             <button className={s.buttonSecondary} type="button" onClick={load} disabled={loading}><Refresh /> Actualizar</button>
           </header>
@@ -95,42 +95,38 @@ export default function SecurityAuditPage() {
             </div>
           </div>
 
-          <div className={s.tableWrap}>
-            <table className={s.table}>
-              <thead>
-                <tr>
-                  <SortableTableHeader column="date" label="Fecha" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader column="actor" label="Actor" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader column="company" label="Empresa" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader column="module" label="Modulo" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader column="action" label="Accion" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader column="detail" label="Detalle" sort={sort} onSort={requestSort} />
-                </tr>
-              </thead>
-              <tbody>
-                {sortedRows.map((log) => {
-                  const actor = log.actor || log.user || log.usuario || {};
-                  const company = log.empresa_info || log.company_info || log.empresa || {};
-                  return (
-                    <tr key={log.id || `${log.created_at}-${log.action}`}>
-                      <td>{log.created_at || log.fecha ? new Date(log.created_at || log.fecha).toLocaleString() : '-'}</td>
-                      <td>
-                        <strong>{getName(actor, actor.email || '-')}</strong>
-                        <span className={s.small}>{actor.email || log.actor_email || ''}</span>
-                      </td>
-                      <td>{getName(company, '-')}</td>
-                      <td>{log.module || log.modulo || '-'}</td>
-                      <td>{log.action || log.accion || '-'}</td>
-                      <td>{log.detail || log.detalle || log.message || '-'}</td>
-                    </tr>
-                  );
-                })}
-                {!filtered.length ? (
-                  <tr><td colSpan="6"><div className={s.message}>No hay eventos de auditoría para mostrar.</div></td></tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            data={sortedRows}
+            rowKey={(log) => log.id || `${log.created_at || log.fecha}-${log.action || log.accion}`}
+            pagination
+            initialRowsPerPage={25}
+            pageSizeOptions={[10, 25, 50, 100]}
+            minWidth={1040}
+            sort={sort ? { field: sort.key, direction: sort.direction } : null}
+            onSort={requestSort}
+            emptyMessage={loading ? 'Cargando auditoría…' : 'No hay eventos de auditoría para mostrar.'}
+            columns={[
+              { id: 'date', label: 'Fecha', minWidth: 170, render: (log) => log.created_at || log.fecha ? new Date(log.created_at || log.fecha).toLocaleString() : '-' },
+              { id: 'actor', label: 'Actor', mobileTitle: true, render: (log) => <><strong>{log.actor_nombre || log.actor_email || 'Sistema'}</strong><span className={s.small}>{log.actor_email || log.target_user_email || ''}</span></> },
+              { id: 'company', label: 'Empresa', render: (log) => log.empresa_efectiva_nombre || 'Global / sin empresa asignada' },
+              { id: 'module', label: 'Módulo', render: (log) => log.module || log.modulo || '-' },
+              { id: 'action', label: 'Acción', render: (log) => log.action || log.accion || '-' },
+              { id: 'detail', label: 'Detalle', minWidth: 260, render: (log) => log.detail || log.detalle || log.message || '-' },
+              { id: 'more', label: '', width: 62, sortable: false, searchable: false, render: (log) => <button type="button" className={s.buttonSecondary} onClick={() => setSelectedLog(log)} title="Ver detalle del evento"><Eye size={16} /></button> },
+            ]}
+          />
+
+          <Modal open={Boolean(selectedLog)} onClose={() => setSelectedLog(null)} title="Detalle del evento de seguridad" size="md" footer={<button type="button" className="go-button" onClick={() => setSelectedLog(null)}>Cerrar</button>}>
+            <div className={s.auditDetail}>
+              <div><span>Acción</span><strong>{selectedLog?.action || selectedLog?.accion || '-'}</strong></div>
+              <div><span>Actor</span><strong>{selectedLog?.actor_nombre || selectedLog?.actor_email || 'Sistema'}</strong></div>
+              <div><span>Empresa</span><strong>{selectedLog?.empresa_efectiva_nombre || 'Global / sin empresa asignada'}</strong></div>
+              <div><span>Usuario afectado</span><strong>{selectedLog?.target_user_nombre || selectedLog?.target_user_email || '—'}</strong></div>
+              <div><span>Dirección IP</span><strong>{selectedLog?.ip_address || 'No registrada'}</strong></div>
+              <div className={s.auditDetailWide}><span>Detalle</span><strong>{selectedLog?.detail || selectedLog?.detalle || 'Sin detalle adicional.'}</strong></div>
+              {selectedLog?.metadata && Object.keys(selectedLog.metadata).length ? <div className={s.auditDetailWide}><span>Datos registrados</span><div className={s.auditMetadata}>{Object.entries(selectedLog.metadata).map(([key, value]) => <div key={key}><b>{key.replaceAll('_', ' ')}</b><em>{typeof value === 'object' ? Object.values(value || {}).join(' · ') : String(value)}</em></div>)}</div></div> : null}
+            </div>
+          </Modal>
         </section>
       </div>
     </main>

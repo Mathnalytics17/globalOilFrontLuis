@@ -285,7 +285,7 @@ export default function PruebasPage() {
           ) : (
             <DataTable
               data={visibleItems}
-              pagination
+              pagination={false}
               minWidth={820}
               defaultSort={{ field: 'nombre_variable', order: 'asc' }}
               emptyMessage={search.trim() ? 'No hay pruebas que coincidan con la búsqueda.' : 'No hay pruebas registradas.'}

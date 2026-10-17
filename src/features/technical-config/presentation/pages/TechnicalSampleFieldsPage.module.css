@@ -1,0 +1,299 @@
+.stack {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: #191b1e;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.kicker {
+  margin: 0 0 5px;
+  color: #f87171;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.cardTitle {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.cardSubtitle {
+  max-width: 760px;
+  margin: 6px 0 0;
+  color: #aeb3bd;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.countBadge {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #cfd3da;
+  background: #15171a;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+  padding: 18px 22px 22px;
+}
+
+.section {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  background: #17191c;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.step {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 1px solid rgba(239, 35, 42, 0.38);
+  border-radius: 8px;
+  color: #ff7378;
+  background: rgba(239, 35, 42, 0.1);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: #f3f4f6;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.sectionHelp {
+  margin: 3px 0 0;
+  color: #9298a3;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.fieldsGrid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.field {
+  display: grid;
+  grid-column: span 6;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fieldSmall {
+  grid-column: span 3;
+}
+
+.fieldWide {
+  grid-column: span 9;
+}
+
+.fieldFull {
+  grid-column: 1 / -1;
+}
+
+.label {
+  color: #d5d8de;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid #393d45;
+  border-radius: 8px;
+  outline: 0;
+  color: #f5f6f7;
+  background: #111316;
+  font: inherit;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+.input,
+.select {
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+.textarea {
+  min-height: 88px;
+  padding: 11px 12px;
+  resize: vertical;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: rgba(239, 35, 42, 0.72);
+  box-shadow: 0 0 0 3px rgba(239, 35, 42, 0.1);
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: #777e89;
+}
+
+.toggleGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.toggleCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: #121417;
+  cursor: pointer;
+}
+
+.toggleCard:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.toggleCard input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  flex: 0 0 auto;
+  accent-color: #ef232a;
+}
+
+.toggleText {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.toggleText strong {
+  color: #eceef1;
+  font-size: 13px;
+}
+
+.toggleText small {
+  color: #8f96a1;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.listBody {
+  min-width: 0;
+  padding: 14px;
+}
+
+@media (max-width: 1100px) {
+  .toggleGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fieldSmall,
+  .fieldWide {
+    grid-column: span 6;
+  }
+}
+
+@media (max-width: 760px) {
+  .stack {
+    gap: 12px;
+  }
+
+  .cardHeader,
+  .form {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .cardHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .countBadge {
+    width: fit-content;
+  }
+
+  .section {
+    padding: 13px;
+  }
+
+  .field,
+  .fieldSmall,
+  .fieldWide,
+  .fieldFull {
+    grid-column: 1 / -1;
+  }
+
+  .toggleGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .formActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .formActions > * {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .listBody {
+    padding: 10px;
+  }
+}

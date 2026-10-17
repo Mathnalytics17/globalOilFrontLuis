@@ -21,12 +21,29 @@ const emptyForm = {
   comentario_no_evaluable: '',
 };
 
-const testName = (field) => (
-  field?.fuente_limite_info?.prueba_nombre
-  || field?.prueba_nombre
-  || field?.fuente_limite_info?.prueba_info?.nombre_variable
-  || 'Prueba'
+const fullTestName = (field) => {
+  const source = field?.fuente_limite_info || {};
+  const acronym = source.prueba_acronimo || field?.prueba_acronimo;
+  const name = source.prueba_nombre || field?.prueba_nombre || field?.fuente_limite_info?.prueba_info?.nombre_variable;
+  return acronym && name && acronym !== name ? `${acronym} · ${name}` : acronym || name || 'Prueba sin identificar';
+};
+
+const resultName = (field) => (
+  field?.componente_nombre
+  || field?.division_nombre
+  || field?.resultado_nombre
+  || field?.nombre
+  || field?.codigo
+  || 'Resultado principal'
 );
+
+const fieldName = (field) => field?.nombre || field?.codigo || 'Campo sin nombre';
+
+const operatorLabel = (operator) => ({
+  max: 'Máximo', min: 'Mínimo', between: 'Rango', eq: 'Igual a', neq: 'Diferente de',
+  in: 'En lista', not_in: 'Fuera de lista', scale_max: 'Escala máxima',
+  scale_min: 'Escala mínima', informativo: 'Informativo',
+}[operator] || operator || 'Regla');
 
 export default function TechnicalLimitCommentsPage() {
   const [fields, setFields] = useState([]);
@@ -42,10 +59,24 @@ export default function TechnicalLimitCommentsPage() {
     return fields.filter((field) => [
       field.nombre,
       field.codigo,
-      testName(field),
+      fullTestName(field),
+      resultName(field),
       field.fuente_limite_info?.catalogo_nombre,
     ].filter(Boolean).join(' ').toLowerCase().includes(term));
   }, [fields, query]);
+
+  const groupedFields = useMemo(() => {
+    const groups = new Map();
+    filtered.forEach((field) => {
+      const source = field.fuente_limite_info || {};
+      const key = String(source.id || field.fuente_limite || fullTestName(field));
+      if (!groups.has(key)) {
+        groups.set(key, { key, test: fullTestName(field), version: source.version, fields: [] });
+      }
+      groups.get(key).fields.push(field);
+    });
+    return [...groups.values()];
+  }, [filtered]);
 
   const reload = async () => {
     setLoading(true);
@@ -101,8 +132,8 @@ export default function TechnicalLimitCommentsPage() {
         <section className={`${styles.card} ${styles.commentList}`}>
           <div className={styles.cardHeader}>
             <div>
-              <h2 className={styles.cardTitle}>Campos con límite</h2>
-              <p className={styles.cardSubtitle}>{fields.length} campos disponibles. Seleccione uno para consultar o editar.</p>
+              <h2 className={styles.cardTitle}>Pruebas y campos evaluables</h2>
+              <p className={styles.cardSubtitle}>{fields.length} campos de las versiones vigentes. Seleccione un campo para editar los textos del reporte.</p>
             </div>
           </div>
           <label className={styles.commentSearch}>
@@ -110,20 +141,28 @@ export default function TechnicalLimitCommentsPage() {
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar prueba, resultado o campo" />
           </label>
           <div className={styles.listStack}>
-            {filtered.map((field) => (
-              <button
-                key={field.id}
-                type="button"
-                className={`${styles.listItem} ${editing?.id === field.id ? styles.active : ''}`}
-                onClick={() => startEdit(field)}
-              >
-                <span className={styles.commentItemTitle}>
-                  <strong>{testName(field)}</strong>
-                  <small>{field.operador || 'Informativo'}</small>
-                </span>
-                <span>{field.nombre || field.codigo}</span>
-                <small>{field.codigo}</small>
-              </button>
+            {groupedFields.map((group) => (
+              <section className={styles.commentTestGroup} key={group.key}>
+                <header>
+                  <strong>{group.test}</strong>
+                  <small>{group.version ? `Límites V${group.version}` : 'Límites vigentes'} · {group.fields.length} campo(s)</small>
+                </header>
+                {group.fields.map((field) => (
+                  <button
+                    key={field.id}
+                    type="button"
+                    className={`${styles.listItem} ${editing?.id === field.id ? styles.active : ''}`}
+                    onClick={() => startEdit(field)}
+                  >
+                    <span className={styles.commentItemTitle}>
+                      <strong>{fieldName(field)}</strong>
+                      <small>{operatorLabel(field.operador)}</small>
+                    </span>
+                    <span>Resultado: {resultName(field)}</span>
+                    <small>{field.unidad ? `Unidad: ${field.unidad}` : 'Sin unidad informada'}</small>
+                  </button>
+                ))}
+              </section>
             ))}
             {!filtered.length ? <div className={styles.emptyState}>No hay campos que coincidan con la búsqueda.</div> : null}
           </div>
@@ -133,9 +172,13 @@ export default function TechnicalLimitCommentsPage() {
           {editing ? (
             <>
               <header className={styles.commentEditorHeader}>
-                <span>Campo seleccionado</span>
-                <h2>{editing.nombre || editing.codigo}</h2>
-                <p>{testName(editing)} · {editing.codigo}</p>
+                <span>Comentario para el campo</span>
+                <h2>{fieldName(editing)}</h2>
+                <dl className={styles.commentContext}>
+                  <div><dt>Prueba</dt><dd>{fullTestName(editing)}</dd></div>
+                  <div><dt>Resultado</dt><dd>{resultName(editing)}</dd></div>
+                  <div><dt>Evaluación</dt><dd>{operatorLabel(editing.operador)}{editing.unidad ? ` · ${editing.unidad}` : ''}</dd></div>
+                </dl>
               </header>
               <form className={styles.commentForm} onSubmit={save}>
                 <label className={styles.commentStateGreen}>

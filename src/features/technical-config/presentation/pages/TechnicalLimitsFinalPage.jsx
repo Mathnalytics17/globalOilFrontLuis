@@ -98,6 +98,46 @@ const normalizeBooleanLimitValue = (field, value) => {
   return value;
 };
 
+const stableValue = (value) => JSON.stringify(value ?? null);
+const fieldsByCode = (source) => new Map(
+  (source?.configuracion_regla?.campos || [])
+    .filter((field) => field?.codigo)
+    .map((field) => [String(field.codigo), field])
+);
+const criteriaByCode = (source) => new Map(
+  (source?.criterios || source?.criterios_limite || [])
+    .filter((criterion) => criterion?.codigo)
+    .map((criterion) => [String(criterion.codigo), criterion])
+);
+function compareLimitVersions(current, previous) {
+  if (!current || !previous) return [];
+  const changes = [];
+  ['tipo_limite', 'modo_seleccion', 'politica_evaluacion', 'publicada'].forEach((key) => {
+    if (stableValue(current[key]) !== stableValue(previous[key])) {
+      changes.push({ type: 'Configuración', label: key.replaceAll('_', ' '), before: previous[key], after: current[key] });
+    }
+  });
+  const currentFields = fieldsByCode(current);
+  const previousFields = fieldsByCode(previous);
+  new Set([...currentFields.keys(), ...previousFields.keys()]).forEach((code) => {
+    const now = currentFields.get(code);
+    const old = previousFields.get(code);
+    if (!old) changes.push({ type: 'Campo', label: now.nombre || code, before: 'No existía', after: 'Añadido' });
+    else if (!now) changes.push({ type: 'Campo', label: old.nombre || code, before: 'Activo', after: 'Eliminado' });
+    else if (stableValue(now) !== stableValue(old)) changes.push({ type: 'Campo', label: now.nombre || old.nombre || code, before: old.valor_global || old.operador || 'Configuración anterior', after: now.valor_global || now.operador || 'Configuración actual' });
+  });
+  const currentCriteria = criteriaByCode(current);
+  const previousCriteria = criteriaByCode(previous);
+  new Set([...currentCriteria.keys(), ...previousCriteria.keys()]).forEach((code) => {
+    const now = currentCriteria.get(code);
+    const old = previousCriteria.get(code);
+    if (!old) changes.push({ type: 'Criterio', label: now.nombre || code, before: 'No existía', after: 'Añadido' });
+    else if (!now) changes.push({ type: 'Criterio', label: old.nombre || code, before: 'Activo', after: 'Eliminado' });
+    else if (stableValue(now.valores_limite) !== stableValue(old.valores_limite)) changes.push({ type: 'Criterio', label: now.nombre || old.nombre || code, before: 'Reglas anteriores', after: 'Reglas actualizadas' });
+  });
+  return changes;
+}
+
 function flattenTest(test) {
   const rows = [];
   list(test?.resultados || test?.results).forEach((result) => {
@@ -221,8 +261,17 @@ function validateRule(field, rawRule, context, scaleItems = []) {
   if (operator === 'informativo') return '';
   const rule = normalizeLimitRule(rawRule, operator);
   const missing = requiredBoundaryKeys(operator, rule.usar_amarillo)
-    .find((key) => rule[key] === '' || rule[key] === null || rule[key] === undefined);
-  if (missing) return `${context}: complete todos los valores visibles del limite.`;
+    .filter((key) => rule[key] === '' || rule[key] === null || rule[key] === undefined);
+  if (missing.length) {
+    const labels = {
+      min_critico: 'mínimo crítico',
+      min_aceptable: 'mínimo aceptable',
+      max_aceptable: 'máximo aceptable',
+      max_critico: 'máximo crítico',
+      valor_esperado: 'valor esperado',
+    };
+    return `${context}: falta ${missing.map((key) => labels[key] || key).join(', ')}.`;
+  }
 
   if (field.tipo_comparacion === 'escala') {
     const position = (value) => scaleItems.findIndex((item) => String(optionValue(item)) === String(value));
@@ -291,7 +340,20 @@ function groupByResult(fields) {
 function buildCatalogCombinations(selectedCatalogs, catalogs, items) {
   const selected = selectedCatalogs.map((id) => catalogs.find((catalog) => String(catalog.id) === String(id))).filter(Boolean);
   if (!selected.length) return [];
-  const optionGroups = selected.map((catalog) => ({ catalog, items: items.filter((item) => String(idOf(item.catalogo)) === String(catalog.id) || String(item.catalogo_info?.id) === String(catalog.id)) })).filter((group) => group.items.length);
+  // A criterion must use the active edition of each catalogue. Including
+  // every historical item here silently duplicates rows and can validate
+  // against values that no longer belong to the selected version.
+  const optionGroups = selected.map((catalog) => {
+    const currentVersionId = String(idOf(catalog.version_actual || catalog.version_actual_info || ''));
+    const catalogItems = items.filter((item) => (
+      String(idOf(item.catalogo)) === String(catalog.id)
+      || String(item.catalogo_info?.id) === String(catalog.id)
+    ));
+    const currentItems = currentVersionId
+      ? catalogItems.filter((item) => String(idOf(item.version)) === currentVersionId || String(item.version_id || '') === currentVersionId)
+      : catalogItems;
+    return { catalog, items: currentItems };
+  }).filter((group) => group.items.length);
   if (!optionGroups.length) return [];
   const combine = (index, acc) => {
     if (index >= optionGroups.length) return [acc];
@@ -629,6 +691,9 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
     const hasCatalog = catalogFields.length > 0;
     return {
         prueba: idOf(test),
+        // The server can then record and compare the exact version selected
+        // as the base, even when another version is currently active.
+        version_base: editing ? (initialSourceId || router.query.id || null) : null,
         fuente: hasCatalog ? 'catalogos' : 'global',
         catalogos: hasCatalog ? selectedCatalogs.map((catalogo, index) => ({ catalogo, orden: index + 1 })) : [],
         campos: fields.map((field) => ({
@@ -728,6 +793,7 @@ function ListPage({ loading, sources, onChanged }) {
   const [busyVersion, setBusyVersion] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [comparison, setComparison] = useState(null);
   const sourceTestLabel = (source) => {
     const prueba = source.prueba_info || source.prueba || source.test_info || source.test;
     const acronym = prueba?.acronimo || source.prueba_acronimo || source.acronimo;
@@ -803,13 +869,16 @@ function ListPage({ loading, sources, onChanged }) {
                   <td>{source.asignaciones_count || 0}</td>
                   <td><div className={styles.tableActions}>
                     <Link href={`/configuracion-tecnica/limites/edit/${source.id}`} title="Usar esta versión como base sin modificarla"><Pencil size={15} /> Usar como base</Link>
+                    {!isCurrent ? <button type="button" onClick={() => setComparison({ testKey, current, previous: source })}>Comparar</button> : null}
                     {!isCurrent ? <button type="button" disabled={busyVersion === `activate:${source.id}`} onClick={() => changeAvailability(source, 'activate')}><Check size={15} /> Activar</button> : null}
                     {!isCurrent && selectable ? <button type="button" disabled={busyVersion === `deactivate:${source.id}`} onClick={() => changeAvailability(source, 'deactivate')}><Power size={15} /> Desactivar</button> : null}
                   </div></td>
                 </tr>;
               })}</tbody>
               </table>
-            </div></td></tr> : null}
+            </div>
+            {comparison?.testKey === testKey ? <LimitVersionComparison current={comparison.current} previous={comparison.previous} onClose={() => setComparison(null)} /> : null}
+            </td></tr> : null}
           </Fragment>;
         })}</tbody>
             </table>
@@ -819,6 +888,16 @@ function ListPage({ loading, sources, onChanged }) {
       </section>
     </main>
   );
+}
+
+function LimitVersionComparison({ current, previous, onClose }) {
+  const changes = useMemo(() => compareLimitVersions(current, previous), [current, previous]);
+  return <section className={styles.versionComparison}>
+    <header><div><strong>Comparación de versiones</strong><span>V{previous.version || 1} frente a V{current.version || 1} vigente</span></div><button type="button" onClick={onClose}>Cerrar</button></header>
+    {changes.length ? <div className={styles.comparisonRows}>{changes.map((change, index) => <div className={styles.comparisonRow} key={`${change.type}-${change.label}-${index}`}>
+      <span>{change.type}</span><strong>{change.label}</strong><small>{String(change.before ?? '-')}</small><b>{String(change.after ?? '-')}</b>
+    </div>)}</div> : <p className={styles.emptyState}>No hay diferencias configurables entre estas versiones.</p>}
+  </section>;
 }
 
 function TestStep({ tests, selected, onSelect }) {

@@ -42,4 +42,12 @@ export const machinesService = {
     const { data } = await apiClient.post(`/machines/${id}/reactivate/`);
     return data;
   },
+  async activity(id, params = {}) {
+    const { data } = await apiClient.get(`/machines/${id}/activity/`, { params });
+    return normalizePaginated(data);
+  },
+  async history(id, params = {}) {
+    const { data } = await apiClient.get(`/machines/${id}/history/`, { params });
+    return normalizePaginated(data);
+  },
 };

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Pencil, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import PageHeader from '@shared/ui/PageHeader';
+import DataTable from '@shared/ui/DataTable';
 import { assetTreeService } from '@features/asset-tree/infrastructure/assetTreeService';
 
 const EMPTY = { fabricante: '', referencia: '' };
@@ -44,11 +45,21 @@ export default function LubricantsPage() {
 
   return <div className="go-page"><div className="go-shell">
     <PageHeader eyebrow="Configuración del sistema" title="Lubricantes" subtitle="Catálogo reutilizable para puntos de medida y muestras." actions={<button className="go-primary" onClick={startCreate}><Plus size={17}/> Nuevo lubricante</button>} />
-    <section className="overflow-hidden rounded-xl border border-white/[.08] bg-[#191b1e]">
-      <table className="w-full text-sm"><thead className="bg-white/[.03] text-left text-xs uppercase tracking-wide text-[#8d939c]"><tr><th className="p-4">Fabricante</th><th className="p-4">Referencia / marca</th><th className="p-4 text-right">Acciones</th></tr></thead>
-        <tbody>{visible.map((row) => <tr key={row.id} className="border-t border-white/[.06]"><td className="p-4 text-white">{row.fabricante}</td><td className="p-4 text-[#c9cdd2]">{row.referencia}</td><td className="p-4"><div className="flex justify-end gap-2"><button className="go-icon-button" title="Editar" onClick={() => startEdit(row)}><Pencil size={16}/></button><button className="go-icon-button text-red-400" title="Desactivar" onClick={() => remove(row)}><Trash2 size={16}/></button></div></td></tr>)}{!visible.length && <tr><td colSpan="3" className="p-8 text-center text-[#8d939c]">No hay lubricantes registrados.</td></tr>}</tbody>
-      </table>
-    </section>
+    <DataTable
+      data={visible}
+      rowKey="id"
+      pagination
+      searchable
+      initialRowsPerPage={15}
+      pageSizeOptions={[10, 15, 25, 50]}
+      minWidth={720}
+      emptyMessage="No hay lubricantes registrados."
+      columns={[
+        { id: 'fabricante', label: 'Fabricante', mobileTitle: true },
+        { id: 'referencia', label: 'Referencia / marca' },
+        { id: 'acciones', label: 'Acciones', sortable: false, mobileActions: true, render: (row) => <div className="flex justify-end gap-2"><button className="go-icon-button" title="Editar" onClick={() => startEdit(row)}><Pencil size={16}/></button><button className="go-icon-button text-red-400" title="Desactivar" onClick={() => remove(row)}><Trash2 size={16}/></button></div> },
+      ]}
+    />
     {open && <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4"><form onSubmit={submit} className="w-full max-w-lg rounded-xl border border-white/[.1] bg-[#1b1d20] p-6 shadow-2xl"><div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-semibold">{editing ? 'Editar lubricante' : 'Nuevo lubricante'}</h2><button type="button" className="text-[#a4aab3]" onClick={() => setOpen(false)}><X/></button></div><div className="space-y-4"><label className="block text-sm font-medium text-gray-300">Fabricante<input required className="input-dark mt-2" value={form.fabricante} onChange={(e) => setForm({...form, fabricante:e.target.value})} placeholder="Ej: Petrobras" /></label><label className="block text-sm font-medium text-gray-300">Referencia / marca<input required className="input-dark mt-2" value={form.referencia} onChange={(e) => setForm({...form, referencia:e.target.value})} placeholder="Ej: Hydra 68" /></label></div><div className="mt-6 flex justify-end gap-3"><button type="button" className="go-secondary" onClick={() => setOpen(false)}>Cancelar</button><button disabled={saving} className="go-primary">{saving ? 'Guardando…' : 'Guardar'}</button></div></form></div>}
   </div></div>;
 }

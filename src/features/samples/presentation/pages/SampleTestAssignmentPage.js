@@ -21,6 +21,7 @@ import { predefinedTestBatchesService } from '@features/technical-config/infrast
 import technicalConfigService from '@features/technical-config/infrastructure/technicalConfigService';
 import { presentLimitBands } from '@shared/utils/limitPresentation';
 import withRequiredPermissions from '@features/auth/presentation/withRequiredPermissions';
+import PaginationBar from '@shared/ui/PaginationBar';
 
 const createRow = () => ({
   key: `row_${Math.random().toString(36).slice(2)}`,
@@ -534,6 +535,8 @@ function AsignacionPruebasPage() {
   const [batchSearch, setBatchSearch] = useState('');
   const [applyMode, setApplyMode] = useState('all');
   const [selectedSamples, setSelectedSamples] = useState([]);
+  const [sampleTablePage, setSampleTablePage] = useState(1);
+  const [sampleTablePageSize, setSampleTablePageSize] = useState(10);
 
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [criterionModalRowKey, setCriterionModalRowKey] = useState(null);
@@ -936,11 +939,18 @@ function AsignacionPruebasPage() {
   ), [availableBundles, selectedBatch]);
 
   const sampleList = selectedBatch?.muestras || [];
+  const sampleTablePages = Math.max(1, Math.ceil(sampleList.length / sampleTablePageSize));
+  const safeSampleTablePage = Math.min(sampleTablePage, sampleTablePages);
+  const visibleSampleList = sampleList.slice((safeSampleTablePage - 1) * sampleTablePageSize, safeSampleTablePage * sampleTablePageSize);
   const selectedSampleObjects = useMemo(() => (
     sampleList.filter((sample) => selectedSamples.includes(entityKey(sample)))
   ), [sampleList, selectedSamples]);
 
   const sampleScope = applyMode === 'all' ? sampleList : selectedSampleObjects;
+
+  useEffect(() => {
+    setSampleTablePage((current) => Math.min(current, Math.max(1, Math.ceil(sampleList.length / sampleTablePageSize))));
+  }, [sampleList.length, sampleTablePageSize]);
 
   const getSampleAttrForSource = (source, sample) => {
     const sourceFieldId = String(getSourceSampleFieldId(source) || '');
@@ -2021,7 +2031,7 @@ function AsignacionPruebasPage() {
                   <tbody>
                     {loadingBatch ? (
                       <tr><td colSpan={8}>Cargando lote...</td></tr>
-                    ) : sampleList.length ? sampleList.map((sample) => {
+                    ) : sampleList.length ? visibleSampleList.map((sample) => {
                       const count = assignmentsBySample.get(sample.id)?.length || 0;
                       return (
                         <tr key={sample.id}>
@@ -2056,6 +2066,16 @@ function AsignacionPruebasPage() {
                   </tbody>
                 </table>
               </div>
+              {sampleList.length ? (
+                <PaginationBar
+                  count={sampleList.length}
+                  page={safeSampleTablePage}
+                  pageSize={sampleTablePageSize}
+                  pageSizeOptions={[5, 10, 15, 25, 50]}
+                  onPageChange={setSampleTablePage}
+                  onPageSizeChange={(size) => { setSampleTablePage(1); setSampleTablePageSize(size); }}
+                />
+              ) : null}
             </section>
 
             {showTemplateForm ? (

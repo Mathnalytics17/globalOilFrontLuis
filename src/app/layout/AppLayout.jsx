@@ -6,12 +6,12 @@ import { getPrimaryRole } from '@features/auth/application/sessionAccess';
 import Sidebar from './Sidebar/Sidebar';
 import Topbar from './Topbar/Topbar';
 
-const DESKTOP_SIDEBAR_KEY = 'globaloil.sidebar.open';
+const DESKTOP_SIDEBAR_KEY = 'globaloil.sidebar.open.v2';
 
 export default function AppLayout({ children }) {
   const { user, hasPermission } = useAuth();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isDesktopOpen, setIsDesktopOpen] = useState(true);
+  const [isDesktopOpen, setIsDesktopOpen] = useState(false);
   const userRole = getPrimaryRole(user) || 'EMPRESA';
 
   useEffect(() => {
@@ -19,7 +19,7 @@ export default function AppLayout({ children }) {
       const saved = window.localStorage.getItem(DESKTOP_SIDEBAR_KEY);
       if (saved !== null) setIsDesktopOpen(saved !== 'false');
     } catch (_) {
-      // localStorage may be unavailable in hardened browsers; default to open.
+      // localStorage may be unavailable in hardened browsers; default to compact.
     }
   }, []);
 

@@ -24,6 +24,11 @@ export const sampleBatchesService = {
     return data;
   },
 
+  async timeline(id, params = {}) {
+    const { data } = await apiClient.get(`${BASE_URL}${id}/timeline/`, { params });
+    return normalizePaginated(data);
+  },
+
   async create(payload) {
     const { data } = await apiClient.post(BASE_URL, payload);
     return data;

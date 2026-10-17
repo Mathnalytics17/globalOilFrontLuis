@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@features/auth/presentation/context/AuthC
 import NativeSelectSearch from '@shared/ui/NativeSelectSearch';
 import AppErrorBoundary from '@shared/ui/AppErrorBoundary';
 import GlobalOilLoader from '@shared/ui/GlobalOilLoader';
+import GlobalNavigationLoader from '@shared/ui/GlobalNavigationLoader';
 import { useEffect } from 'react';
 
 import "../src/shared/styles/design-system.css";
@@ -100,6 +101,7 @@ export default function MyApp({ Component, pageProps }) {
       />
       <NativeSelectSearch />
       <NumericWheelGuard />
+      <GlobalNavigationLoader />
 
     </>
   )

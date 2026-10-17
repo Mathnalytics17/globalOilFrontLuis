@@ -8,7 +8,7 @@ import styles from '../components/TechnicalConfig.module.css';
 import { apiErrorToText } from '../components/technicalConfigUtils';
 import { sampleManagementTypesService } from '@features/samples/infrastructure/sampleManagementTypesService';
 import { companiesOptionsService } from '@features/companies/infrastructure/companiesOptionsService';
-import SortableTableHeader from '@shared/ui/SortableTableHeader';
+import DataTable from '@shared/ui/DataTable';
 import useTableSort from '@shared/hooks/useTableSort';
 
 const EMPTY_FORM = {
@@ -287,39 +287,24 @@ export default function SampleManagementTypesPage() {
 
           <input className={styles.input} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, días o empresa..." style={{ marginBottom: 14 }} />
 
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <SortableTableHeader column="name" label="Nombre" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader column="days" label="Dias" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader column="visibility" label="Visibilidad" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader column="status" label="Estado" sort={sort} onSort={requestSort} />
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? <tr><td colSpan={5}>Cargando tipos de gestión…</td></tr> : null}
-                {!loading && !filtered.length ? <tr><td colSpan={5}>No hay tipos de gestión.</td></tr> : null}
-                {!loading && sortedRows.map((item) => (
-                  <tr key={item.id}>
-                    <td><b>{item.nombre}</b></td>
-                    <td>{item.dias_habiles ?? 0} hábiles / {item.dias_calendario ?? 0} calendario</td>
-                    <td>{getCompaniesLabel(item)}</td>
-                    <td>{item.deleted_at || !item.activo ? <span className={styles.badgeRed}>Inactivo</span> : <span className={styles.badgeGreen}>Activo</span>}</td>
-                    <td>
-                      <OverflowMenu items={[
-                        { label: 'Editar', icon: Pencil, onClick: () => edit(item) },
-                        item.deleted_at || !item.activo
-                          ? { label: 'Restaurar', icon: RefreshCw, onClick: () => restore(item) }
-                          : { label: 'Eliminar', icon: Trash2, danger: true, onClick: () => remove(item) },
-                      ]} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            data={loading ? [] : sortedRows}
+            rowKey="id"
+            pagination
+            initialRowsPerPage={15}
+            pageSizeOptions={[10, 15, 25, 50]}
+            minWidth={860}
+            sort={sort ? { field: sort.key, direction: sort.direction } : null}
+            onSort={requestSort}
+            emptyMessage={loading ? 'Cargando tipos de gestión…' : 'No hay tipos de gestión.'}
+            columns={[
+              { id: 'name', label: 'Nombre', mobileTitle: true, render: (item) => <b>{item.nombre}</b> },
+              { id: 'days', label: 'Días', render: (item) => `${item.dias_habiles ?? 0} hábiles / ${item.dias_calendario ?? 0} calendario` },
+              { id: 'visibility', label: 'Visibilidad', render: (item) => getCompaniesLabel(item) },
+              { id: 'status', label: 'Estado', render: (item) => item.deleted_at || !item.activo ? <span className={styles.badgeRed}>Inactivo</span> : <span className={styles.badgeGreen}>Activo</span> },
+              { id: 'acciones', label: 'Acciones', sortable: false, mobileActions: true, render: (item) => <OverflowMenu items={[{ label: 'Editar', icon: Pencil, onClick: () => edit(item) }, item.deleted_at || !item.activo ? { label: 'Restaurar', icon: RefreshCw, onClick: () => restore(item) } : { label: 'Eliminar', icon: Trash2, danger: true, onClick: () => remove(item) }]} /> },
+            ]}
+          />
         </article>
       </section>
     </TechnicalConfigShell>

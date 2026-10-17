@@ -6,6 +6,7 @@ import {
   Search,
   Upload,
   ClipboardCheck,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -62,6 +63,7 @@ function ResultEntryPage() {
   const [excelLoading, setExcelLoading] = useState(false);
   const [excelLoadingMessage, setExcelLoadingMessage] = useState('Procesando archivo Excel...');
   const [excelMenuOpen, setExcelMenuOpen] = useState(false);
+  const [saveMenuOpen, setSaveMenuOpen] = useState(false);
   const [sampleFilter, setSampleFilter] = useState('');
   const [testListPage, setTestListPage] = useState(1);
   const [equipment, setEquipment] = useState([]);
@@ -404,21 +406,17 @@ function ResultEntryPage() {
     const statuses = {};
     try {
       for (const [testId, draft] of pendingEntries) {
-        const complete = Boolean(draft.formData?.fields?.length)
-          && draft.formData.fields.every((field) => isFilled(draft.valueMap?.[field.key]?.value));
-        if (complete) {
-          await resultEntryService.confirm(testId, buildPayloadFromDraft(draft));
-          statuses[testId] = 'completado';
-        } else {
-          await resultEntryService.saveDraft(testId, buildPayloadFromDraft(draft));
-          statuses[testId] = 'en_proceso';
-        }
+        // The bulk action intentionally never confirms a result.  Confirmation
+        // is an explicit, reversible-looking workflow transition and lives in
+        // its own action below.
+        await resultEntryService.saveDraft(testId, buildPayloadFromDraft(draft));
+        statuses[testId] = 'en_proceso';
         draft.dirty = false;
         if (draft.formData?.prueba_muestra) {
           draft.formData.prueba_muestra = {
             ...draft.formData.prueba_muestra,
             estatus: statuses[testId],
-            completada: complete,
+            completada: false,
           };
         }
       }
@@ -430,7 +428,7 @@ function ResultEntryPage() {
       } : current);
       const currentDraft = formCacheRef.current[String(selectedTestId)];
       if (currentDraft) setFormData(currentDraft.formData);
-      toast.success(`${pendingEntries.length} resultado(s) guardados sin recargar el lote.`);
+      toast.success(`${pendingEntries.length} resultado(s) guardados como borrador.`);
     } catch (error) {
       console.error(error);
       toast.error(error?.response?.data?.detail || 'No se pudieron guardar todos los resultados.');
@@ -586,20 +584,40 @@ function ResultEntryPage() {
         </div>
 
         <div className="topActions">
-          <button type="button" className="btn secondary" onClick={saveAllResults} disabled={saving || !selectedBatchId}>
-            <Save size={16} />
-            Guardar todo
-          </button>
-          <button
-            type="button"
-            className="btn red"
-            onClick={confirmAllResults}
-            disabled={saving || excelLoading || !selectedBatchId || stats.total === 0 || stats.proceso === 0}
-            title={stats.proceso > 0 ? 'Confirmar todos los borradores completos para revisión.' : 'No hay borradores pendientes de confirmar.'}
-          >
-            <ClipboardCheck size={16} />
-            Confirmar todo
-          </button>
+          <div className="saveMenu">
+            <div className="saveSplit">
+              <button type="button" className="btn secondary" onClick={saveAllResults} disabled={saving || !selectedBatchId}>
+                <Save size={16} />
+                Guardar borrador
+              </button>
+              <button
+                type="button"
+                className="btn secondary saveMenuToggle"
+                onClick={() => setSaveMenuOpen((current) => !current)}
+                disabled={saving || excelLoading || !selectedBatchId}
+                aria-label="Más acciones para todos los resultados"
+                aria-expanded={saveMenuOpen}
+                aria-haspopup="menu"
+              >
+                <ChevronDown size={16} />
+              </button>
+            </div>
+            {saveMenuOpen && (
+              <div className="excelMenuPanel saveMenuPanel" role="menu">
+                <strong className="excelMenuTitle">Acciones del lote</strong>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setSaveMenuOpen(false); confirmAllResults(); }}
+                  disabled={stats.total === 0 || stats.proceso === 0}
+                  title={stats.proceso > 0 ? 'Confirma todos los borradores completos y los envía a revisión.' : 'No hay borradores pendientes de confirmar.'}
+                >
+                  <ClipboardCheck size={15} /> Confirmar todos los resultados
+                </button>
+                <small>Solo se confirmarán resultados completos.</small>
+              </div>
+            )}
+          </div>
           <div className="excelMenu">
             <button
               type="button"
@@ -971,8 +989,26 @@ function ResultEntryPage() {
           align-items: center;
         }
 
-        .excelMenu {
+        .excelMenu,
+        .saveMenu {
           position: relative;
+        }
+
+        .saveSplit {
+          display: inline-flex;
+        }
+
+        .saveSplit .btn:first-child {
+          border-top-right-radius: 0;
+          border-bottom-right-radius: 0;
+        }
+
+        .saveMenuToggle {
+          min-width: 34px;
+          padding: 0;
+          border-left-color: #53565d;
+          border-top-left-radius: 0;
+          border-bottom-left-radius: 0;
         }
 
         .excelMenuPanel {
@@ -1001,6 +1037,28 @@ function ResultEntryPage() {
         .excelMenuPanel button:focus-visible {
           background: #292b30;
           outline: none;
+        }
+
+        .saveMenuPanel {
+          width: 286px;
+        }
+
+        .saveMenuPanel button {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .saveMenuPanel button:disabled {
+          cursor: not-allowed;
+          color: #737780;
+        }
+
+        .saveMenuPanel small {
+          display: block;
+          padding: 6px 10px 8px;
+          color: #9aa0aa;
+          line-height: 1.35;
         }
 
         .excelMenuTitle {

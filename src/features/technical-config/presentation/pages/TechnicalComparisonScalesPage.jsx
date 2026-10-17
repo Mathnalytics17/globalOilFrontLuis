@@ -7,7 +7,7 @@ import TechnicalConfigShell from '../components/TechnicalConfigShell';
 import technicalConfigService from '../../infrastructure/technicalConfigService';
 import { apiErrorToText } from '../components/technicalConfigUtils';
 import styles from '../components/TechnicalConfig.module.css';
-import SortableTableHeader from '@shared/ui/SortableTableHeader';
+import DataTable from '@shared/ui/DataTable';
 import useTableSort from '@shared/hooks/useTableSort';
 
 export default function TechnicalComparisonScalesPage() {
@@ -44,13 +44,24 @@ export default function TechnicalComparisonScalesPage() {
           <p className={styles.cardSubtitle}>Cree, edite, active o desactive escalas ordinales.</p>
         </div>
       </div>
-      <div className={styles.tableWrap}><table className={styles.table}><thead><tr><SortableTableHeader column="name" label="Nombre" sort={sort} onSort={requestSort}/><SortableTableHeader column="code" label="Codigo" sort={sort} onSort={requestSort}/><SortableTableHeader column="values" label="Valores" sort={sort} onSort={requestSort}/><SortableTableHeader column="status" label="Estado" sort={sort} onSort={requestSort}/><th>Acciones</th></tr></thead><tbody>
-        {!loading && !scales.length && <tr><td colSpan="5">No hay escalas configuradas.</td></tr>}
-        {sortedRows.map((scale) => <tr key={scale.id}><td><strong>{scale.nombre}</strong></td><td>{scale.codigo}</td><td>{scale.items_count ?? scale.cantidad_items ?? '-'}</td><td className={scale.activo ? styles.statusActive : ''}>{scale.activo ? 'Activa' : 'Inactiva'}</td><td><OverflowMenu items={[
-          { label: 'Editar', icon: Pencil, onClick: () => window.location.assign(`/configuracion-tecnica/escalas/edit/${scale.id}`) },
-          { label: scale.activo ? 'Desactivar' : 'Activar', icon: Power, onClick: () => toggle(scale) },
-        ]} /></td></tr>)}
-      </tbody></table></div>
+      <DataTable
+        data={sortedRows}
+        rowKey="id"
+        pagination
+        initialRowsPerPage={15}
+        pageSizeOptions={[10, 15, 25, 50]}
+        minWidth={760}
+        sort={sort ? { field: sort.key, direction: sort.direction } : null}
+        onSort={requestSort}
+        emptyMessage={loading ? 'Cargando escalas…' : 'No hay escalas configuradas.'}
+        columns={[
+          { id: 'name', label: 'Nombre', mobileTitle: true, render: (scale) => <strong>{scale.nombre}</strong> },
+          { id: 'code', label: 'Código', render: (scale) => scale.codigo },
+          { id: 'values', label: 'Valores', render: (scale) => scale.items_count ?? scale.cantidad_items ?? '-' },
+          { id: 'status', label: 'Estado', render: (scale) => <span className={scale.activo ? styles.statusActive : ''}>{scale.activo ? 'Activa' : 'Inactiva'}</span> },
+          { id: 'acciones', label: 'Acciones', sortable: false, mobileActions: true, render: (scale) => <OverflowMenu items={[{ label: 'Editar', icon: Pencil, onClick: () => window.location.assign(`/configuracion-tecnica/escalas/edit/${scale.id}`) }, { label: scale.activo ? 'Desactivar' : 'Activar', icon: Power, onClick: () => toggle(scale) }]} /> },
+        ]}
+      />
     </section>
   </TechnicalConfigShell>;
 }

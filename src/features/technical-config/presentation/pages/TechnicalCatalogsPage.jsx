@@ -32,6 +32,50 @@ const appliesLabel = (value) => {
   return value || 'General';
 };
 
+const valueText = (value) => String(value ?? '').trim() || '—';
+
+const compareCatalogVersions = (current, previous, currentItems = [], previousItems = []) => {
+  const changes = [];
+  [
+    ['nombre', 'Nombre de versión'],
+    ['norma_referencia', 'Norma de referencia'],
+    ['fecha_vigencia', 'Fecha de vigencia'],
+    ['notas', 'Notas'],
+    ['activo', 'Estado'],
+  ].forEach(([key, label]) => {
+    if (String(previous?.[key] ?? '') !== String(current?.[key] ?? '')) {
+      changes.push({ type: 'Configuración', label, before: valueText(previous?.[key]), after: valueText(current?.[key]) });
+    }
+  });
+
+  const byCode = (items) => new Map(items.map((item) => [String(item.codigo || item.id), item]));
+  const currentByCode = byCode(currentItems);
+  const previousByCode = byCode(previousItems);
+  currentByCode.forEach((item, key) => {
+    const old = previousByCode.get(key);
+    if (!old) {
+      changes.push({ type: 'Ítem añadido', label: item.nombre || key, before: 'No existía', after: valueText(item.descripcion) });
+      return;
+    }
+    const oldSignature = [old.nombre, old.descripcion, old.activo].map((value) => String(value ?? '')).join('|');
+    const currentSignature = [item.nombre, item.descripcion, item.activo].map((value) => String(value ?? '')).join('|');
+    if (oldSignature !== currentSignature) {
+      changes.push({
+        type: 'Ítem modificado',
+        label: item.nombre || old.nombre || key,
+        before: `${valueText(old.descripcion)} · ${old.activo === false ? 'Inactivo' : 'Activo'}`,
+        after: `${valueText(item.descripcion)} · ${item.activo === false ? 'Inactivo' : 'Activo'}`,
+      });
+    }
+  });
+  previousByCode.forEach((item, key) => {
+    if (!currentByCode.has(key)) {
+      changes.push({ type: 'Ítem retirado', label: item.nombre || key, before: valueText(item.descripcion), after: 'Ya no figura en esta versión' });
+    }
+  });
+  return changes;
+};
+
 export default function TechnicalCatalogsPage() {
   const [catalogs, setCatalogs] = useState([]);
   const [items, setItems] = useState([]);
@@ -52,6 +96,8 @@ export default function TechnicalCatalogsPage() {
   const [itemPage, setItemPage] = useState(1);
   const [itemPageSize, setItemPageSize] = useState(20);
   const [itemMeta, setItemMeta] = useState({ count: 0 });
+  const [comparison, setComparison] = useState(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
 
   const selectedCatalog = useMemo(
     () => catalogs.find((catalog) => String(catalog.id) === String(selectedCatalogId)),
@@ -321,6 +367,32 @@ export default function TechnicalCatalogsPage() {
     }
   };
 
+  const compareVersion = async (previous) => {
+    if (!selectedCatalog?.version_actual || String(previous.id) === String(selectedCatalog.version_actual)) return;
+    const current = versions.find((version) => String(version.id) === String(selectedCatalog.version_actual));
+    if (!current) {
+      toast.warning('No se encontró la versión vigente del catálogo. Recargue la lista.');
+      return;
+    }
+    setComparisonLoading(true);
+    try {
+      const [currentData, previousData] = await Promise.all([
+        technicalConfigService.pageCatalogItems({ catalogo: selectedCatalog.id, version: current.id, incluir_eliminados: true, page: 1, page_size: 1000 }),
+        technicalConfigService.pageCatalogItems({ catalogo: selectedCatalog.id, version: previous.id, incluir_eliminados: true, page: 1, page_size: 1000 }),
+      ]);
+      setComparison({
+        current,
+        previous,
+        changes: compareCatalogVersions(current, previous, currentData.results || [], previousData.results || []),
+        capped: Number(currentData.count || 0) > 1000 || Number(previousData.count || 0) > 1000,
+      });
+    } catch (error) {
+      toast.error(apiErrorToText(error) || 'No se pudieron comparar las versiones del catálogo.');
+    } finally {
+      setComparisonLoading(false);
+    }
+  };
+
   if (selectedCatalog && selectedVersion) {
     return (
       <main className={ps.page}>
@@ -418,9 +490,10 @@ export default function TechnicalCatalogsPage() {
         <button type="button" className={ps.backButton} onClick={() => setSelectedCatalogId('')}><ArrowLeft size={21} />Catálogos técnicos</button>
         <header className={ps.header}><div className={ps.headerMain}><h1 className={ps.sectionTitle}>{selectedCatalog.nombre}</h1><p className={ps.subtitle}>Versiones publicadas para mantener trazabilidad ante cambios normativos.</p></div><div className={ps.actionsRight}><button type="button" className={ps.buttonPrimary} onClick={openNewVersion}><Plus size={21} />Nueva versión</button></div></header>
         <table className={ps.linearTable}><thead><tr><th>Versión</th><th>Norma de referencia</th><th>Vigencia</th><th>Ítems</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
-          {versions.map((version) => <tr key={version.id} className={String(selectedCatalog.version_actual) === String(version.id) ? ps.selected : ''}><td>v{version.numero}{version.nombre ? ` · ${version.nombre}` : ''}</td><td>{version.norma_referencia || '—'}</td><td>{version.fecha_vigencia || '—'}</td><td>{version.items_count || 0}</td><td><span className={ps.statusPill}>{String(selectedCatalog.version_actual) === String(version.id) ? 'Actual' : (version.activo === false ? 'Inactiva' : 'Histórica')}</span></td><td><button type="button" className={ps.tableAction} onClick={() => { setItemPage(1); setSelectedVersionId(String(version.id)); }}><MoreHorizontal size={19} /> Más <ChevronRight size={20} /></button></td></tr>)}
+          {versions.map((version) => <tr key={version.id} className={String(selectedCatalog.version_actual) === String(version.id) ? ps.selected : ''}><td>v{version.numero}{version.nombre ? ` · ${version.nombre}` : ''}</td><td>{version.norma_referencia || '—'}</td><td>{version.fecha_vigencia || '—'}</td><td>{version.items_count || 0}</td><td><span className={ps.statusPill}>{String(selectedCatalog.version_actual) === String(version.id) ? 'Actual' : (version.activo === false ? 'Inactiva' : 'Histórica')}</span></td><td><button type="button" className={ps.tableAction} onClick={() => { setItemPage(1); setSelectedVersionId(String(version.id)); }}><MoreHorizontal size={19} /> Más <ChevronRight size={20} /></button>{String(selectedCatalog.version_actual) !== String(version.id) ? <button type="button" className={ps.tableAction} disabled={comparisonLoading} onClick={() => compareVersion(version)}>Comparar</button> : null}</td></tr>)}
           {!versions.length ? <tr><td colSpan="6" style={{ color: '#999' }}>Este catálogo aún no tiene versiones.</td></tr> : null}
         </tbody></table>
+        {comparison ? <CatalogVersionComparison comparison={comparison} onClose={() => setComparison(null)} /> : null}
       </section></div>
       {drawer === 'version' ? <CatalogDrawer drawer={drawer} title="Nueva versión" versionForm={versionForm} setVersionForm={setVersionForm} saveVersion={saveVersion} close={() => setDrawer(null)} saving={saving} /> : null}
       </main>
@@ -508,6 +581,17 @@ export default function TechnicalCatalogsPage() {
       ) : null}
     </main>
   );
+}
+
+function CatalogVersionComparison({ comparison, onClose }) {
+  return <section className={ps.versionComparison}>
+    <header>
+      <div><strong>Comparación de versiones</strong><span>v{comparison.previous.numero} frente a v{comparison.current.numero} vigente</span></div>
+      <button type="button" className={ps.buttonSecondary} onClick={onClose}>Cerrar</button>
+    </header>
+    {comparison.capped ? <p className={ps.helpText}>La comparación muestra los primeros 1.000 ítems de cada versión. Para catálogos mayores, se incorporará comparación paginada del servidor.</p> : null}
+    {comparison.changes.length ? <div className={ps.comparisonRows}>{comparison.changes.map((change, index) => <div className={ps.comparisonRow} key={`${change.type}-${change.label}-${index}`}><span>{change.type}</span><strong>{change.label}</strong><small>Antes: {change.before}</small><b>Ahora: {change.after}</b></div>)}</div> : <p className={ps.helpText}>No hay cambios configurables entre estas dos versiones.</p>}
+  </section>;
 }
 
 function CatalogDrawer({

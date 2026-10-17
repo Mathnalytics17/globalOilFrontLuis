@@ -4,6 +4,7 @@ import {
   Eye,
   Folder,
   FolderPlus,
+  History,
   Link2,
   ListFilter,
   MapPin,
@@ -91,6 +92,7 @@ function TreeNode({ node, reload }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [pointOpen, setPointOpen] = useState(false);
+  const [pointActivityOpen, setPointActivityOpen] = useState(false);
   const [organizeOpen, setOrganizeOpen] = useState(false);
   const hasChildren = node.children.length > 0;
   const canCreate = node.type === 'root' || node.type === 'folder';
@@ -171,6 +173,7 @@ function TreeNode({ node, reload }) {
             <MenuAction icon={ListFilter} onClick={openFilteredLots}>Ver lotes de este equipo</MenuAction>
           </> : null}
           {node.type === 'sampling-point' ? <>
+            <MenuAction icon={History} onClick={() => setPointActivityOpen(true)}>Ver actividad del punto</MenuAction>
             <MenuAction icon={Pencil} onClick={() => setPointOpen(true)}>Editar punto</MenuAction>
             <MenuAction icon={Link2} onClick={() => setOrganizeOpen(true)}>Asignar muestras existentes a este punto</MenuAction>
             <MenuAction icon={ListFilter} onClick={openFilteredLots}>Ver lotes de este punto</MenuAction>
@@ -191,6 +194,7 @@ function TreeNode({ node, reload }) {
         </div>
       </Modal>
       <SamplingPointModal open={pointOpen} machine={node.machine} point={node.point} onClose={() => setPointOpen(false)} onSaved={() => { setPointOpen(false); reload(); }} />
+      <SamplingPointActivityModal open={pointActivityOpen} point={node.point} onClose={() => setPointActivityOpen(false)} />
       <OrganizePointModal open={organizeOpen} point={node.point} machine={node.machine} onClose={() => setOrganizeOpen(false)} onSaved={() => { setOrganizeOpen(false); reload(); }} />
 
       {open && hasChildren ? <ul className="ml-6 border-l border-go-border pl-2">{node.children.map((child) => <TreeNode key={child.id} node={child} reload={reload} />)}</ul> : null}
@@ -200,6 +204,32 @@ function TreeNode({ node, reload }) {
 
 function Detail({ label, value }) {
   return <div className="grid grid-cols-[120px_1fr] gap-3 border-b border-go-border pb-2 last:border-0"><span className="text-go-muted">{label}</span><strong className="font-medium text-go-text">{value || 'No especificado'}</strong></div>;
+}
+
+function SamplingPointActivityModal({ open, point, onClose }) {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !point?.id) return;
+    let cancelled = false;
+    setLoading(true);
+    assetTreeService.samplingPointActivity(point.id, { page_size: 30 })
+      .then((data) => { if (!cancelled) setEvents(data.results || []); })
+      .catch(() => { if (!cancelled) toast.error('No se pudo cargar la actividad del punto.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, point?.id]);
+
+  return <Modal open={Boolean(open && point)} onClose={onClose} title={`Actividad · ${point?.nombre || ''}`} size="lg" footer={<button type="button" className="go-button" onClick={onClose}>Cerrar</button>}>
+    {loading ? <div className="py-6"><GlobalOilLoader /></div> : null}
+    {!loading && !events.length ? <p className="m-0 text-sm text-go-muted">Aún no hay cambios registrados para este punto desde la activación de trazabilidad.</p> : null}
+    {!loading && events.length ? <ol className="m-0 grid list-none gap-3 p-0">{events.map((event) => <li key={event.id} className="rounded-md border border-go-border bg-black/10 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm text-go-text">{event.detalle || event.accion}</strong><time className="text-xs text-go-muted">{event.creado_en ? new Date(event.creado_en).toLocaleString('es-CO') : 'Sin fecha'}</time></div>
+      <p className="mb-0 mt-1 text-xs text-go-muted">{event.actor_nombre || 'Sistema'}{event.motivo ? ` · Motivo: ${event.motivo}` : ''}</p>
+      {event.muestra ? <p className="mb-0 mt-1 text-xs text-zinc-300">Muestra relacionada: {event.muestra}</p> : null}
+    </li>)}</ol> : null}
+  </Modal>;
 }
 
 export default function AssetTreeView() {
