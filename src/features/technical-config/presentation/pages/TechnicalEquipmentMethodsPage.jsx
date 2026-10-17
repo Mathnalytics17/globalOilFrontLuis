@@ -13,6 +13,7 @@ import {
 import { technicalConfigService } from '../../infrastructure/technicalConfigService';
 import { apiErrorToText } from '../components/technicalConfigUtils';
 import OverflowMenu from '@shared/ui/OverflowMenu';
+import DataTable from '@shared/ui/DataTable';
 import PageHeader from '@shared/ui/PageHeader';
 
 const EMPTY_EQUIPMENT = { codigo: '', nombre: '', descripcion: '', activo: true };
@@ -274,50 +275,23 @@ export default function TechnicalEquipmentMethodsPage() {
             </div>
           </div>
 
-          <div className="go-scrollbar overflow-x-auto">
-            <table className="w-full min-w-[760px] border-collapse text-sm">
-              <thead className="bg-[#1c1e22] text-left text-[11px] uppercase tracking-[.04em] text-[#858b94]">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Método</th>
-                  <th className="px-4 py-3 font-semibold">Norma</th>
-                  <th className="px-4 py-3 font-semibold">Equipo</th>
-                  <th className="px-4 py-3 font-semibold">Estado</th>
-                  <th className="w-16 px-4 py-3 text-right font-semibold">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleMethods.map((method) => (
-                  <tr key={method.id} className="border-t border-white/[0.05] hover:bg-white/[0.018]">
-                    <td className="px-4 py-3 text-[#dadddf]"><strong className="font-semibold text-[#f0f1f3]">{method.codigo}</strong><br /><span className="text-xs text-[#949aa3]">{method.nombre}</span></td>
-                    <td className="px-4 py-3 text-[#b9bec5]">{method.norma_referencia || '-'}</td>
-                    <td className="px-4 py-3 text-[#b9bec5]">{method.equipo_prueba_info?.nombre || method.equipo_prueba}</td>
-                    <td className="px-4 py-3"><span className={method.activo === false ? 'go-status-off' : 'go-status-on'}>{method.activo === false ? 'Inactivo' : 'Activo'}</span></td>
-                    <td className="px-4 py-3 text-right">
-                      <OverflowMenu
-                        items={[
-                          {
-                            label: 'Editar método',
-                            icon: Edit3,
-                            onClick: () => {
-                              setEditingMethodId(method.id);
-                              setMethodForm({ equipo_prueba: method.equipo_prueba || selectedEquipmentId, codigo: method.codigo || '', nombre: method.nombre || '', norma_referencia: method.norma_referencia || '', descripcion: method.descripcion || '', activo: method.activo !== false });
-                            },
-                          },
-                          {
-                            label: method.activo === false ? 'Reactivar método' : 'Desactivar método',
-                            icon: method.activo === false ? RotateCcw : Trash2,
-                            danger: method.activo !== false,
-                            onClick: () => changeMethodStatus(method),
-                          },
-                        ]}
-                      />
-                    </td>
-                  </tr>
-                ))}
-                {!visibleMethods.length ? <tr><td className="px-4 py-10 text-center text-sm text-[#858b94]" colSpan={5}>No hay métodos para este equipo.</td></tr> : null}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            data={visibleMethods}
+            rowKey="id"
+            pagination
+            preserveOrder
+            initialRowsPerPage={15}
+            pageSizeOptions={[10, 15, 25, 50]}
+            minWidth={820}
+            emptyMessage="No hay métodos para este equipo."
+            columns={[
+              { id: 'metodo', label: 'Método', mobileTitle: true, minWidth: 220, render: (method) => <><strong className="font-semibold text-[#f0f1f3]">{method.codigo}</strong><br /><span className="text-xs text-[#949aa3]">{method.nombre}</span></> },
+              { id: 'norma', label: 'Norma', render: (method) => method.norma_referencia || '-' },
+              { id: 'equipo', label: 'Equipo', render: (method) => method.equipo_prueba_info?.nombre || method.equipo_prueba },
+              { id: 'estado', label: 'Estado', render: (method) => <span className={method.activo === false ? 'go-status-off' : 'go-status-on'}>{method.activo === false ? 'Inactivo' : 'Activo'}</span> },
+              { id: 'acciones', label: 'Acciones', sortable: false, mobileActions: true, render: (method) => <OverflowMenu items={[{ label: 'Editar método', icon: Edit3, onClick: () => { setEditingMethodId(method.id); setMethodForm({ equipo_prueba: method.equipo_prueba || selectedEquipmentId, codigo: method.codigo || '', nombre: method.nombre || '', norma_referencia: method.norma_referencia || '', descripcion: method.descripcion || '', activo: method.activo !== false }); } }, { label: method.activo === false ? 'Reactivar método' : 'Desactivar método', icon: method.activo === false ? RotateCcw : Trash2, danger: method.activo !== false, onClick: () => changeMethodStatus(method) }]} /> },
+            ]}
+          />
         </section>
       </div>
     </div>

@@ -631,8 +631,21 @@
   border-collapse: collapse;
 }
 .versionTable {
-  min-width: 1020px;
+  min-width: 0;
+  table-layout: fixed;
 }
+.versionTable th:nth-child(1),
+.versionTable td:nth-child(1) { width: 27%; }
+.versionTable th:nth-child(2),
+.versionTable td:nth-child(2) { width: 15%; }
+.versionTable th:nth-child(3),
+.versionTable td:nth-child(3) { width: 15%; }
+.versionTable th:nth-child(4),
+.versionTable td:nth-child(4) { width: 13%; }
+.versionTable th:nth-child(5),
+.versionTable td:nth-child(5) { width: 12%; }
+.versionTable th:nth-child(6),
+.versionTable td:nth-child(6) { width: 18%; }
 .versionTable th,
 .historyTable th {
   padding: 13px 16px;
@@ -665,13 +678,21 @@
 }
 .testName {
   display: block;
+  min-width: 0;
   color: #fff;
   font-size: 15px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 .tableActions {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
+  min-width: 0;
+}
+.versionTable > tbody > tr:not(.historyRow) > td:last-child .tableActions {
+  display: grid;
+  grid-template-columns: 1fr;
 }
 .tableActions a,
 .tableActions button,
@@ -688,7 +709,11 @@
   color: #fff;
   text-decoration: none;
   cursor: pointer;
+  min-width: 0;
   white-space: nowrap;
+}
+.versionTable > tbody > tr:not(.historyRow) > td:last-child .tableActions > * {
+  width: 100%;
 }
 .tableActions button:disabled { cursor: wait; opacity: .55; }
 .historyRow > td {
@@ -1045,6 +1070,67 @@
   color: #9da3ad !important;
   font-weight: 400;
 }
+.versionComparison {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 2px;
+  padding: 14px;
+  border: 1px solid #343b47;
+  border-radius: 10px;
+  background: #171a1f;
+}
+.versionComparison header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.versionComparison header div {
+  display: grid;
+  gap: 3px;
+}
+.versionComparison header strong {
+  color: #f3f4f6;
+}
+.versionComparison header span {
+  color: #9da3ad;
+  font-size: 12px;
+}
+.versionComparison button {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid #495160;
+  border-radius: 7px;
+  background: transparent;
+  color: #d6dae1;
+}
+.comparisonRows {
+  display: grid;
+  gap: 8px;
+}
+.comparisonRow {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 7px;
+  background: #20242b;
+}
+.comparisonRow span {
+  color: #9da3ad;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.comparisonRow small {
+  color: #b9c0ca;
+  overflow-wrap: anywhere;
+}
+.comparisonRow b {
+  color: #f2c4c4;
+  overflow-wrap: anywhere;
+}
 @media (max-width: 1000px) {
   .cards,
   .fieldGrid,
@@ -1054,7 +1140,8 @@
   }
   .sourceRow,
   .directGrid,
-  .resultDecisionGrid {
+  .resultDecisionGrid,
+  .comparisonRow {
     grid-template-columns: 1fr;
   }
 }
@@ -1080,5 +1167,50 @@
   }
   .finalDecision {
     grid-template-columns: 1fr;
+  }
+}
+
+
+@media (max-width: 1180px) {
+  .versionTable th,
+  .versionTable td {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .versionTable th:nth-child(3),
+  .versionTable td:nth-child(3) {
+    display: none;
+  }
+
+  .versionTable th:nth-child(1),
+  .versionTable td:nth-child(1) { width: 31%; }
+  .versionTable th:nth-child(2),
+  .versionTable td:nth-child(2) { width: 17%; }
+  .versionTable th:nth-child(4),
+  .versionTable td:nth-child(4) { width: 15%; }
+  .versionTable th:nth-child(5),
+  .versionTable td:nth-child(5) { width: 14%; }
+  .versionTable th:nth-child(6),
+  .versionTable td:nth-child(6) { width: 23%; }
+}
+
+@media (max-width: 820px) {
+  .versionTableWrap {
+    overflow-x: auto;
+  }
+
+  .versionTable {
+    min-width: 760px;
+    table-layout: auto;
+  }
+
+  .versionTable th:nth-child(3),
+  .versionTable td:nth-child(3) {
+    display: table-cell;
+  }
+
+  .tableActions {
+    min-width: 145px;
   }
 }

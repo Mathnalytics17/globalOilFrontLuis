@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import Button from './Button';
+import PaginationBar from './PaginationBar';
 
 function valueFor(row, column) {
   const value = row?.[column.id];
@@ -33,6 +34,7 @@ export default function DataTable({
   preserveOrder = false,
   initialRowsPerPage = 10,
   pageSizeOptions = [5, 10, 15, 25],
+  resetPageKey = null,
 }) {
   const getRowId = (row, index) => typeof rowKey === 'function' ? rowKey(row, index) : row?.[rowKey] ?? index;
   const inferredSort = useMemo(() => {
@@ -49,6 +51,8 @@ export default function DataTable({
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedRows, setExpandedRows] = useState([]);
 
+  useEffect(() => { setPage(0); }, [resetPageKey]);
+
   const filteredData = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return data;
@@ -59,7 +63,7 @@ export default function DataTable({
     }));
   }, [data, columns, searchTerm]);
 
-  const activeOrderBy = sort?.field || orderBy;
+  const activeOrderBy = sort?.field || sort?.key || orderBy;
   const activeOrder = sort?.direction || order;
   const sortedData = useMemo(() => {
     if (onSort || preserveOrder) return filteredData;
@@ -228,17 +232,16 @@ export default function DataTable({
       ) : null}
 
       {pagination && filteredData.length ? (
-        <div className="go-data-pagination">
-          <span>Mostrando {safePage * rowsPerPage + 1}–{Math.min((safePage + 1) * rowsPerPage, filteredData.length)} de {filteredData.length}</span>
-          <div className="go-data-pagination-actions">
-            <select className="go-control" value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0); }}>
-              {pageSizeOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
-            <Button size="sm" iconOnly disabled={safePage <= 0} onClick={() => setPage((current) => Math.max(0, current - 1))}><ChevronLeft /></Button>
-            <span className="go-data-page-number">{safePage + 1}</span>
-            <Button size="sm" iconOnly disabled={safePage >= pages - 1} onClick={() => setPage((current) => Math.min(pages - 1, current + 1))}><ChevronRight /></Button>
-          </div>
-        </div>
+        <PaginationBar
+          count={filteredData.length}
+          page={safePage + 1}
+          pageSize={rowsPerPage}
+          pageSizeOptions={pageSizeOptions}
+          onPageChange={(nextPage) => setPage(Math.max(0, Number(nextPage || 1) - 1))}
+          onPageSizeChange={(nextSize) => { setRowsPerPage(Number(nextSize)); setPage(0); }}
+          className="go-data-pagination"
+          compact
+        />
       ) : null}
     </div>
   );

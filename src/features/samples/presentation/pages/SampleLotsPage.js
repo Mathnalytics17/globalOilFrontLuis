@@ -492,7 +492,7 @@ const LotesMuestrasPage = () => {
             ) : (
               <DataTable
                 data={visibleLotes}
-                pagination
+                pagination={false}
                 minWidth={900}
                 sort={ordering}
                 onSort={toggleOrdering}

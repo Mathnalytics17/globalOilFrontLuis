@@ -23,6 +23,7 @@ import DataTable from '@shared/ui/DataTable';
 import PageHeader from '@shared/ui/PageHeader';
 import MetricStrip from '@shared/ui/MetricStrip';
 import OverflowMenu from '@shared/ui/OverflowMenu';
+import Modal from '@shared/ui/Modal';
 
 
 const fmt = (value) => {
@@ -57,6 +58,10 @@ export default function ReportsPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [actionBusy, setActionBusy] = useState(null);
+  const [reportPendingApproval, setReportPendingApproval] = useState(null);
+  const [batchPendingSend, setBatchPendingSend] = useState(null);
+  const [reportPendingAnnulment, setReportPendingAnnulment] = useState(null);
+  const [annulmentReason, setAnnulmentReason] = useState('');
   const [expandedLots, setExpandedLots] = useState(() => new Set());
   const [filters, setFilters] = useState({
     lote: '',
@@ -215,15 +220,22 @@ export default function ReportsPage() {
     }
   };
 
-  const approveReport = async (report) => {
-    if (!window.confirm(`¿Aprobar el reporte ${report.consecutivo} de la muestra ${report.muestra_id}?`)) return;
+  const approveReport = async () => {
+    const report = reportPendingApproval;
+    if (!report) return;
+
+    // Cierra inmediatamente para dar feedback visual al usuario.
+    // Si la petición falla, restauramos el mismo reporte en el modal.
+    setReportPendingApproval(null);
     setActionBusy({ id: report.id, message: `Aprobando el reporte de ${report.muestra_id}...` });
+
     try {
       await reportsService.approve(report.id);
       toast.success(`Reporte de ${report.muestra_id} aprobado.`);
       await loadReports();
     } catch (error) {
       console.error(error);
+      setReportPendingApproval(report);
       toast.error(error?.response?.data?.detail || 'No se pudo aprobar el reporte.');
     } finally {
       setActionBusy(null);
@@ -251,12 +263,13 @@ export default function ReportsPage() {
     }
   };
 
-  const sendBatch = async (format, lotId = filters.lote) => {
+  const sendBatch = async () => {
+    const { format, lotId } = batchPendingSend || {};
     if (!lotId || lotId === 'SIN-LOTE') return;
-    if (!window.confirm(`¿Enviar al cliente el lote ${lotId} como ${format.toUpperCase()}?`)) return;
     try {
       const response = await reportsService.sendBatch(lotId, format);
       toast.success(`Lote enviado a ${(response.recipients || []).join(', ')}.`);
+      setBatchPendingSend(null);
       await loadReports();
     } catch (error) {
       console.error(error);
@@ -281,13 +294,20 @@ export default function ReportsPage() {
   };
 
   const annulReport = async (report) => {
-    const reason = window.prompt(`Motivo para anular ${report.consecutivo} v${report.version}:`);
-    if (reason === null) return;
-    if (!reason.trim()) return toast.error('El motivo es obligatorio.');
+    setReportPendingAnnulment(report);
+    setAnnulmentReason('');
+  };
+
+  const confirmAnnulment = async () => {
+    const report = reportPendingAnnulment;
+    if (!report) return;
+    if (!annulmentReason.trim()) return toast.error('El motivo es obligatorio.');
     try {
       setActionBusy({ message: 'Anulando reporte...' });
-      await reportsService.annul(report.id, reason.trim());
+      await reportsService.annul(report.id, annulmentReason.trim());
       toast.success('Reporte anulado. Su historial se conserva.');
+      setReportPendingAnnulment(null);
+      setAnnulmentReason('');
       await loadReports();
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'No se pudo anular el reporte.');
@@ -295,11 +315,6 @@ export default function ReportsPage() {
       setActionBusy(null);
     }
   };
-
-  const reportPageSize = 12;
-  const reportTotalPages = Math.max(1, Math.ceil(sortedRows.length / reportPageSize));
-  const reportCurrentPage = Math.min(page, reportTotalPages);
-  const paginatedReports = sortedRows.slice((reportCurrentPage - 1) * reportPageSize, reportCurrentPage * reportPageSize);
 
   return (
     <div className="go-page reports-v2">
@@ -400,8 +415,8 @@ export default function ReportsPage() {
                 { label: 'Descargar PDF consolidado', icon: Download, onClick: () => downloadBatch('pdf') },
                 { label: 'Descargar ZIP individual', icon: Download, onClick: () => downloadBatch('zip') },
                 { separator: true },
-                { label: 'Enviar PDF', icon: Mail, onClick: () => sendBatch('pdf') },
-                { label: 'Enviar ZIP', icon: Mail, onClick: () => sendBatch('zip') },
+                { label: 'Enviar PDF', icon: Mail, onClick: () => setBatchPendingSend({ format: 'pdf', lotId: filters.lote }) },
+                { label: 'Enviar ZIP', icon: Mail, onClick: () => setBatchPendingSend({ format: 'zip', lotId: filters.lote }) },
               ]}
             />
           </section>
@@ -409,8 +424,11 @@ export default function ReportsPage() {
 
         <section className="go-card reports-table-card">
           <DataTable
-            data={paginatedReports}
+            data={sortedRows}
             pagination
+            initialRowsPerPage={12}
+            pageSizeOptions={[12, 25, 50, 100]}
+            resetPageKey={`${filters.search}|${filters.lote}|${filters.client_id}|${filters.machine_id}|${filters.sampling_point_id}|${filters.estado}|${filters.visible_cliente}|${filters.fecha_generacion_desde}|${filters.fecha_generacion_hasta}`}
             minWidth={920}
             defaultSort={{ field: 'fecha_generacion', order: 'desc' }}
             emptyMessage="No hay reportes con los filtros actuales."
@@ -433,7 +451,7 @@ export default function ReportsPage() {
                   const menu = [
                     { label: 'Vista previa', icon: Eye, onClick: () => previewReport(report.id) },
                     { label: 'Descargar PDF', icon: Download, onClick: () => downloadReport(report.id, `${report.consecutivo}_v${report.version}`) },
-                    !report.fecha_aprobacion && !['aprobado', 'enviado', 'anulado'].includes(report.estatus) ? { label: 'Aprobar reporte', icon: CheckCircle2, onClick: () => approveReport(report) } : null,
+                    !report.fecha_aprobacion && !['aprobado', 'enviado', 'anulado'].includes(report.estatus) ? { label: 'Aprobar reporte', icon: CheckCircle2, onClick: () => setReportPendingApproval(report) } : null,
                     report.fecha_aprobacion || ['aprobado', 'enviado'].includes(report.estatus) ? { label: 'Enviar por correo', icon: Mail, onClick: () => sendReport(report) } : null,
                     report.fecha_aprobacion || ['aprobado', 'enviado'].includes(report.estatus) ? { label: report.visible_cliente ? 'Ocultar al cliente' : 'Mostrar al cliente', icon: report.visible_cliente ? EyeOff : Eye, onClick: () => togglePublish(report) } : null,
                     { separator: true },
@@ -446,18 +464,67 @@ export default function ReportsPage() {
             ]}
           />
 
-          {sortedRows.length > reportPageSize ? (
-            <div className="reports-pagination">
-              <span>Mostrando {(reportCurrentPage - 1) * reportPageSize + 1}-{Math.min(reportCurrentPage * reportPageSize, sortedRows.length)} de {sortedRows.length}</span>
-              <div>
-                <button type="button" className="go-mini" disabled={reportCurrentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Anterior</button>
-                <span className="go-pill">{reportCurrentPage} / {reportTotalPages}</span>
-                <button type="button" className="go-mini" disabled={reportCurrentPage >= reportTotalPages} onClick={() => setPage((value) => Math.min(reportTotalPages, value + 1))}>Siguiente</button>
-              </div>
-            </div>
-          ) : null}
         </section>
       </div>
+
+      <Modal
+        open={Boolean(reportPendingApproval)}
+        onClose={() => setReportPendingApproval(null)}
+        title="Aprobar reporte"
+        size="sm"
+        footer={(
+          <>
+            <button type="button" className="go-button" onClick={() => setReportPendingApproval(null)}>Cancelar</button>
+            <button type="button" className="go-button-primary" onClick={approveReport}>Aprobar reporte</button>
+          </>
+        )}
+      >
+        <div className="report-approval-dialog report-approval-dialog--confirm">
+          <div className="report-approval-icon"><CheckCircle2 size={25} /></div>
+          <div className="report-approval-content">
+            <strong className="report-approval-heading">Confirmar aprobación</strong>
+            <p>El reporte quedará aprobado y listo para publicación o envío al cliente.</p>
+            <dl>
+              <div><dt>Reporte</dt><dd>{reportPendingApproval?.consecutivo} <small>v{reportPendingApproval?.version}</small></dd></div>
+              <div><dt>Muestra</dt><dd>{reportPendingApproval?.muestra_id}</dd></div>
+              <div><dt>Lote</dt><dd>{reportPendingApproval?.lote_id || 'Sin lote'}</dd></div>
+            </dl>
+            <div className="report-approval-note">
+              <CheckCircle2 size={15} />
+              <span>Verifique la vista previa y la interpretación antes de continuar.</span>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(batchPendingSend)}
+        onClose={() => setBatchPendingSend(null)}
+        title="Enviar reportes al cliente"
+        size="sm"
+        footer={<><button type="button" className="go-button" onClick={() => setBatchPendingSend(null)}>Cancelar</button><button type="button" className="go-button-primary" onClick={sendBatch}>Enviar {batchPendingSend?.format?.toUpperCase()}</button></>}
+      >
+        <div className="report-approval-dialog">
+          <div className="report-approval-icon"><Mail size={24} /></div>
+          <div><p>Se enviará el lote <strong>{batchPendingSend?.lotId}</strong> al correo configurado del cliente.</p><p className="report-approval-note">Formato: {batchPendingSend?.format?.toUpperCase() === 'ZIP' ? 'un archivo ZIP con reportes individuales' : 'un PDF consolidado'}.</p></div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(reportPendingAnnulment)}
+        onClose={() => setReportPendingAnnulment(null)}
+        title="Anular reporte"
+        size="sm"
+        footer={<><button type="button" className="go-button" onClick={() => setReportPendingAnnulment(null)}>Cancelar</button><button type="button" className="go-button-primary" onClick={confirmAnnulment}>Anular reporte</button></>}
+      >
+        <div className="report-approval-dialog">
+          <div className="report-approval-icon report-annul-icon"><Trash2 size={24} /></div>
+          <div>
+            <p>La anulación conserva el historial del reporte <strong>{reportPendingAnnulment?.consecutivo}</strong>, pero evita que siga disponible.</p>
+            <label className="report-annul-reason"><span>Motivo de anulación</span><textarea autoFocus value={annulmentReason} onChange={(event) => setAnnulmentReason(event.target.value)} placeholder="Describa por qué se anula este reporte" /></label>
+          </div>
+        </div>
+      </Modal>
 
       <style jsx global>{`
         .reports-v2 .reports-filterbar{flex-wrap:wrap}
@@ -476,6 +543,8 @@ export default function ReportsPage() {
         .requestOverlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.72);backdrop-filter:blur(3px);display:grid;place-items:center;padding:20px;cursor:wait}
         .requestCard{width:min(420px,92vw);min-height:190px;border:1px solid var(--go-border-soft);background:#191b1e;border-radius:var(--go-radius-lg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px}
         .requestCard strong{font-size:16px}.requestCard span{color:#858b94;font-size:12px}.requestSpinner{width:46px;height:46px;border:4px solid #34383f;border-top-color:var(--go-red);border-radius:50%;animation:requestSpin .8s linear infinite}@keyframes requestSpin{to{transform:rotate(360deg)}}
+        .report-approval-dialog{display:flex;gap:15px;align-items:flex-start;min-width:0}.report-approval-content{flex:1;min-width:0}.report-approval-icon{flex:0 0 auto;width:48px;height:48px;display:grid;place-items:center;border-radius:50%;color:#f5c86a;background:rgba(245,200,106,.11);border:1px solid rgba(245,200,106,.3)}.report-approval-heading{display:block;margin:1px 0 5px;color:#f1f3f5;font-size:14px}.report-approval-dialog p{margin:0;color:#aeb4bd;font-size:12.5px;line-height:1.55}.report-approval-dialog dl{margin:17px 0 14px;padding:9px 13px;border:1px solid var(--go-border-soft);border-radius:9px;background:#141619}.report-approval-dialog dl div{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.045)}.report-approval-dialog dl div:last-child{border-bottom:0}.report-approval-dialog dt{color:#858b94;font-size:11.5px}.report-approval-dialog dd{margin:0;color:#f1f3f5;font-weight:700;font-size:12px;text-align:right}.report-approval-dialog dd small{color:#9aa0aa;font-weight:500}.report-approval-dialog .report-approval-note{display:flex;align-items:flex-start;gap:7px;color:#e5bd62;font-size:11.5px;line-height:1.45}.report-approval-note svg{flex:none;margin-top:1px}@media(max-width:520px){.report-approval-dialog{gap:11px}.report-approval-icon{width:40px;height:40px}.report-approval-dialog dl{margin-left:-51px;margin-top:16px}.report-approval-dialog .report-approval-note{margin-left:-51px}}
+        .report-annul-icon{color:#fb7185;background:rgba(251,113,133,.12);border-color:rgba(251,113,133,.32)}.report-annul-reason{display:block;margin-top:14px}.report-annul-reason span{display:block;margin-bottom:6px;color:#c9cdd3;font-size:12px;font-weight:700}.report-annul-reason textarea{display:block;width:100%;min-height:82px;padding:9px 10px;resize:vertical;border:1px solid #42464e;border-radius:7px;background:#121316;color:#f1f3f5;font:inherit;font-size:12px}.report-annul-reason textarea:focus{outline:2px solid rgba(239,35,42,.4);border-color:#ef232a}
       `}</style>
     </div>
   );

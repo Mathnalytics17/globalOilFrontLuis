@@ -3,6 +3,8 @@ import { useRouter } from 'next/router';
 import { CalendarDays, Clock3, Droplets, Gauge, RefreshCw, Save, Wrench } from 'lucide-react';
 import { toast } from 'react-toastify';
 
+import GlobalOilLoader from '@shared/ui/GlobalOilLoader';
+
 import DynamicSampleTechnicalFields, {
   buildDynamicAttributesPayload,
   validateDynamicAttributes,
@@ -34,6 +36,7 @@ const FIELD_LABELS = {
   condicion: 'Condición',
   contacto_cliente: 'Contacto',
   referencia_equipo_id: 'Equipo',
+  punto_muestreo: 'Punto de medida',
   equipo_placa: 'Placa / identificación',
   referencia_marca: 'Referencia / marca',
   periodo_servicio_aceite: 'Servicio del lubricante',
@@ -65,10 +68,20 @@ const normalizeAttributes = (attributes = []) =>
     return result;
   }, {});
 
-const auditValue = (value) => {
-  if (value === null || value === undefined || value === '') return 'Sin dato';
-  if (Array.isArray(value)) return `${value.length} valor(es)`;
-  if (typeof value === 'object') return JSON.stringify(value);
+const auditValue = (value, field, machines = []) => {
+  if (value === null || value === undefined || value === '') {
+    return field === 'punto_muestreo' ? 'Sin punto de medida' : 'Sin dato';
+  }
+  if (field === 'referencia_equipo_id' && typeof value !== 'object') {
+    const machine = machines.find((item) => String(item.id) === String(value));
+    return machine ? [machine.codigo_equipo, machine.nombre].filter(Boolean).join(' · ') : 'Equipo no disponible';
+  }
+  if (Array.isArray(value)) return value.length ? `${value.length} dato(s) técnico(s) actualizado(s)` : 'Sin datos técnicos';
+  if (typeof value === 'object') {
+    if (value.nombre) return [value.codigo, value.nombre].filter(Boolean).join(' · ');
+    if (value.nombre_visible) return value.nombre_visible;
+    return 'Información estructurada actualizada';
+  }
   if (typeof value === 'boolean') return value ? 'Sí' : 'No';
   return String(value);
 };
@@ -80,6 +93,8 @@ export default function EditSamplePage() {
   const [form, setForm] = useState(EMPTY);
   const [catalogs, setCatalogs] = useState([]);
   const [machines, setMachines] = useState([]);
+  const [samplingPoints, setSamplingPoints] = useState([]);
+  const [measurementPointId, setMeasurementPointId] = useState('');
   const [history, setHistory] = useState([]);
   const [equipmentMode, setEquipmentMode] = useState('manual');
   const [loading, setLoading] = useState(true);
@@ -98,6 +113,8 @@ export default function EditSamplePage() {
       setSample(data);
       setCatalogs(catalogData);
       setMachines(options.machines || []);
+      setSamplingPoints(options.samplingPoints || []);
+      setMeasurementPointId(data.punto_muestreo?.id ? String(data.punto_muestreo.id) : '');
       setHistory(historyData);
       setEquipmentMode(data.referencia_equipo ? 'catalog' : 'manual');
       setForm({
@@ -134,8 +151,22 @@ export default function EditSamplePage() {
   const changeEquipmentMode = (mode) => {
     setEquipmentMode(mode);
     if (mode === 'catalog') update('equipo_placa', '');
-    else update('referencia_equipo', '');
+    else {
+      update('referencia_equipo', '');
+      setMeasurementPointId('');
+    }
   };
+
+  const changeRegisteredMachine = (machineId) => {
+    update('referencia_equipo', machineId);
+    // A point belongs to exactly one machine. Do not keep a stale selection
+    // while the user chooses the compatible point for the new machine.
+    if (String(machineId) !== String(sample?.referencia_equipo || '')) setMeasurementPointId('');
+  };
+
+  const compatibleSamplingPoints = samplingPoints.filter(
+    (point) => String(point.maquina) === String(form.referencia_equipo) && point.activo !== false,
+  );
 
   const save = async (event) => {
     event.preventDefault();
@@ -144,7 +175,7 @@ export default function EditSamplePage() {
     if (Object.keys(technicalErrors).length) return toast.warning(Object.values(technicalErrors)[0]);
     setSaving(true);
     try {
-      await samplesService.patch(muestraId, {
+      const savedSample = await samplesService.patch(muestraId, {
         ...form,
         referencia_equipo: equipmentMode === 'catalog' ? form.referencia_equipo || null : null,
         equipo_placa: equipmentMode === 'manual' ? form.equipo_placa.trim() || null : null,
@@ -156,6 +187,14 @@ export default function EditSamplePage() {
         fecha_envio: form.fecha_envio || null,
         atributos_tecnicos: buildDynamicAttributesPayload(form, catalogs),
       });
+      const previousPointId = sample?.punto_muestreo?.id ? String(sample.punto_muestreo.id) : '';
+      const machineWasChanged = String(savedSample.referencia_equipo || '') !== String(sample?.referencia_equipo || '');
+      if (!machineWasChanged && measurementPointId !== previousPointId) {
+        await samplesService.setMeasurementPoint(muestraId, measurementPointId || null);
+      }
+      if (machineWasChanged && equipmentMode === 'catalog' && measurementPointId) {
+        await samplesService.setMeasurementPoint(muestraId, measurementPointId);
+      }
       toast.success('Muestra actualizada y cambio registrado en el historial.');
       await load();
     } catch (error) {
@@ -166,8 +205,21 @@ export default function EditSamplePage() {
     }
   };
 
-  if (loading) return <div className="sampleLoading"><RefreshCw className="spin" /> Cargando muestra...</div>;
-  if (!sample) return <div className="sampleLoading">No se encontró la muestra.</div>;
+  if (loading) {
+    return (
+      <div style={{ minHeight: 'calc(100vh - var(--go-topbar-height, 58px))', display: 'grid', placeItems: 'center', padding: '32px' }}>
+        <GlobalOilLoader label="Cargando muestra..." />
+      </div>
+    );
+  }
+
+  if (!sample) {
+    return (
+      <div style={{ minHeight: 'calc(100vh - var(--go-topbar-height, 58px))', display: 'grid', placeItems: 'center', padding: '32px', color: 'var(--go-muted, #858b94)' }}>
+        No se encontró la muestra.
+      </div>
+    );
+  }
 
   return (
     <main className="sampleEdit">
@@ -204,11 +256,20 @@ export default function EditSamplePage() {
             </div>
           </div>
           {equipmentMode === 'catalog' ? (
-            <Field label="Equipo registrado"><select value={form.referencia_equipo} onChange={(event) => update('referencia_equipo', event.target.value)}><option value="">Seleccione un equipo</option>{machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.codigo_equipo || machine.nombre} · {machine.nombre}</option>)}</select></Field>
+            <>
+              <Field label="Equipo registrado"><select value={form.referencia_equipo} onChange={(event) => changeRegisteredMachine(event.target.value)}><option value="">Seleccione un equipo</option>{machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.codigo_equipo || machine.nombre} · {machine.nombre}</option>)}</select></Field>
+              <Field label="Punto de medida">
+                <select value={measurementPointId} onChange={(event) => setMeasurementPointId(event.target.value)} disabled={!form.referencia_equipo}>
+                  <option value="">Sin punto de medida</option>
+                  {compatibleSamplingPoints.map((point) => <option key={point.id} value={point.id}>{point.codigo ? `${point.codigo} · ` : ''}{point.nombre}</option>)}
+                </select>
+              </Field>
+              {form.referencia_equipo && !compatibleSamplingPoints.length && <p className="pointHint">Este equipo no tiene puntos de medida activos. Puede guardar la muestra sin punto o crearlo desde el árbol de activos.</p>}
+            </>
           ) : (
             <Field label="Placa / identificación manual"><input value={form.equipo_placa} onChange={(event) => update('equipo_placa', event.target.value)} /></Field>
           )}
-          {sample.punto_muestreo && <div className="pointContext"><Gauge size={17} /><div><strong>{sample.punto_muestreo.nombre}</strong><span>Punto de medida asociado a esta muestra. Puede repetirse en nuevas tomas para construir su tendencia.</span></div></div>}
+          {sample.punto_muestreo && <div className="pointContext"><Gauge size={17} /><div><strong>{sample.punto_muestreo.nombre}</strong><span>Seleccione arriba un punto compatible para cambiarlo. La asignación anterior se conserva en el historial.</span></div></div>}
         </section>
 
         <section>
@@ -237,15 +298,490 @@ export default function EditSamplePage() {
             <div className="auditMeta"><strong>{entry.usuario_nombre}</strong><span>{new Date(entry.creado_en).toLocaleString('es-CO')}</span></div>
             <div className="changeGrid">
               {Object.entries(entry.cambios || {}).map(([field, values]) => (
-                <div key={field} className="change"><strong>{FIELD_LABELS[field] || field}</strong><span><b>Antes:</b> {auditValue(values.anterior)}</span><span><b>Después:</b> {auditValue(values.nuevo)}</span></div>
+                <div key={field} className="change"><strong>{FIELD_LABELS[field] || field.replaceAll('_', ' ')}</strong><span><b>Antes:</b> {auditValue(values.anterior, field, machines)}</span><span><b>Después:</b> {auditValue(values.nuevo, field, machines)}</span></div>
               ))}
             </div>
           </article>
         ))}
       </section>
 
-      <style jsx>{`
-        .sampleEdit{color:#f7f7f7;color-scheme:dark;max-width:1280px;margin:0 auto;padding:30px 28px 64px}.sampleLoading{min-height:60vh;color:#fff;display:flex;gap:10px;align-items:center;justify-content:center}.pageHeader,.auditHeader,.sectionTitle,.formActions{display:flex;align-items:center;justify-content:space-between;gap:18px}.kicker{color:#ff3040;font-size:11px;font-weight:900;letter-spacing:.18em;text-transform:uppercase;margin:0 0 5px}.pageHeader h1{font-size:32px;font-weight:650;margin:0 0 7px;letter-spacing:-.025em}.pageHeader span,.empty,.sectionHeading p{color:#a8a8aa}.historyJump,.secondary,.save{min-height:42px;border-radius:7px;border:1px solid #484850;background:#222228;color:#fff;padding:0 15px;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:750;cursor:pointer}.historyJump :global(svg),.secondary :global(svg),.save :global(svg){color:#fff;stroke-width:2.4}.editForm,.audit{border:1px solid #34383e;border-radius:11px;margin-top:24px;background:#191b1f;box-shadow:0 14px 34px rgba(0,0,0,.14)}.editForm section{padding:24px}.editForm section+section{border-top:1px solid #30343a}.sectionHeading{display:flex;align-items:flex-start;gap:11px;margin-bottom:18px}.sectionHeading :global(svg){flex:none;color:#fff;background:#30343b;border-radius:7px;padding:6px;box-sizing:content-box}.sectionHeading h2,.audit h2{font-size:18px;margin:0 0 3px}.sectionHeading p{margin:0;font-size:13px;line-height:1.4}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.field{display:grid;gap:7px}.field.full{grid-column:1/-1}.field>span{font-size:13px;font-weight:750;color:#d9dce1}.field input,.field select,.field textarea{width:100%;min-height:44px;border:1px solid #454a53;border-radius:7px;background:#101215;color:#fff;padding:10px 12px;color-scheme:dark}.field input:focus,.field select:focus,.field textarea:focus{border-color:#ed3440;outline:none;box-shadow:0 0 0 3px rgba(239,43,50,.13)}.field textarea{min-height:92px;resize:vertical}.period{display:grid;grid-template-columns:1fr 128px;gap:9px}.segmented{display:flex;border:1px solid #454a53;border-radius:7px;overflow:hidden}.segmented button{border:0;background:#111316;color:#c3c7ce;padding:10px 14px;cursor:pointer;font-weight:650}.segmented button.active{background:#ef2532;color:#fff}.pointContext{display:flex;align-items:flex-start;gap:10px;margin-top:16px;padding:13px 14px;border:1px solid #353b44;background:#111419;border-radius:8px;color:#fff}.pointContext :global(svg){color:#fff;flex:none;margin-top:2px}.pointContext div{display:grid;gap:3px}.pointContext strong{font-size:14px}.pointContext span{color:#aeb4be;font-size:12px;line-height:1.4}.technical :global(.md\\:col-span-4){border:0!important;padding-top:0!important}.formActions{padding:16px 24px;border-top:1px solid #30343a}.save{background:#ef2532;border-color:#ef2532;min-width:190px}.save:disabled{opacity:.55}.audit{padding:22px 24px}.auditHeader{border-bottom:1px solid #30343a;padding-bottom:15px}.auditHeader .kicker{margin-top:0}.auditHeader h2{margin:0}.auditHeader>span{color:#aaa}.auditEntry{padding:16px 0;border-bottom:1px solid #2d3137}.auditMeta{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}.auditMeta span{color:#a8a8aa;font-size:13px}.changeGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.change{border-left:3px solid #ef2532;background:#22252a;padding:9px 11px;display:grid;gap:3px}.change>strong{font-size:13px}.change span{font-size:12px;color:#bbb}.change b{color:#e6e6e6}.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:960px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.sampleEdit{padding:18px 12px 40px}.pageHeader,.sectionTitle{align-items:flex-start;flex-direction:column}.grid,.changeGrid{grid-template-columns:1fr}.field.full{grid-column:auto}.historyJump{width:100%}.segmented{width:100%}.segmented button{flex:1}.formActions{position:sticky;bottom:0;background:#191b1f}.save{flex:1}.editForm section,.audit{padding:18px}}
+      <style jsx global>{`
+        .sampleEdit {
+          color: var(--go-text, #f3f4f6);
+          color-scheme: dark;
+          width: min(100%, 1440px);
+          margin: 0 auto;
+          padding: 34px clamp(20px, 3vw, 46px) 72px;
+        }
+
+        .sampleEdit .pageHeader,
+        .sampleEdit .auditHeader,
+        .sampleEdit .sectionTitle,
+        .sampleEdit .formActions {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 20px;
+        }
+
+        .sampleEdit .pageHeader {
+          padding: 0 2px 4px;
+        }
+
+        .sampleEdit .kicker {
+          margin: 0 0 7px;
+          color: var(--go-accent, #ef2b32);
+          font-size: 11px;
+          font-weight: 850;
+          letter-spacing: .18em;
+          text-transform: uppercase;
+        }
+
+        .sampleEdit .pageHeader h1 {
+          margin: 0 0 8px;
+          font-size: clamp(28px, 3vw, 38px);
+          line-height: 1.08;
+          font-weight: 720;
+          letter-spacing: -.035em;
+          color: #f7f7f8;
+        }
+
+        .sampleEdit .pageHeader > div > span,
+        .sampleEdit .empty,
+        .sampleEdit .sectionHeading p {
+          color: var(--go-muted, #858b94);
+        }
+
+        .sampleEdit .pointHint {
+          margin: 10px 0 0;
+          color: var(--go-muted, #858b94);
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
+        .sampleEdit .pageHeader > div > span {
+          display: block;
+          max-width: 720px;
+          font-size: 13px;
+          line-height: 1.55;
+        }
+
+        .sampleEdit .historyJump,
+        .sampleEdit .secondary,
+        .sampleEdit .save {
+          min-height: 40px;
+          border-radius: var(--go-radius-sm, 7px);
+          border: 1px solid var(--go-border-strong, #3a3f46);
+          background: var(--go-surface-raised, #1e2024);
+          color: var(--go-text, #f3f4f6);
+          padding: 0 14px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          font-size: 12.5px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: background-color .16s ease, border-color .16s ease, transform .16s ease;
+        }
+
+        .sampleEdit .historyJump:hover,
+        .sampleEdit .secondary:hover {
+          background: var(--go-surface-hover, #24272c);
+          border-color: #4a5058;
+        }
+
+        .sampleEdit .historyJump svg,
+        .sampleEdit .secondary svg,
+        .sampleEdit .save svg {
+          color: currentColor;
+          stroke-width: 2.2;
+        }
+
+        .sampleEdit .editForm,
+        .sampleEdit .audit {
+          overflow: hidden;
+          margin-top: 24px;
+          border: 1px solid var(--go-border-soft, rgba(255,255,255,.065));
+          border-radius: var(--go-radius-lg, 11px);
+          background: var(--go-surface, #191b1e);
+          box-shadow: 0 18px 44px rgba(0,0,0,.16);
+        }
+
+        .sampleEdit .editForm > section {
+          padding: 26px 28px;
+        }
+
+        .sampleEdit .editForm > section + section {
+          border-top: 1px solid var(--go-border-soft, rgba(255,255,255,.065));
+        }
+
+        .sampleEdit .sectionHeading {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          margin-bottom: 20px;
+        }
+
+        .sampleEdit .sectionHeading > svg {
+          flex: none;
+          width: 34px;
+          height: 34px;
+          padding: 8px;
+          box-sizing: border-box;
+          border: 1px solid #383d44;
+          border-radius: 8px;
+          background: #202328;
+          color: #f0f1f2;
+        }
+
+        .sampleEdit .sectionHeading h2,
+        .sampleEdit .audit h2 {
+          margin: 0 0 4px;
+          font-size: 16px;
+          line-height: 1.25;
+          font-weight: 720;
+          color: #f1f2f4;
+        }
+
+        .sampleEdit .sectionHeading p {
+          margin: 0;
+          font-size: 12px;
+          line-height: 1.45;
+        }
+
+        .sampleEdit .grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 18px;
+        }
+
+        .sampleEdit .field {
+          min-width: 0;
+          display: grid;
+          gap: 7px;
+        }
+
+        .sampleEdit .field.full {
+          grid-column: 1 / -1;
+        }
+
+        .sampleEdit .field > span {
+          color: #bfc4cc;
+          font-size: 11.5px;
+          line-height: 1.25;
+          font-weight: 650;
+        }
+
+        .sampleEdit .field input,
+        .sampleEdit .field select,
+        .sampleEdit .field textarea {
+          width: 100%;
+          min-width: 0;
+          min-height: 40px;
+          border: 1px solid var(--go-border-strong, #3a3f46);
+          border-radius: var(--go-radius-sm, 7px);
+          background: #141518;
+          color: var(--go-text, #f3f4f6);
+          padding: 8px 11px;
+          font: inherit;
+          font-size: 13px;
+          outline: none;
+          box-shadow: none;
+          color-scheme: dark;
+          transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+        }
+
+        .sampleEdit .field input:hover,
+        .sampleEdit .field select:hover,
+        .sampleEdit .field textarea:hover {
+          border-color: #484e57;
+        }
+
+        .sampleEdit .field input:focus,
+        .sampleEdit .field select:focus,
+        .sampleEdit .field textarea:focus {
+          border-color: #626973;
+          background: #16181b;
+          box-shadow: 0 0 0 2px rgba(255,255,255,.035);
+        }
+
+        .sampleEdit .field textarea {
+          min-height: 96px;
+          resize: vertical;
+        }
+
+        .sampleEdit .period {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 124px;
+          gap: 8px;
+        }
+
+        .sampleEdit .sectionTitle {
+          align-items: flex-start;
+        }
+
+        .sampleEdit .sectionTitle .sectionHeading {
+          margin-bottom: 20px;
+        }
+
+        .sampleEdit .segmented {
+          flex: none;
+          display: flex;
+          overflow: hidden;
+          border: 1px solid var(--go-border-strong, #3a3f46);
+          border-radius: 8px;
+          background: #121316;
+        }
+
+        .sampleEdit .segmented button {
+          min-height: 38px;
+          border: 0;
+          border-right: 1px solid var(--go-border-strong, #3a3f46);
+          background: transparent;
+          color: #aeb4bd;
+          padding: 0 14px;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: background-color .15s ease, color .15s ease;
+        }
+
+        .sampleEdit .segmented button:last-child {
+          border-right: 0;
+        }
+
+        .sampleEdit .segmented button:hover {
+          background: #1d2024;
+          color: #fff;
+        }
+
+        .sampleEdit .segmented button.active {
+          background: var(--go-accent, #ef2b32);
+          color: #fff;
+        }
+
+        .sampleEdit .pointContext {
+          display: flex;
+          align-items: flex-start;
+          gap: 11px;
+          margin-top: 16px;
+          padding: 14px 15px;
+          border: 1px solid var(--go-border-soft, rgba(255,255,255,.065));
+          border-radius: 9px;
+          background: #14171b;
+          color: #fff;
+        }
+
+        .sampleEdit .pointContext > svg {
+          flex: none;
+          margin-top: 1px;
+          color: #d9dde3;
+        }
+
+        .sampleEdit .pointContext div {
+          display: grid;
+          gap: 4px;
+        }
+
+        .sampleEdit .pointContext strong {
+          font-size: 13px;
+          font-weight: 720;
+        }
+
+        .sampleEdit .pointContext span {
+          color: #969da7;
+          font-size: 11.5px;
+          line-height: 1.45;
+        }
+
+        .sampleEdit .technical .md\\:col-span-4 {
+          border: 0 !important;
+          padding-top: 0 !important;
+        }
+
+        .sampleEdit .formActions {
+          padding: 16px 28px;
+          border-top: 1px solid var(--go-border-soft, rgba(255,255,255,.065));
+          background: #17191c;
+        }
+
+        .sampleEdit .save {
+          min-width: 178px;
+          border-color: var(--go-accent, #ef2b32);
+          background: var(--go-accent, #ef2b32);
+          color: #fff;
+        }
+
+        .sampleEdit .save:hover:not(:disabled) {
+          background: var(--go-accent-hover, #d9232a);
+          border-color: var(--go-accent-hover, #d9232a);
+        }
+
+        .sampleEdit .save:disabled {
+          opacity: .52;
+          cursor: not-allowed;
+        }
+
+        .sampleEdit .audit {
+          padding: 24px 28px;
+        }
+
+        .sampleEdit .auditHeader {
+          padding-bottom: 16px;
+          border-bottom: 1px solid var(--go-border-soft, rgba(255,255,255,.065));
+        }
+
+        .sampleEdit .auditHeader .kicker {
+          margin-top: 0;
+        }
+
+        .sampleEdit .auditHeader h2 {
+          margin: 0;
+        }
+
+        .sampleEdit .auditHeader > span {
+          color: var(--go-muted, #858b94);
+          font-size: 11.5px;
+        }
+
+        .sampleEdit .auditEntry {
+          padding: 18px 0;
+          border-bottom: 1px solid var(--go-border-soft, rgba(255,255,255,.065));
+        }
+
+        .sampleEdit .auditEntry:last-child {
+          border-bottom: 0;
+          padding-bottom: 0;
+        }
+
+        .sampleEdit .auditMeta {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 11px;
+        }
+
+        .sampleEdit .auditMeta strong {
+          font-size: 12.5px;
+        }
+
+        .sampleEdit .auditMeta span {
+          color: var(--go-muted, #858b94);
+          font-size: 11.5px;
+        }
+
+        .sampleEdit .changeGrid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 9px;
+        }
+
+        .sampleEdit .change {
+          display: grid;
+          gap: 4px;
+          padding: 11px 12px;
+          border: 1px solid var(--go-border-soft, rgba(255,255,255,.065));
+          border-left: 2px solid var(--go-accent, #ef2b32);
+          border-radius: 7px;
+          background: #202328;
+        }
+
+        .sampleEdit .change > strong {
+          margin-bottom: 1px;
+          font-size: 12px;
+        }
+
+        .sampleEdit .change span {
+          color: #adb3bb;
+          font-size: 11px;
+        }
+
+        .sampleEdit .change b {
+          color: #d8dce1;
+          font-weight: 650;
+        }
+
+        .sampleEdit .spin {
+          animation: sample-spin 1s linear infinite;
+        }
+
+        @keyframes sample-spin {
+          to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 1080px) {
+          .sampleEdit .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        @media (max-width: 760px) {
+          .sampleEdit {
+            padding: 22px 14px 44px;
+          }
+
+          .sampleEdit .pageHeader,
+          .sampleEdit .sectionTitle,
+          .sampleEdit .auditHeader {
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+          .sampleEdit .pageHeader h1 {
+            font-size: 28px;
+          }
+
+          .sampleEdit .grid,
+          .sampleEdit .changeGrid {
+            grid-template-columns: 1fr;
+          }
+
+          .sampleEdit .field.full {
+            grid-column: auto;
+          }
+
+          .sampleEdit .historyJump,
+          .sampleEdit .segmented {
+            width: 100%;
+          }
+
+          .sampleEdit .segmented button {
+            flex: 1;
+          }
+
+          .sampleEdit .editForm > section,
+          .sampleEdit .audit {
+            padding: 20px 16px;
+          }
+
+          .sampleEdit .formActions {
+            position: sticky;
+            bottom: 0;
+            z-index: 3;
+            padding: 12px 16px;
+            background: rgba(23,25,28,.96);
+            backdrop-filter: blur(8px);
+          }
+
+          .sampleEdit .save {
+            flex: 1;
+            min-width: 0;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .sampleEdit .period {
+            grid-template-columns: 1fr;
+          }
+
+          .sampleEdit .formActions {
+            flex-direction: column-reverse;
+          }
+
+          .sampleEdit .secondary,
+          .sampleEdit .save {
+            width: 100%;
+          }
+        }
       `}</style>
     </main>
   );

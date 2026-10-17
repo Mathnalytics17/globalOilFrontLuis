@@ -24,22 +24,25 @@ export default function SidebarItem({ item, currentPath, depth = 0, onNavigate, 
   }
 
   if (collapsed && depth === 0) {
+    const compactHref = item.compactHref || item.href || item.children?.[0]?.href || '/';
+    const compactLabel = item.compactLabel || item.label;
+
     return (
       <li className="relative flex justify-center">
         <Link
-          href={item.href}
+          href={compactHref}
           className={`group relative flex h-11 w-11 items-center justify-center rounded-lg no-underline transition-colors duration-150 hover:no-underline ${
             active ? 'bg-white/[0.075] text-white' : 'text-[#858b94] hover:bg-white/[0.05] hover:text-white'
           }`}
           style={{ textDecoration: 'none' }}
           onClick={onNavigate}
-          aria-label={item.label}
-          title={item.label}
+          aria-label={`Ir a ${compactLabel}`}
+          title={`Ir a ${compactLabel}`}
         >
           {Icon ? <Icon className="h-[19px] w-[19px]" strokeWidth={1.8} /> : null}
           {active ? <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full bg-go-red" /> : null}
           <span className="pointer-events-none absolute left-[calc(100%+10px)] z-[70] hidden whitespace-nowrap rounded-md border border-white/[0.08] bg-[#1b1d20] px-2.5 py-1.5 text-xs font-medium text-[#e6e8eb] shadow-xl group-hover:block">
-            {item.label}
+            {compactLabel}
           </span>
         </Link>
       </li>

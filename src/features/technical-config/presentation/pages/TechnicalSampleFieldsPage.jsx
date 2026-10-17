@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil as Edit3, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { Pencil as Edit3, Save, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import DataTable from '@shared/ui/DataTable';
 
 import technicalConfigService from '../../infrastructure/technicalConfigService';
 import TechnicalConfigShell from '../components/TechnicalConfigShell';
 import styles from '../components/TechnicalConfig.module.css';
+import pageStyles from './TechnicalSampleFieldsPage.module.css';
 import { apiErrorToText, slugify } from '../components/technicalConfigUtils';
 
 const emptyForm = {
@@ -25,6 +27,14 @@ const sampleKindOptions = [
   { value: 'aceite', label: 'Aceite' },
   { value: 'grasa', label: 'Grasa' },
   { value: 'ambos', label: 'Aceite y grasa' },
+];
+
+const behaviorOptions = [
+  ['obligatorio', 'Obligatorio', 'El usuario deberá diligenciar este campo.'],
+  ['permite_desconocido', 'Permite desconocido', 'Acepta un valor desconocido cuando aplique.'],
+  ['visible_en_ingreso', 'Visible en ingreso', 'Se mostrará al registrar una muestra.'],
+  ['visible_en_asignacion', 'Visible en asignación', 'Se mostrará durante la asignación.'],
+  ['activo', 'Activo', 'El campo estará disponible para nuevos registros.'],
 ];
 
 const getCatalogName = (field) =>
@@ -91,6 +101,7 @@ export default function TechnicalSampleFieldsPage() {
       ayuda: field.ayuda || '',
       activo: field.activo !== false,
     });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const submit = async (event) => {
@@ -142,129 +153,171 @@ export default function TechnicalSampleFieldsPage() {
       subtitle="Define qué inputs aparecen al registrar aceites y grasas, y a qué catálogo pertenece cada uno."
       action={null}
     >
-      <div className={styles.grid}>
-        <section className={`${styles.card} ${styles.col5}`}>
-          <div className={styles.cardHeader}>
+      <div className={pageStyles.stack}>
+        <section className={pageStyles.card}>
+          <div className={pageStyles.cardHeader}>
             <div>
-              <h2 className={styles.cardTitle}>{editingId ? 'Editar campo' : 'Nuevo campo'}</h2>
-              <p className={styles.cardSubtitle}>El formulario de muestras se construye desde esta configuración.</p>
+              <p className={pageStyles.kicker}>{editingId ? 'Edición de campo' : 'Nuevo campo'}</p>
+              <h2 className={pageStyles.cardTitle}>{editingId ? 'Editar campo técnico' : 'Crear campo técnico'}</h2>
+              <p className={pageStyles.cardSubtitle}>
+                Configure primero la identidad del campo, luego dónde aplica y finalmente su comportamiento dentro del flujo de muestras.
+              </p>
             </div>
+            {editingId ? (
+              <button type="button" className={`${styles.btn} ${styles.secondary}`} onClick={reset}>
+                Cancelar edición
+              </button>
+            ) : null}
           </div>
 
-          <form className={styles.formGrid} onSubmit={submit}>
-            <label className={`${styles.field} ${styles.fieldFull}`}>
-              <span className={styles.label}>Nombre visible *</span>
-              <input className={styles.input} value={form.nombre_visible} onChange={(e) => update('nombre_visible', e.target.value)} placeholder="Ej: Grado de viscosidad" />
-            </label>
+          <form className={pageStyles.form} onSubmit={submit}>
+            <section className={pageStyles.section}>
+              <div className={pageStyles.sectionHeader}>
+                <span className={pageStyles.step}>1</span>
+                <div>
+                  <h3 className={pageStyles.sectionTitle}>Identidad del campo</h3>
+                  <p className={pageStyles.sectionHelp}>Defina cómo verá y cómo reconocerá el sistema este dato.</p>
+                </div>
+              </div>
 
-            <label className={styles.field}>
-              <span className={styles.label}>Código</span>
-              <input className={styles.input} value={form.codigo} onChange={(e) => update('codigo', e.target.value)} placeholder="grado_viscosidad" />
-            </label>
+              <div className={pageStyles.fieldsGrid}>
+                <label className={`${pageStyles.field} ${pageStyles.fieldWide}`}>
+                  <span className={pageStyles.label}>Nombre visible *</span>
+                  <input
+                    className={pageStyles.input}
+                    value={form.nombre_visible}
+                    onChange={(e) => update('nombre_visible', e.target.value)}
+                    placeholder="Ej: Grado de viscosidad"
+                  />
+                </label>
 
-            <label className={styles.field}>
-              <span className={styles.label}>Aplica a</span>
-              <select className={styles.select} value={form.tipo_muestra} onChange={(e) => update('tipo_muestra', e.target.value)}>
-                {sampleKindOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </label>
+                <label className={`${pageStyles.field} ${pageStyles.fieldSmall}`}>
+                  <span className={pageStyles.label}>Orden</span>
+                  <input
+                    className={pageStyles.input}
+                    type="number"
+                    min="1"
+                    value={form.orden}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    onChange={(e) => update('orden', e.target.value)}
+                  />
+                </label>
 
-            <label className={`${styles.field} ${styles.fieldFull}`}>
-              <span className={styles.label}>Catálogo asociado *</span>
-              <select className={styles.select} value={form.catalogo} onChange={(e) => update('catalogo', e.target.value)}>
-                <option value="">Seleccione catálogo</option>
-                {activeCatalogs.map((catalog) => (
-                  <option key={catalog.id} value={catalog.id}>{catalog.nombre}</option>
+                <label className={`${pageStyles.field} ${pageStyles.fieldFull}`}>
+                  <span className={pageStyles.label}>Código</span>
+                  <input
+                    className={pageStyles.input}
+                    value={form.codigo}
+                    onChange={(e) => update('codigo', e.target.value)}
+                    placeholder="grado_viscosidad"
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className={pageStyles.section}>
+              <div className={pageStyles.sectionHeader}>
+                <span className={pageStyles.step}>2</span>
+                <div>
+                  <h3 className={pageStyles.sectionTitle}>Aplicación y catálogo</h3>
+                  <p className={pageStyles.sectionHelp}>Indique para qué muestras aplica y de dónde toma sus valores.</p>
+                </div>
+              </div>
+
+              <div className={pageStyles.fieldsGrid}>
+                <label className={pageStyles.field}>
+                  <span className={pageStyles.label}>Aplica a</span>
+                  <select className={pageStyles.select} value={form.tipo_muestra} onChange={(e) => update('tipo_muestra', e.target.value)}>
+                    {sampleKindOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+
+                <label className={pageStyles.field}>
+                  <span className={pageStyles.label}>Catálogo asociado *</span>
+                  <select className={pageStyles.select} value={form.catalogo} onChange={(e) => update('catalogo', e.target.value)}>
+                    <option value="">Seleccione catálogo</option>
+                    {activeCatalogs.map((catalog) => (
+                      <option key={catalog.id} value={catalog.id}>{catalog.nombre}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className={`${pageStyles.field} ${pageStyles.fieldFull}`}>
+                  <span className={pageStyles.label}>Ayuda para el usuario</span>
+                  <textarea
+                    className={pageStyles.textarea}
+                    value={form.ayuda}
+                    onChange={(e) => update('ayuda', e.target.value)}
+                    placeholder="Texto corto para orientar al usuario."
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className={pageStyles.section}>
+              <div className={pageStyles.sectionHeader}>
+                <span className={pageStyles.step}>3</span>
+                <div>
+                  <h3 className={pageStyles.sectionTitle}>Comportamiento</h3>
+                  <p className={pageStyles.sectionHelp}>Controle obligatoriedad, visibilidad y disponibilidad del campo.</p>
+                </div>
+              </div>
+
+              <div className={pageStyles.toggleGrid}>
+                {behaviorOptions.map(([key, label, help]) => (
+                  <label key={key} className={pageStyles.toggleCard}>
+                    <input type="checkbox" checked={Boolean(form[key])} onChange={(e) => update(key, e.target.checked)} />
+                    <span className={pageStyles.toggleText}>
+                      <strong>{label}</strong>
+                      <small>{help}</small>
+                    </span>
+                  </label>
                 ))}
-              </select>
-            </label>
+              </div>
+            </section>
 
-            <label className={styles.field}>
-              <span className={styles.label}>Orden</span>
-              <input className={styles.input} type="number" min="1" value={form.orden} onWheel={(e) => e.currentTarget.blur()} onChange={(e) => update('orden', e.target.value)} />
-            </label>
-
-            <label className={`${styles.field} ${styles.fieldFull}`}>
-              <span className={styles.label}>Ayuda</span>
-              <textarea className={styles.textarea} value={form.ayuda} onChange={(e) => update('ayuda', e.target.value)} placeholder="Texto corto para orientar al usuario." />
-            </label>
-
-            {[
-              ['obligatorio', 'Obligatorio'],
-              ['permite_desconocido', 'Permite desconocido'],
-              ['visible_en_ingreso', 'Visible en ingreso'],
-              ['visible_en_asignacion', 'Visible en asignación'],
-              ['activo', 'Activo'],
-            ].map(([key, label]) => (
-              <label key={key} className={`${styles.checkInline} ${styles.col6}`}>
-                <input type="checkbox" checked={Boolean(form[key])} onChange={(e) => update(key, e.target.checked)} />
-                <span>{label}</span>
-              </label>
-            ))}
-
-            <div className={`${styles.actions} ${styles.fieldFull}`}>
+            <div className={pageStyles.formActions}>
+              {editingId ? (
+                <button type="button" className={`${styles.btn} ${styles.secondary}`} onClick={reset}>
+                  Cancelar
+                </button>
+              ) : null}
               <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={saving}>
                 <Save size={16} /> {editingId ? 'Guardar cambios' : 'Crear campo'}
               </button>
-              {editingId ? (
-                <button type="button" className={`${styles.btn} ${styles.secondary}`} onClick={reset}>Cancelar</button>
-              ) : null}
             </div>
           </form>
         </section>
 
-        <section className={`${styles.card} ${styles.col7}`}>
-          <div className={styles.cardHeader}>
+        <section className={pageStyles.card}>
+          <div className={pageStyles.cardHeader}>
             <div>
-              <h2 className={styles.cardTitle}>Campos configurados</h2>
-              <p className={styles.cardSubtitle}>Estos son los inputs que verá el usuario al crear muestras.</p>
+              <p className={pageStyles.kicker}>Listado activo</p>
+              <h2 className={pageStyles.cardTitle}>Campos configurados</h2>
+              <p className={pageStyles.cardSubtitle}>Estos son los inputs que verá el usuario al crear muestras.</p>
             </div>
+            <span className={pageStyles.countBadge}>{fields.length} {fields.length === 1 ? 'registro' : 'registros'}</span>
           </div>
 
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Campo</th>
-                  <th>Tipo</th>
-                  <th>Catálogo</th>
-                  <th>Uso</th>
-                  <th>Estado</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fields.length ? fields.map((field) => (
-                  <tr key={field.id}>
-                    <td><strong>{field.nombre_visible}</strong><br /><small>{field.codigo}</small></td>
-                    <td>{field.tipo_muestra}</td>
-                    <td>{getCatalogName(field)}</td>
-                    <td>
-                      {field.obligatorio ? 'Obligatorio' : 'Opcional'}
-                      <br />
-                      <small>{field.permite_desconocido ? 'Permite desconocido' : 'No permite desconocido'}</small>
-                    </td>
-                    <td>
-                      <span className={field.activo ? styles.badgeGreen : styles.badgeRed}>
-                        {field.activo ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </td>
-                    <td>
-                      <div className={styles.actions}>
-                        <button type="button" className={`${styles.btn} ${styles.secondary}`} onClick={() => edit(field)} title="Editar">
-                          <Edit3 size={15} />
-                        </button>
-                        <button type="button" className={`${styles.btn} ${styles.danger}`} onClick={() => deactivate(field)} title="Desactivar">
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan="6" className={styles.empty}>No hay campos técnicos configurados.</td></tr>
-                )}
-              </tbody>
-            </table>
+          <div className={pageStyles.listBody}>
+            <DataTable
+              data={fields}
+              rowKey="id"
+              pagination
+              searchable
+              initialRowsPerPage={15}
+              pageSizeOptions={[10, 15, 25, 50]}
+              minWidth={760}
+              emptyMessage={loading ? 'Cargando campos técnicos…' : 'No hay campos técnicos configurados.'}
+              columns={[
+                { id: 'nombre_visible', label: 'Campo', mobileTitle: true, minWidth: 180, render: (field) => <><strong>{field.nombre_visible}</strong><br /><small>{field.codigo}</small></> },
+                { id: 'tipo_muestra', label: 'Tipo', minWidth: 110 },
+                { id: 'catalogo', label: 'Catálogo', minWidth: 170, render: (field) => getCatalogName(field) },
+                { id: 'uso', label: 'Uso', sortable: false, minWidth: 170, render: (field) => <>{field.obligatorio ? 'Obligatorio' : 'Opcional'}<br /><small>{field.permite_desconocido ? 'Permite desconocido' : 'No permite desconocido'}</small></> },
+                { id: 'activo', label: 'Estado', minWidth: 100, render: (field) => <span className={field.activo ? styles.badgeGreen : styles.badgeRed}>{field.activo ? 'Activo' : 'Inactivo'}</span> },
+                { id: 'acciones', label: 'Acciones', sortable: false, mobileActions: true, minWidth: 110, render: (field) => <div className={styles.actions}><button type="button" className={`${styles.btn} ${styles.secondary}`} onClick={() => edit(field)} title="Editar"><Edit3 size={15} /></button><button type="button" className={`${styles.btn} ${styles.danger}`} onClick={() => deactivate(field)} title="Desactivar"><Trash2 size={15} /></button></div> },
+              ]}
+            />
           </div>
         </section>
       </div>

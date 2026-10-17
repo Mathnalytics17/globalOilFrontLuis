@@ -54,22 +54,66 @@ input,
 select,
 textarea { font: inherit; }
 
-/* Chrome renders date controls with a black native glyph by default.  The app
-   is dark, so keep the calendar and time affordances visible everywhere. */
+/* Native form affordances on the dark UI.
+   `color-scheme: dark` already makes Chromium render its calendar/clock glyphs
+   in a light colour. Do NOT invert them: that turns the native light glyph
+   back to black (the exact issue that made date fields unreadable). */
+input[type="date"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="time"],
+input[type="number"],
+select {
+  color-scheme: dark !important;
+}
+
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator,
 input[type="month"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator {
-  filter: invert(1) !important;
-  opacity: 1 !important;
+  filter: none !important;
+  opacity: .82 !important;
   cursor: pointer !important;
 }
 
-input[type="date"],
-input[type="datetime-local"],
-input[type="month"],
-input[type="time"] {
-  color-scheme: dark !important;
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="month"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1 !important;
+}
+
+/* Chromium numeric steppers inherit a light treatment from the same dark
+   colour scheme; keep them visible if a feature chooses to show them. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: .78;
+}
+
+/* Keep native file inputs consistent with the rest of the design system. */
+input[type="file"]::file-selector-button {
+  min-height: 32px;
+  margin-right: 10px;
+  border: 1px solid #3a3f47;
+  border-radius: 7px;
+  background: #23262b;
+  color: #eef0f3;
+  padding: 6px 10px;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: #2b2f35;
+  border-color: #4a5059;
+}
+
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"],
+progress {
+  accent-color: var(--go-red);
 }
 
 button { cursor: pointer; }
@@ -856,6 +900,84 @@ body { font-size: 13px; }
 .go-pagination-actions, .go-data-pagination-actions { display: flex; align-items: center; gap: 6px; }
 .go-pagination-size, .go-data-pagination .go-control { width: auto; min-width: 62px; min-height: 30px; padding: 4px 7px; font-size: 11.5px; }
 
+
+/* Canonical modal. Shared by confirmations and focused workflows. */
+.go-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 5, 7, .72);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+.go-modal {
+  width: min(calc(100vw - 48px), 100%);
+  max-height: min(86vh, 820px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--go-border-strong);
+  border-radius: 14px;
+  background: #181a1d;
+  color: var(--go-text);
+  box-shadow: 0 28px 90px rgba(0,0,0,.52), 0 0 0 1px rgba(255,255,255,.025) inset;
+}
+.go-modal-header {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px 14px 18px;
+  border-bottom: 1px solid var(--go-border-soft);
+  background: #1b1d21;
+}
+.go-modal-title {
+  min-width: 0;
+  margin: 0;
+  color: #f1f3f5;
+  font-size: 16px;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -.015em;
+}
+.go-modal-header > button {
+  flex: 0 0 auto;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+.go-modal-header > button:hover { background: rgba(255,255,255,.06) !important; }
+.go-modal-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+}
+.go-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 13px 16px;
+  border-top: 1px solid var(--go-border-soft);
+  background: #15171a;
+}
+.go-modal-footer .go-button,
+.go-modal-footer .go-button-primary {
+  min-height: 38px;
+}
+@media (max-width: 640px) {
+  .go-modal-backdrop { padding: 12px; align-items: end; }
+  .go-modal { width: 100%; max-height: calc(100dvh - 24px); border-radius: 14px 14px 10px 10px; }
+  .go-modal-header { min-height: 54px; padding: 12px 12px 12px 14px; }
+  .go-modal-body { padding: 16px 14px; }
+  .go-modal-footer { padding: 12px 14px; }
+  .go-modal-footer > * { flex: 1 1 140px; }
+}
+
 /* Canonical data table. Desktop is a compact table; phones receive cards. */
 .go-data-table {
   width: 100%;
@@ -1101,4 +1223,66 @@ body { font-size: 13px; }
   .assignPage .editorRow > *, .assignPage .editorRow input, .assignPage .editorRow select, .assignPage .criterionCell { width: 100% !important; min-width: 0 !important; border-right: 0 !important; }
   .assignPage .samplesTableWrap { overflow-x: auto !important; }
   .assignPage .footerBar { position: static !important; }
+}
+
+/* Global route transition feedback. This is intentionally mounted once in
+   _app so every Next.js navigation gets the same immediate response. */
+.go-navigation-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+}
+
+.go-navigation-loader__scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 11, 13, 0.54);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: go-navigation-scrim-in 140ms ease-out both;
+}
+
+.go-navigation-loader__panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-width: 220px;
+  place-items: center;
+  padding: 22px 28px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 16px;
+  background: rgba(22, 24, 27, 0.94);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.42);
+  animation: go-navigation-panel-in 160ms ease-out both;
+}
+
+.go-navigation-loader__panel .go-loader p {
+  color: #c8ccd2;
+}
+
+@keyframes go-navigation-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes go-navigation-panel-in {
+  from { opacity: 0; transform: translateY(5px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 640px) {
+  .go-navigation-loader__panel {
+    min-width: 190px;
+    padding: 19px 22px 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .go-navigation-loader__scrim,
+  .go-navigation-loader__panel {
+    animation: none;
+  }
 }

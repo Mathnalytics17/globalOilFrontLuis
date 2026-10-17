@@ -6,7 +6,7 @@ import { toast } from 'react-toastify';
 import technicalConfigService from '../../infrastructure/technicalConfigService';
 import dynamicTechnicalConfigService from '../../infrastructure/dynamicTechnicalConfigService';
 import ps from '../components/TechnicalPs5.module.css';
-import SortableTableHeader from '@shared/ui/SortableTableHeader';
+import DataTable from '@shared/ui/DataTable';
 import useTableSort from '@shared/hooks/useTableSort';
 import { getApiErrorMessage } from '@shared/utils/errors';
 
@@ -216,41 +216,25 @@ export default function TechnicalUnitsConditionsPage() {
             ) : null}
           </div>
 
-          <table className={ps.linearTable}>
-            <thead>
-              <tr>
-                <SortableTableHeader column="name" label="Nombre" sort={sort} onSort={requestSort} />
-                <SortableTableHeader column="value" label={tab === 'conditions' ? 'Valor' : 'Simbolo'} sort={sort} onSort={requestSort} />
-                <SortableTableHeader column="category" label="Categoria" sort={sort} onSort={requestSort} />
-                <SortableTableHeader column="status" label="Estado" sort={sort} onSort={requestSort} />
-                <th>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedRows.map((row) => (
-                <tr key={row.id || row.simbolo || row.nombre}>
-                  <td>{row.nombre}</td>
-                  <td>{tab === 'conditions' ? `${row.valor ?? '-'} ${units.find((u) => String(u.id) === String(row.unidad))?.simbolo || ''}` : row.simbolo}</td>
-                  <td>{row.magnitud || row.categoria || 'General'}</td>
-                  <td><span className={ps.statusPill}><span className={`${ps.statusDot} ${ps.greenDot}`} />{row.activo === false ? 'Inactivo' : 'Activo'}</span></td>
-                  <td>
-                    {tab === 'units' ? (
-                      <><button type="button" className={ps.tableAction} title="Editar" onClick={() => openUnit(row)}><MoreHorizontal size={24} /></button><button type="button" className={ps.tableAction} onClick={() => toggleRecord(row)}>{row.activo === false ? 'Reactivar' : 'Desactivar'}</button></>
-                    ) : tab === 'conditions' ? (
-                      <><button type="button" className={ps.tableAction} title="Editar" onClick={() => openCondition(row)}><MoreHorizontal size={24} /></button><button type="button" className={ps.tableAction} onClick={() => toggleRecord(row)}>{row.activo === false ? 'Reactivar' : 'Desactivar'}</button></>
-                    ) : <span style={{ color: '#777' }}>—</span>}
-                  </td>
-                </tr>
-              ))}
-              {!currentRows.length ? (
-                <tr><td colSpan="5" style={{ color: '#999' }}>No hay registros para mostrar.</td></tr>
-              ) : null}
-            </tbody>
-          </table>
+          <DataTable
+            data={sortedRows}
+            rowKey={(row) => row.id || row.simbolo || row.nombre}
+            pagination
+            initialRowsPerPage={15}
+            pageSizeOptions={[10, 15, 25, 50]}
+            minWidth={820}
+            sort={sort ? { field: sort.key, direction: sort.direction } : null}
+            onSort={requestSort}
+            emptyMessage="No hay registros para mostrar."
+            columns={[
+              { id: 'name', label: 'Nombre', mobileTitle: true, render: (row) => row.nombre },
+              { id: 'value', label: tab === 'conditions' ? 'Valor' : 'Símbolo', render: (row) => tab === 'conditions' ? `${row.valor ?? '-'} ${units.find((u) => String(u.id) === String(row.unidad))?.simbolo || ''}` : row.simbolo },
+              { id: 'category', label: 'Categoría', render: (row) => row.magnitud || row.categoria || 'General' },
+              { id: 'status', label: 'Estado', render: (row) => <span className={ps.statusPill}><span className={`${ps.statusDot} ${ps.greenDot}`} />{row.activo === false ? 'Inactivo' : 'Activo'}</span> },
+              { id: 'acciones', label: 'Acciones', sortable: false, mobileActions: true, minWidth: 180, render: (row) => tab === 'units' ? <><button type="button" className={ps.tableAction} title="Editar" onClick={() => openUnit(row)}><MoreHorizontal size={24} /></button><button type="button" className={ps.tableAction} onClick={() => toggleRecord(row)}>{row.activo === false ? 'Reactivar' : 'Desactivar'}</button></> : tab === 'conditions' ? <><button type="button" className={ps.tableAction} title="Editar" onClick={() => openCondition(row)}><MoreHorizontal size={24} /></button><button type="button" className={ps.tableAction} onClick={() => toggleRecord(row)}>{row.activo === false ? 'Reactivar' : 'Desactivar'}</button></> : <span style={{ color: '#777' }}>—</span> },
+            ]}
+          />
 
-          <footer className={ps.footerNote}>
-            <span>Mostrando {currentRows.length} registro(s)</span>
-          </footer>
         </section>
       </div>
 

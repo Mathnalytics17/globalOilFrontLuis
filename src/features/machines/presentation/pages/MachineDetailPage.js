@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { Cpu, Settings, FileText, Pencil as Edit } from 'lucide-react';
+import { Cpu, Settings, FileText, Pencil as Edit, History } from 'lucide-react';
 import { machinesService } from '@features/machines/infrastructure/machinesService';
 import { samplesService } from '@features/samples/infrastructure/samplesService';
 import AppErrorState from '@shared/ui/AppErrorState';
@@ -12,6 +12,7 @@ const DetailMachine = () => {
   const [error, setError] = useState(null);
   const [machine, setMachine] = useState(null);
   const [muestras, setMuestras] = useState([]);
+  const [activity, setActivity] = useState([]);
 
   // Cargar datos de la máquina
   useEffect(() => {
@@ -23,8 +24,12 @@ const DetailMachine = () => {
         setError(null);
 
         // Fetch de la máquina principal
-        const machineData = await machinesService.getById(id);
+        const [machineData, activityData] = await Promise.all([
+          machinesService.getById(id),
+          machinesService.activity(id, { page_size: 12 }).catch(() => ({ results: [] })),
+        ]);
         setMachine(machineData);
+        setActivity(activityData.results || []);
 
         // Fetch de muestras asociadas a esta máquina
         try {
@@ -63,6 +68,18 @@ const DetailMachine = () => {
       day: 'numeric'
     });
   };
+
+  const formatActivity = (event) => ({
+    'maquina.creada': 'Máquina creada',
+    'maquina.actualizada': 'Ficha técnica actualizada',
+    'maquina.desactivada': 'Máquina desactivada',
+    'maquina.reactivada': 'Máquina reactivada',
+    'punto_muestreo.creado': 'Punto de medición creado',
+    'punto_muestreo.actualizado': 'Punto de medición actualizado',
+    'punto_muestreo.desactivado': 'Punto de medición desactivado',
+    'punto_muestreo.reactivado': 'Punto de medición reactivado',
+    'muestra.punto_muestreo_asignado': 'Muestra asociada a un punto',
+  }[event.accion] || event.detalle || event.accion);
 
   if (loading) {
     return (
@@ -228,6 +245,31 @@ const DetailMachine = () => {
             <p className="text-[#969ca6] whitespace-pre-wrap">{machine.descripcion}</p>
           </div>
         )}
+
+        <section className="go-card mb-6">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <History size={20} className="text-[#e2646a]" /> Actividad del activo
+            </h3>
+            <span className="text-xs text-[#969ca6]">Últimos {activity.length} eventos</span>
+          </div>
+          {activity.length ? (
+            <div className="space-y-3">
+              {activity.map((event) => (
+                <div key={event.id} className="border-l-2 border-red-500/70 pl-3 py-1">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-white font-medium text-sm">{formatActivity(event)}</p>
+                      <p className="text-[#969ca6] text-xs mt-1">{event.actor_nombre || 'Sistema'}{event.punto_muestreo ? ` · Punto #${event.punto_muestreo}` : ''}</p>
+                    </div>
+                    <time className="text-[#969ca6] text-xs whitespace-nowrap">{formatDate(event.creado_en)}</time>
+                  </div>
+                  {event.motivo ? <p className="text-[#c7cbd1] text-sm mt-2">Motivo: {event.motivo}</p> : null}
+                </div>
+              ))}
+            </div>
+          ) : <p className="text-[#969ca6] text-sm">Aún no hay eventos de actividad para esta máquina.</p>}
+        </section>
 
         {/* Muestras Asociadas */}
         <div className="go-card">

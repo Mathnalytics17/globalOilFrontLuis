@@ -40,6 +40,13 @@ export const samplesService = {
     return Array.isArray(data) ? data : data.results || [];
   },
 
+  async setMeasurementPoint(id, puntoMuestreoId) {
+    const { data } = await apiClient.put(`/lubrication/samples/${id}/measurement-point/`, {
+      punto_muestreo_id: puntoMuestreoId || null,
+    });
+    return data;
+  },
+
   async invalidate(id, reason) {
     const { data } = await apiClient.post(`/lubrication/samples/${id}/invalidate/`, { reason });
     return data;

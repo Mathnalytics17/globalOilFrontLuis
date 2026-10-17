@@ -7,7 +7,7 @@ import { companiesService } from '@features/companies/infrastructure/companiesSe
 import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import { isGlobalUser } from '@features/auth/application/sessionAccess';
 import s from '../components/Security.module.css';
-import SortableTableHeader from '@shared/ui/SortableTableHeader';
+import DataTable from '@shared/ui/DataTable';
 import useTableSort from '@shared/hooks/useTableSort';
 import {
   BackLink,
@@ -266,54 +266,44 @@ export default function SecurityUsersPage() {
             </div>
           </div>
 
-          <div className={s.tableWrap}>
-            <table className={s.table}>
-              <thead>
-                <tr>
-                  <SortableTableHeader columnKey="usuario" label="Usuario" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader columnKey="empresa" label="Empresa" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader columnKey="rol" label="Rol" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader columnKey="acceso" label="Acceso" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader columnKey="ultimo_acceso" label="Último acceso" sort={sort} onSort={requestSort} />
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedRows.map((item) => (
-                  <tr key={item.id}>
-                    <td>
-                      <strong>{item.displayName}</strong>
-                      <span className={s.small}>{item.displayEmail}</span>
-                    </td>
-                    <td>{item.companyName}</td>
-                    <td>{item.roleName}</td>
-                    <td>
-                      <StatusPill status={item.accessStatus} />
-                      {item.is_read_only ? <span className={s.small}>Solo lectura</span> : null}
-                      {item.block_scope && item.block_scope !== 'NONE' ? <span className={s.small}>Bloqueo: {item.block_scope}</span> : null}
-                    </td>
-                    <td>{item.last_login ? new Date(item.last_login).toLocaleString() : <span className={s.muted}>Sin registro</span>}</td>
-                    <td>
-                      <div className={s.actions}>
-                        <button className={s.iconButton} title="Ver detalle" type="button" onClick={() => { setSelectedUser(item); setDrawer('detail'); }}><RemoveRedEye /></button>
-                        {canEdit ? <button className={s.iconButton} title="Editar usuario" type="button" onClick={() => openEdit(item)}><Edit /></button> : null}
-                        {canReinvite && (isPending(item) || isDisabled(item)) ? <button className={s.iconButton} title="Reinvitar usuario" type="button" onClick={() => openAction(item, 'reinvite')}><PersonAddAlt /></button> : null}
-                        {canDeactivate && !isDisabled(item) && item.id !== user?.id ? <button className={s.iconButton} title="Desactivar cuenta" type="button" onClick={() => openAction(item, 'deactivate')}><DeleteOutline /></button> : null}
-                        {canUnblock && isDisabled(item) ? <button className={s.iconButton} title="Reactivar cuenta" type="button" onClick={() => openAction(item, 'reactivate')}><LockOpen /></button> : null}
-                        {canBlock && !isBlocked(item) && !isPending(item) ? <button className={s.iconButton} title="Bloquear acceso" type="button" onClick={() => openAction(item, 'block')}><Block /></button> : null}
-                        {canUnblock && isBlocked(item) ? <button className={s.iconButton} title="Desbloquear acceso" type="button" onClick={() => openAction(item, 'unblock')}><LockOpen /></button> : null}
-                        {canBlock && !isReadOnly(item) && !isBlocked(item) && !isPending(item) ? <button className={s.iconButton} title="Pasar a solo lectura" type="button" onClick={() => openAction(item, 'readonly')}><VisibilityOff /></button> : null}
-                        {canUnblock && isReadOnly(item) ? <button className={s.iconButton} title="Restaurar escritura" type="button" onClick={() => openAction(item, 'restore')}><Edit /></button> : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {!filteredUsers.length ? (
-                  <tr><td colSpan="6"><div className={s.message}>No hay usuarios para mostrar.</div></td></tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            data={sortedRows}
+            rowKey="id"
+            pagination
+            initialRowsPerPage={15}
+            pageSizeOptions={[10, 15, 25, 50]}
+            minWidth={980}
+            sort={sort ? { field: sort.key, direction: sort.direction } : null}
+            onSort={requestSort}
+            emptyMessage={loading ? 'Cargando usuarios…' : 'No hay usuarios para mostrar.'}
+            columns={[
+              { id: 'usuario', label: 'Usuario', mobileTitle: true, render: (item) => <><strong>{item.displayName}</strong><span className={s.small}>{item.displayEmail}</span></> },
+              { id: 'empresa', label: 'Empresa', render: (item) => item.companyName },
+              { id: 'rol', label: 'Rol', render: (item) => item.roleName },
+              { id: 'acceso', label: 'Acceso', render: (item) => <><StatusPill status={item.accessStatus} />{item.is_read_only ? <span className={s.small}>Solo lectura</span> : null}{item.block_scope && item.block_scope !== 'NONE' ? <span className={s.small}>Bloqueo: {item.block_scope}</span> : null}</> },
+              { id: 'ultimo_acceso', label: 'Último acceso', minWidth: 170, render: (item) => item.last_login ? new Date(item.last_login).toLocaleString() : <span className={s.muted}>Sin registro</span> },
+              {
+                id: 'acciones',
+                label: 'Acciones',
+                sortable: false,
+                mobileActions: true,
+                minWidth: 250,
+                render: (item) => (
+                  <div className={s.actions}>
+                    <button className={s.iconButton} title="Ver detalle" type="button" onClick={() => { setSelectedUser(item); setDrawer('detail'); }}><RemoveRedEye /></button>
+                    {canEdit ? <button className={s.iconButton} title="Editar usuario" type="button" onClick={() => openEdit(item)}><Edit /></button> : null}
+                    {canReinvite && (isPending(item) || isDisabled(item)) ? <button className={s.iconButton} title="Reinvitar usuario" type="button" onClick={() => openAction(item, 'reinvite')}><PersonAddAlt /></button> : null}
+                    {canDeactivate && !isDisabled(item) && item.id !== user?.id ? <button className={s.iconButton} title="Desactivar cuenta" type="button" onClick={() => openAction(item, 'deactivate')}><DeleteOutline /></button> : null}
+                    {canUnblock && isDisabled(item) ? <button className={s.iconButton} title="Reactivar cuenta" type="button" onClick={() => openAction(item, 'reactivate')}><LockOpen /></button> : null}
+                    {canBlock && !isBlocked(item) && !isPending(item) ? <button className={s.iconButton} title="Bloquear acceso" type="button" onClick={() => openAction(item, 'block')}><Block /></button> : null}
+                    {canUnblock && isBlocked(item) ? <button className={s.iconButton} title="Desbloquear acceso" type="button" onClick={() => openAction(item, 'unblock')}><LockOpen /></button> : null}
+                    {canBlock && !isReadOnly(item) && !isBlocked(item) && !isPending(item) ? <button className={s.iconButton} title="Pasar a solo lectura" type="button" onClick={() => openAction(item, 'readonly')}><VisibilityOff /></button> : null}
+                    {canUnblock && isReadOnly(item) ? <button className={s.iconButton} title="Restaurar escritura" type="button" onClick={() => openAction(item, 'restore')}><Edit /></button> : null}
+                  </div>
+                ),
+              },
+            ]}
+          />
         </section>
       </div>
 

@@ -6,7 +6,7 @@ import { securityService } from '../../infrastructure/securityService';
 import { companiesService } from '@features/companies/infrastructure/companiesService';
 import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import { isGlobalUser } from '@features/auth/application/sessionAccess';
-import SortableTableHeader from '@shared/ui/SortableTableHeader';
+import DataTable from '@shared/ui/DataTable';
 import useTableSort from '@shared/hooks/useTableSort';
 import s from '../components/Security.module.css';
 import {
@@ -128,50 +128,33 @@ export default function SecurityInvitationsPage() {
             </div>
           </div>
 
-          <div className={s.tableWrap}>
-            <table className={s.table}>
-              <thead>
-                <tr>
-                  <SortableTableHeader column="email" label="Correo" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader column="company" label="Empresa" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader column="role" label="Rol" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader column="status" label="Estado" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader column="expires" label="Vence" sort={sort} onSort={requestSort} />
-                  <SortableTableHeader column="sender" label="Enviado por" sort={sort} onSort={requestSort} />
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedRows.map((item) => {
-                  const company = item.empresa_info || item.company_info || item.empresa || item.company;
-                  const role = item.role_info || item.security_role_info || item.role || {};
-                  const rawStatus = String(item.status || item.estado || '').toUpperCase();
-                  const effectiveStatus = rawStatus === 'PENDING' && item.expires_at && new Date(item.expires_at) < new Date() ? 'EXPIRED' : rawStatus;
-                  const delivery = item.metadata?.email_delivery || {};
-                  return (
-                    <tr key={item.id}>
-                      <td><strong>{item.email}</strong><span className={s.small}>{item.created_at ? new Date(item.created_at).toLocaleString() : ''}</span><span className={s.small}>Correo: {delivery.status === 'sent' ? 'enviado' : delivery.status === 'failed' ? 'fallido' : 'pendiente'}</span></td>
-                      <td>{getName(company)}</td>
-                      <td>{getName(role, item.role_name || '-')}</td>
-                      <td><StatusPill status={effectiveStatus} /></td>
-                      <td>{item.expires_at || item.fecha_expiracion ? new Date(item.expires_at || item.fecha_expiracion).toLocaleString() : <span className={s.muted}>-</span>}</td>
-                      <td>{getName(item.invited_by || item.enviado_por || item.created_by, '-')}</td>
-                      <td>
-                        <div className={s.actions}>
-                          {['PENDING', 'EXPIRED', 'REVOKED'].includes(effectiveStatus) ? <button className={s.iconButton} title="Reenviar" type="button" onClick={() => resend(item.id)}><Send /></button> : null}
-                          {effectiveStatus === 'PENDING' ? <button className={s.iconButton} title="Revocar" type="button" onClick={() => revoke(item.id)}><Cancel /></button> : null}
-                          {effectiveStatus === 'ACCEPTED' ? <span className={s.muted}>Solo consulta</span> : null}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {!filtered.length ? (
-                  <tr><td colSpan="7"><div className={s.message}>No hay invitaciones para mostrar.</div></td></tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            data={sortedRows}
+            rowKey="id"
+            pagination
+            initialRowsPerPage={15}
+            pageSizeOptions={[10, 15, 25, 50]}
+            minWidth={1040}
+            sort={sort ? { field: sort.key, direction: sort.direction } : null}
+            onSort={requestSort}
+            emptyMessage={loading ? 'Cargando invitaciones…' : 'No hay invitaciones para mostrar.'}
+            columns={[
+              { id: 'email', label: 'Correo', mobileTitle: true, minWidth: 220, render: (item) => { const delivery = item.metadata?.email_delivery || {}; return <><strong>{item.email}</strong><span className={s.small}>{item.created_at ? new Date(item.created_at).toLocaleString() : ''}</span><span className={s.small}>Correo: {delivery.status === 'sent' ? 'enviado' : delivery.status === 'failed' ? 'fallido' : 'pendiente'}</span></>; } },
+              { id: 'company', label: 'Empresa', render: (item) => getName(item.empresa_info || item.company_info || item.empresa || item.company) },
+              { id: 'role', label: 'Rol', render: (item) => getName(item.role_info || item.security_role_info || item.role || {}, item.role_name || '-') },
+              { id: 'status', label: 'Estado', render: (item) => { const raw = String(item.status || item.estado || '').toUpperCase(); const effective = raw === 'PENDING' && item.expires_at && new Date(item.expires_at) < new Date() ? 'EXPIRED' : raw; return <StatusPill status={effective} />; } },
+              { id: 'expires', label: 'Vence', minWidth: 170, render: (item) => item.expires_at || item.fecha_expiracion ? new Date(item.expires_at || item.fecha_expiracion).toLocaleString() : <span className={s.muted}>-</span> },
+              { id: 'sender', label: 'Enviado por', render: (item) => getName(item.invited_by || item.enviado_por || item.created_by, '-') },
+              {
+                id: 'acciones', label: 'Acciones', sortable: false, mobileActions: true, minWidth: 120,
+                render: (item) => {
+                  const raw = String(item.status || item.estado || '').toUpperCase();
+                  const effective = raw === 'PENDING' && item.expires_at && new Date(item.expires_at) < new Date() ? 'EXPIRED' : raw;
+                  return <div className={s.actions}>{['PENDING', 'EXPIRED', 'REVOKED'].includes(effective) ? <button className={s.iconButton} title="Reenviar" type="button" onClick={() => resend(item.id)}><Send /></button> : null}{effective === 'PENDING' ? <button className={s.iconButton} title="Revocar" type="button" onClick={() => revoke(item.id)}><Cancel /></button> : null}{effective === 'ACCEPTED' ? <span className={s.muted}>Solo consulta</span> : null}</div>;
+                },
+              },
+            ]}
+          />
         </section>
       </div>
     </main>

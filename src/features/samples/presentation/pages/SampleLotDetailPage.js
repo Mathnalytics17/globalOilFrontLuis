@@ -8,6 +8,8 @@ import {
   FileSpreadsheet,
   RefreshCw,
   ShieldOff,
+  History,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "react-toastify";
 
@@ -138,12 +140,94 @@ const Field = ({ label, error, children }) => (
     )}
   </label>
 );
+
+const auditActionLabels = {
+  "lote.creado": "Lote creado",
+  "lote.actualizado": "Información del lote actualizada",
+  "lote.cancelado": "Lote cancelado",
+  "lote.reabierto": "Lote reabierto",
+  "lote.recibido_laboratorio": "Lote recibido en laboratorio",
+  "lote.ingreso_laboratorio_revertido": "Ingreso a laboratorio revertido",
+  "lote.pruebas_sincronizadas": "Pruebas configuradas",
+  "lote.revision_completada": "Revisión del lote completada",
+  "lote.muestras_agregadas": "Muestras agregadas",
+  "lote.reportes_generados": "Reportes del lote generados",
+  "muestra.creada": "Muestra creada",
+  "muestra.actualizada": "Muestra actualizada",
+  "muestra.invalidada": "Muestra invalidada",
+  "muestra.reactivada": "Muestra reactivada",
+  "muestra.punto_muestreo_asignado": "Punto de medición asignado",
+  "resultado.registrado": "Resultado registrado",
+  "resultado.actualizado": "Resultado actualizado",
+  "resultado.invalidado": "Resultado invalidado",
+  "resultado.corregido": "Resultado corregido",
+  "resultado.revisado": "Resultado revisado",
+  "interpretacion.guardada": "Interpretación guardada",
+  "reporte.generado": "Reporte generado",
+  "reporte.enviado_aprobacion": "Reporte enviado a aprobación",
+  "reporte.aprobado": "Reporte aprobado",
+  "reporte.publicado_cliente": "Reporte publicado al cliente",
+  "reporte.ocultado_cliente": "Reporte retirado del cliente",
+  "reporte.enviado_correo": "Reporte enviado por correo",
+  "reporte.envio_fallido": "Falló el envío del reporte",
+  "reporte.anulado": "Reporte anulado",
+  "lote.reportes_enviados_correo": "Reportes del lote enviados por correo",
+  "lote.envio_reportes_fallido": "Falló el envío de reportes del lote",
+};
+
+const auditFieldLabels = {
+  estado: "Estado",
+  estatus: "Estado",
+  valor: "Resultado",
+  unidad: "Unidad",
+  completada: "Completado",
+  is_revisada: "Revisado",
+  fecha_envio: "Fecha de envío",
+  fecha_recepcion: "Fecha de recepción",
+  observaciones: "Observaciones",
+  aplicar_limites: "Aplicar límites",
+};
+
+const formatAuditValue = (value) => {
+  if (value === null || value === undefined || value === "") return "Sin valor";
+  if (typeof value === "boolean") return value ? "Sí" : "No";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+};
+
+const AuditChanges = ({ before = {}, after = {} }) => {
+  const fields = [...new Set([...Object.keys(before), ...Object.keys(after)])]
+    .filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+
+  if (!fields.length) return null;
+
+  return (
+    <details className="mt-3 text-xs">
+      <summary className="inline-flex cursor-pointer items-center gap-1 text-gray-300 hover:text-white">
+        <ChevronDown size={14} /> Ver valores registrados
+      </summary>
+      <div className="mt-2 grid gap-2 rounded-lg border border-white/[0.07] bg-black/20 p-3">
+        {fields.map((field) => (
+          <div key={field} className="grid grid-cols-1 gap-1 sm:grid-cols-[130px_1fr_1fr] sm:gap-3">
+            <span className="font-semibold text-gray-400">{auditFieldLabels[field] || field}</span>
+            <span className="text-red-200 break-words">Antes: {formatAuditValue(before[field])}</span>
+            <span className="text-emerald-200 break-words">Después: {formatAuditValue(after[field])}</span>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+};
+
 const DetalleLoteMuestrasPage = () => {
   const router = useRouter();
   const { id } = router.query;
   const [lote, setLote] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [timeline, setTimeline] = useState({ results: [], count: 0, next: null });
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelinePage, setTimelinePage] = useState(1);
 
   const [search, setSearch] = useState("");
   const [estadoFilter, setEstadoFilter] = useState("todos");
@@ -157,13 +241,42 @@ const DetalleLoteMuestrasPage = () => {
     setLoading(true);
 
     try {
-      const data = await sampleBatchesService.getById(id);
-      setLote(data);
+      const [lotResult, timelineResult] = await Promise.allSettled([
+        sampleBatchesService.getById(id),
+        sampleBatchesService.timeline(id),
+      ]);
+      if (lotResult.status !== "fulfilled") throw lotResult.reason;
+      setLote(lotResult.value);
+      if (timelineResult.status === "fulfilled") {
+        setTimeline(timelineResult.value);
+        setTimelinePage(1);
+      } else {
+        console.error("No se pudo cargar la actividad del lote", timelineResult.reason);
+      }
     } catch (error) {
       console.error(error);
       toast.error("No se pudo cargar el lote");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreTimeline = async () => {
+    if (!timeline.next || timelineLoading) return;
+    setTimelineLoading(true);
+    try {
+      const nextPage = timelinePage + 1;
+      const data = await sampleBatchesService.timeline(id, { page: nextPage });
+      setTimeline((current) => ({
+        ...data,
+        results: [...current.results, ...data.results],
+      }));
+      setTimelinePage(nextPage);
+    } catch (error) {
+      console.error(error);
+      toast.error("No se pudo cargar más actividad del lote.");
+    } finally {
+      setTimelineLoading(false);
     }
   };
 
@@ -547,6 +660,55 @@ const DetalleLoteMuestrasPage = () => {
             { label: 'Tipos', value: `${resumen.aceites} A / ${resumen.grasas} G` },
           ]}
         />
+
+        <section className="go-card">
+          <div className="flex flex-col gap-2 border-b border-white/[0.07] pb-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="grid h-10 w-10 place-items-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-300">
+                <History size={20} />
+              </span>
+              <div>
+                <h2 className="text-xl font-bold">Actividad y trazabilidad</h2>
+                <p className="text-sm text-gray-400">Cambios relevantes registrados durante el ciclo del lote.</p>
+              </div>
+            </div>
+            <span className="text-sm text-gray-400">{timeline.count} evento{timeline.count === 1 ? "" : "s"}</span>
+          </div>
+
+          <div className="relative mt-5 space-y-4 before:absolute before:bottom-3 before:left-[9px] before:top-3 before:w-px before:bg-white/[0.10]">
+            {timeline.results.length ? timeline.results.map((event) => (
+              <article key={event.id} className="relative pl-8">
+                <span className="absolute left-0 top-2 h-[19px] w-[19px] rounded-full border-4 border-[#17191c] bg-red-500" />
+                <div className="rounded-xl border border-white/[0.07] bg-black/10 p-4">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                    <div>
+                      <h3 className="font-semibold text-white">{auditActionLabels[event.accion] || event.accion}</h3>
+                      {event.detalle ? <p className="mt-1 text-sm text-gray-300">{event.detalle}</p> : null}
+                    </div>
+                    <time className="shrink-0 text-xs text-gray-500">
+                      {event.creado_en ? new Date(event.creado_en).toLocaleString("es-CO") : "Sin fecha"}
+                    </time>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-400">
+                    {event.actor_nombre || "Sistema"}{event.muestra ? ` · Muestra ${event.muestra}` : ""}
+                  </p>
+                  {event.motivo ? <p className="mt-2 rounded bg-amber-500/10 px-3 py-2 text-sm text-amber-100">Motivo: {event.motivo}</p> : null}
+                  <AuditChanges before={event.estado_anterior} after={event.estado_nuevo} />
+                </div>
+              </article>
+            )) : (
+              <div className="relative pl-8 text-sm text-gray-400">
+                Aún no hay actividad consolidada para este lote. Los cambios nuevos aparecerán aquí.
+              </div>
+            )}
+          </div>
+
+          {timeline.next ? (
+            <button type="button" onClick={loadMoreTimeline} disabled={timelineLoading} className="go-secondary mt-5 disabled:cursor-not-allowed disabled:opacity-60">
+              {timelineLoading ? "Cargando actividad..." : "Cargar actividad anterior"}
+            </button>
+          ) : null}
+        </section>
 
         <section className="go-card p-0 overflow-hidden">
           <div className="p-5 border-b border-white/[0.07] space-y-4">
