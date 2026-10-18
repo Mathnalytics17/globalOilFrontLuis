@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '@features/auth/presentation/context/AuthContext';
@@ -83,7 +84,7 @@ const DocumentsList = () => {
   // NUEVA FUNCIÓN: Enviar reporte
   const handleSendReport = async (report) => {
     if (!canSendReport) {
-      alert('No tienes permisos para enviar reportes');
+      appDialog.alert('No tienes permisos para enviar reportes');
       return;
     }
 
@@ -107,7 +108,7 @@ const DocumentsList = () => {
       }
 
       if (adminUsers.length === 0) {
-        alert('No se encontraron usuarios ADMIN o GLOBAL para enviar el reporte');
+        appDialog.alert('No se encontraron usuarios ADMIN o GLOBAL para enviar el reporte');
         return;
       }
 
@@ -116,10 +117,10 @@ const DocumentsList = () => {
       // Simular envío
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      alert(`Reporte enviado exitosamente a ${adminUsers.length} usuario(s)`);
+      appDialog.alert(`Reporte enviado exitosamente a ${adminUsers.length} usuario(s)`);
       
     } catch (error) {
-      alert('Error al enviar el reporte');
+      appDialog.alert('Error al enviar el reporte');
     } finally {
       setSendingReport(false);
     }

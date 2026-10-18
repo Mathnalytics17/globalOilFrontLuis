@@ -9,6 +9,7 @@ import NativeSelectSearch from '@shared/ui/NativeSelectSearch';
 import AppErrorBoundary from '@shared/ui/AppErrorBoundary';
 import GlobalOilLoader from '@shared/ui/GlobalOilLoader';
 import GlobalNavigationLoader from '@shared/ui/GlobalNavigationLoader';
+import AppDialogProvider from '@shared/ui/AppDialogProvider';
 import { useEffect } from 'react';
 
 import "../src/shared/styles/design-system.css";
@@ -71,7 +72,7 @@ export default function MyApp({ Component, pageProps }) {
 
   const isErrorPage = pageProps?.statusCode === 404;
   return (
-    <>
+    <AppDialogProvider>
       <AppErrorBoundary>
       {!pathsWithoutDefaultLayout.includes(router.pathname) &&
         !isErrorPage ? (
@@ -103,6 +104,6 @@ export default function MyApp({ Component, pageProps }) {
       <NumericWheelGuard />
       <GlobalNavigationLoader />
 
-    </>
+    </AppDialogProvider>
   )
 }

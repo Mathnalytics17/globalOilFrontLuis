@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import React, { useState } from "react";
 import Modal from "react-bootstrap/Modal";
 import Button from "react-bootstrap/Button";
@@ -24,7 +25,7 @@ const ModalAddResults: React.FC<ModalAddResultsProps> = ({
 
   const handleAddResults = () => {
     if (observaciones.trim() === "" || indicadores.trim() === "" || analisis_id.trim() === "") {
-      alert("Todos los campos son obligatorios.");
+      appDialog.alert("Todos los campos son obligatorios.");
       return;
     }
 

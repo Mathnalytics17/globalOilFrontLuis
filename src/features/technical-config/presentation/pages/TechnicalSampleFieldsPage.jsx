@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { Pencil as Edit3, Save, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -137,7 +138,7 @@ export default function TechnicalSampleFieldsPage() {
   };
 
   const deactivate = async (field) => {
-    if (!window.confirm(`¿Desactivar "${field.nombre_visible}"?`)) return;
+    if (!await appDialog.confirm(`¿Desactivar "${field.nombre_visible}"?`)) return;
     try {
       await technicalConfigService.deleteSampleField(field.id);
       toast.success('Campo técnico desactivado.');

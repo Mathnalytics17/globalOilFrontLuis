@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import {
@@ -191,14 +192,14 @@ export default function PruebasPage() {
   const remove = async (p) => {
     const label = p.acronimo || p.nombre_variable || "esta prueba";
 
-    if (!confirm(`¿Eliminar prueba ${label}?`)) return;
+    if (!await appDialog.confirm(`¿Eliminar prueba ${label}?`)) return;
 
     try {
       await testsService.remove(p.id);
       await load();
     } catch (error) {
       console.error("Error eliminando prueba:", error);
-      alert("No se pudo eliminar la prueba.");
+      appDialog.alert("No se pudo eliminar la prueba.");
     }
   };
 
@@ -208,7 +209,7 @@ export default function PruebasPage() {
       await load();
     } catch (error) {
       console.error("Error restaurando prueba:", error);
-      alert("No se pudo restaurar la prueba.");
+      appDialog.alert("No se pudo restaurar la prueba.");
     }
   };
 

@@ -1,4 +1,5 @@
 
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import { RefreshCcw as Refresh, Send, XCircle as Cancel } from 'lucide-react';
@@ -82,7 +83,7 @@ export default function SecurityInvitationsPage() {
   };
 
   const revoke = async (id) => {
-    if (!window.confirm('¿Revocar esta invitación? El enlace anterior dejará de funcionar.')) return;
+    if (!await appDialog.confirm('¿Revocar esta invitación? El enlace anterior dejará de funcionar.')) return;
     try {
       await securityService.invitations.revoke(id);
       toast.success('Invitación revocada.');

@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { toast } from 'react-toastify';
@@ -316,7 +317,7 @@ const EditMachine = () => {
   };
 
   const handleDeactivateSamplingPoint = async (point) => {
-    if (!confirm(`¿Desactivar el punto de medida “${point.nombre}”? Sus muestras históricas se conservarán.`)) return;
+    if (!await appDialog.confirm(`¿Desactivar el punto de medida “${point.nombre}”? Sus muestras históricas se conservarán.`)) return;
     try {
       await assetTreeService.removeSamplingPoint(point.id);
       toast.success('Punto de medida desactivado.');
@@ -430,7 +431,7 @@ const EditMachine = () => {
 
   // Manejar eliminación
   const handleDelete = async () => {
-    if (!confirm('¿Estás seguro de que deseas eliminar esta máquina? Esta acción eliminará también su carpeta y no se puede deshacer.')) {
+    if (!await appDialog.confirm('¿Estás seguro de que deseas eliminar esta máquina? Esta acción eliminará también su carpeta y no se puede deshacer.')) {
       return;
     }
 

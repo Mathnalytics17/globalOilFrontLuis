@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Pencil, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -38,7 +39,7 @@ export default function LubricantsPage() {
     finally { setSaving(false); }
   };
   const remove = async (row) => {
-    if (!window.confirm(`¿Desactivar ${row.fabricante} ${row.referencia}?`)) return;
+    if (!await appDialog.confirm(`¿Desactivar ${row.fabricante} ${row.referencia}?`)) return;
     try { await assetTreeService.removeLubricant(row.id); toast.success('Lubricante desactivado.'); await load(); }
     catch (error) { toast.error(error?.response?.data?.detail || 'No se pudo desactivar el lubricante.'); }
   };

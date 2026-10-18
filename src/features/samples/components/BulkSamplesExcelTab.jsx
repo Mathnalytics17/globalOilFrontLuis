@@ -46,6 +46,7 @@ const normalizeImportedMuestra = (row) => {
     condicion: data.condicion || "usada",
     referencia_equipo: toSelectValue(data.referencia_equipo),
     punto_muestreo: toSelectValue(data.punto_muestreo),
+    punto_manual: data.punto_muestreo_manual || data.punto_manual || "",
     equipo_placa: data.equipo_placa || data.placa_manual || data.placa || "",
     periodo_servicio_aceite: data.periodo_servicio_aceite ?? data.periodo_aceite ?? "",
     unidad_periodo_aceite: data.unidad_periodo_aceite || data.unidad_aceite || "horas",
@@ -110,6 +111,10 @@ const BulkSamplesExcelTab = ({ form, state, onStateChange, onUseRows }) => {
   const visiblePreviewRows = useMemo(() => (preview?.rows || []).slice(0, PREVIEW_ROW_LIMIT), [preview]);
 
   const handleDownload = async () => {
+    if (form?.tipo_cliente === "registrado" && !form?.cliente_empresa) {
+      toast.warning("Seleccione la empresa antes de generar la plantilla Excel.");
+      return;
+    }
     setDownloading(true);
     try {
       await sampleBatchExcelService.downloadTemplate({
@@ -183,12 +188,12 @@ const BulkSamplesExcelTab = ({ form, state, onStateChange, onUseRows }) => {
           </div>
           <h3 className="font-bold text-lg">1. Generar plantilla</h3>
           <p className="text-sm text-gray-400 mt-2">
-            Descarga un Excel protegido con listas desplegables alimentadas desde configuración técnica.
+            Descarga un Excel protegido con listas desplegables de la empresa seleccionada y la configuración técnica vigente.
           </p>
           <button
             type="button"
             onClick={handleDownload}
-            disabled={downloading}
+            disabled={downloading || (form?.tipo_cliente === "registrado" && !form?.cliente_empresa)}
             className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50 font-semibold"
           >
             <Download size={18} />
@@ -310,6 +315,7 @@ Volver a cargar filas válidas
                   <th className="px-3 py-3 text-left">Referencia</th>
                   <th className="px-3 py-3 text-left">Máquina</th>
                   <th className="px-3 py-3 text-left">Punto de medida</th>
+                  <th className="px-3 py-3 text-left">Punto manual</th>
                   <th className="px-3 py-3 text-left">Placa manual</th>
                   <th className="px-3 py-3 text-left">Errores</th>
                 </tr>
@@ -329,8 +335,9 @@ Volver a cargar filas válidas
                     <td className="px-3 py-3 capitalize">{row.data?.condicion || "-"}</td>
                     <td className="px-3 py-3">{row.data?.fabricante || "-"}</td>
                     <td className="px-3 py-3">{row.data?.referencia_marca || "-"}</td>
-                    <td className="px-3 py-3 break-words">{row.data?.referencia_equipo || "-"}</td>
-                    <td className="px-3 py-3 break-words">{row.data?.punto_muestreo || "-"}</td>
+                    <td className="px-3 py-3 break-words">{row.data?.referencia_equipo_nombre || "-"}</td>
+                    <td className="px-3 py-3 break-words">{row.data?.punto_muestreo_nombre || "-"}</td>
+                    <td className="px-3 py-3 break-words">{row.data?.punto_muestreo_manual || "-"}</td>
                     <td className="px-3 py-3 break-words">{row.data?.equipo_placa || "-"}</td>
                     <td className="px-3 py-3 break-words">
                       {row.errors?.length ? (

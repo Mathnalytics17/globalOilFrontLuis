@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-import { getApiErrorMessage, getErrorPresentation, isAuthEndpoint } from '@shared/utils/errors';
+import { getApiErrorMessage, getApiFieldErrors, getErrorPresentation, isAuthEndpoint } from '@shared/utils/errors';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
@@ -92,6 +92,7 @@ apiClient.interceptors.response.use(
     // sensitive transport/access failures here so those paths cannot turn a
     // permission check or a server exception into a revealing UI message.
     error.userPresentation = presentation;
+    error.fieldErrors = getApiFieldErrors(error);
     if (status === 403 || status === 404 || status >= 500) {
       const previousData = error.response?.data;
       error.response.data = {

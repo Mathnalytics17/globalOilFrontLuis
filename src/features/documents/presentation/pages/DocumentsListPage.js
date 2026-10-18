@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { FilePlus2, FileText, Loader2, Mail, Pencil, RefreshCw, Send, X } from 'lucide-react';
@@ -50,11 +51,11 @@ export default function DocumentsList() {
     const sample = sampleById.get(reportSampleId(report));
     const users = sample?.referencia_equipo_info?.empresa_info?.usuarios || [];
     const recipients = users.filter((candidate) => isCompanyAdmin(candidate) || isGlobalUser(candidate));
-    if (!recipients.length) { window.alert('No se encontraron administradores de la empresa para enviar el reporte.'); return; }
+    if (!recipients.length) { appDialog.alert('No se encontraron administradores de la empresa para enviar el reporte.'); return; }
     setSendingReport(true);
     try {
       await new Promise((resolve) => setTimeout(resolve, 700));
-      window.alert(`Reporte preparado para ${recipients.length} usuario(s).`);
+      appDialog.alert(`Reporte preparado para ${recipients.length} usuario(s).`);
     } finally { setSendingReport(false); }
   };
 

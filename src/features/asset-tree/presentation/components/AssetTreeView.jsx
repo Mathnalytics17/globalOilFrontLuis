@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useRef, useState } from 'react';
 import {
   ChevronRight,
@@ -121,7 +122,7 @@ function TreeNode({ node, reload }) {
 
   const removeNode = async () => {
     const deactivate = ['sampling-point', 'machine'].includes(node.type);
-    if (!window.confirm(`${deactivate ? 'Desactivar' : 'Eliminar'} "${node.name}"?`)) return;
+    if (!await appDialog.confirm(`${deactivate ? 'Desactivar' : 'Eliminar'} "${node.name}"?`)) return;
     try {
       if (node.type === 'sampling-point') await assetTreeService.removeSamplingPoint(node.point.id);
       else if (node.machine?.id) await machinesService.remove(node.machine.id);
@@ -134,7 +135,7 @@ function TreeNode({ node, reload }) {
   };
 
   const renameFolder = async () => {
-    const name = window.prompt('Nuevo nombre de la carpeta:', node.name);
+    const name = await appDialog.prompt('Nuevo nombre de la carpeta:', node.name);
     if (name === null || !name.trim() || name.trim() === node.name) return;
     try {
       await foldersService.patch(node.id, { nombre: name.trim() });

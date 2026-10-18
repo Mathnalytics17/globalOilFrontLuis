@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
@@ -36,7 +37,7 @@ const MetodoPruebaForm = ({ mode = "create", id }) => {
 
   const save = async () => {
     if (!form.codigo.trim() || !form.nombre.trim()) {
-      alert("Código y nombre son obligatorios");
+      appDialog.alert("Código y nombre son obligatorios");
       return;
     }
     setSaving(true);
@@ -55,7 +56,7 @@ const MetodoPruebaForm = ({ mode = "create", id }) => {
       router.push("/configuracion-tecnica/metodos-prueba");
     } catch (e) {
       console.error(e);
-      alert("No se pudo guardar el método técnico");
+      appDialog.alert("No se pudo guardar el método técnico");
     } finally {
       setSaving(false);
     }

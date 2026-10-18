@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { toast } from 'react-toastify';
@@ -174,7 +175,7 @@ const LaboratorioLotesPage = () => {
   const isReceptionMode = Boolean(selectedLote);
 
   const revertEntry = async (row) => {
-    const reason = window.prompt(`Motivo para revertir el ingreso del lote ${row.lote}:`);
+    const reason = await appDialog.prompt(`Motivo para revertir el ingreso del lote ${row.lote}:`);
     if (reason === null) return;
     if (!reason.trim()) return toast.error('El motivo es obligatorio.');
     try {

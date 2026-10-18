@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import { Building2, Layers, Pencil, RefreshCw, Trash2 } from 'lucide-react';
@@ -184,7 +185,7 @@ export default function SampleManagementTypesPage() {
   };
 
   const remove = async (item) => {
-    if (!window.confirm(`¿Eliminar el tipo de gestión "${item.nombre}"?`)) return;
+    if (!await appDialog.confirm(`¿Eliminar el tipo de gestión "${item.nombre}"?`)) return;
     try {
       await sampleManagementTypesService.remove(item.id);
       toast.success('Tipo de gestión eliminado');

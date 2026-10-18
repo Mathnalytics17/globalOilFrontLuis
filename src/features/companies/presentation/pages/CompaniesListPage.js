@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Building2, Eye, Pencil, Plus, Power, RefreshCcw, Search, ShieldOff } from 'lucide-react';
@@ -64,7 +65,7 @@ function CompanyTable() {
   }), [companies]);
 
   const handleToggleCompanyStatus = async (company) => {
-    if (!window.confirm(`¿${company.is_active ? 'Desactivar' : 'activar'} la compañía “${company.nombre}”?`)) return;
+    if (!await appDialog.confirm(`¿${company.is_active ? 'Desactivar' : 'activar'} la compañía “${company.nombre}”?`)) return;
     try {
       let updatedCompany;
       if (company.is_active) {
@@ -84,12 +85,12 @@ function CompanyTable() {
     try {
       let updated;
       if (mode === 'block') {
-        const reason = window.prompt(`Motivo para bloquear “${company.nombre}”:`);
+        const reason = await appDialog.prompt(`Motivo para bloquear “${company.nombre}”:`);
         if (reason === null) return;
         if (!reason.trim()) return toast.error('El motivo es obligatorio para auditoría.');
         updated = await companiesService.block(company.id, reason.trim());
       } else if (mode === 'readonly') {
-        if (!window.confirm(`¿Poner “${company.nombre}” en modo solo lectura?`)) return;
+        if (!await appDialog.confirm(`¿Poner “${company.nombre}” en modo solo lectura?`)) return;
         updated = await companiesService.readOnly(company.id);
       } else {
         updated = await companiesService.restoreActive(company.id);
