@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { CalendarClock, Pencil, Plus, RefreshCw, Search, Trash2, Undo2 } from 'lucide-react';
@@ -80,7 +81,7 @@ export default function TipoGestionMuestraList() {
   }, [items]);
 
   const remove = async (item) => {
-    if (!confirm(`¿Eliminar el tipo de gestión "${item.nombre}"?`)) return;
+    if (!await appDialog.confirm(`¿Eliminar el tipo de gestión "${item.nombre}"?`)) return;
 
     try {
       await sampleManagementTypesService.remove(item.id);

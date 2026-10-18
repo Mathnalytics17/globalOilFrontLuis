@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useRouter } from "next/router";
 import {
   Pencil as Edit,
@@ -282,7 +283,7 @@ const DetalleLoteMuestrasPage = () => {
 
   const toggleSampleValidity = async (sample) => {
     const invalid = sample.estado_operativo === "invalidada";
-    const reason = window.prompt(`Indique el motivo para ${invalid ? "reactivar" : "invalidar"} la muestra ${sample.id}:`);
+    const reason = await appDialog.prompt(`Indique el motivo para ${invalid ? "reactivar" : "invalidar"} la muestra ${sample.id}:`);
     if (!reason?.trim()) return;
     setActionLoading(true);
     try {

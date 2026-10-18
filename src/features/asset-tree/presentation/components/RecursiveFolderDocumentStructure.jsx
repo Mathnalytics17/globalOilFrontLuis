@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { ChevronRight, Eye, Folder, FolderPlus, Pencil, Trash2, Wrench, MapPin, ListFilter, Link2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -97,7 +98,7 @@ const TreeNode = ({ node, reload }) => {
 
   const removeNode = async () => {
     const verb = ['sampling-point', 'machine'].includes(node.type) ? 'Desactivar' : 'Eliminar';
-    if (!window.confirm(`${verb} "${node.name}"?`)) return;
+    if (!await appDialog.confirm(`${verb} "${node.name}"?`)) return;
     try {
       if (node.type === 'sampling-point') {
         await assetTreeService.removeSamplingPoint(node.point.id);
@@ -114,7 +115,7 @@ const TreeNode = ({ node, reload }) => {
   };
 
   const renameFolder = async () => {
-    const name = window.prompt('Nuevo nombre de la carpeta:', node.name);
+    const name = await appDialog.prompt('Nuevo nombre de la carpeta:', node.name);
     if (name === null || !name.trim() || name.trim() === node.name) return;
     try {
       await foldersService.patch(node.id, { nombre: name.trim() });

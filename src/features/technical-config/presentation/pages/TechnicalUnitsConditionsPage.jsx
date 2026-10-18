@@ -1,4 +1,5 @@
 
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, MoreHorizontal, Plus, Search, X } from 'lucide-react';
@@ -133,7 +134,7 @@ export default function TechnicalUnitsConditionsPage() {
   };
 
   const removeUnit = async (unit) => {
-    if (!window.confirm(`¿Desactivar la unidad ${unit.simbolo} - ${unit.nombre}?`)) return;
+    if (!await appDialog.confirm(`¿Desactivar la unidad ${unit.simbolo} - ${unit.nombre}?`)) return;
     try {
       await dynamicTechnicalConfigService.units.remove(unit.id);
       toast.success('Unidad desactivada.');

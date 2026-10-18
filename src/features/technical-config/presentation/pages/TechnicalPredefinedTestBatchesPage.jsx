@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { Boxes, Layers, Pencil, Plus, Save, Trash2, Wand2 } from 'lucide-react';
 import MetricStrip from '@shared/ui/MetricStrip';
@@ -176,7 +177,7 @@ export default function TechnicalPredefinedTestBatchesPage() {
   };
 
   const handleDelete = async (bundle) => {
-    if (!window.confirm(`¿Eliminar el lote predefinido ${bundle.nombre}?`)) return;
+    if (!await appDialog.confirm(`¿Eliminar el lote predefinido ${bundle.nombre}?`)) return;
     try {
       await predefinedTestBatchesService.remove(bundle.id);
       if (editingId === bundle.id) resetForm();

@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import {
@@ -18,6 +19,7 @@ import BulkSamplesExcelTab from "@features/samples/components/BulkSamplesExcelTa
 import PageHeader from '@shared/ui/PageHeader';
 import MetricStrip from '@shared/ui/MetricStrip';
 import { notifyApiError } from '@shared/ui/notifications';
+import { getApiFieldErrors } from '@shared/utils/errors';
 import DynamicSampleTechnicalFields, {
   buildDynamicAttributesPayload,
   createDynamicAttributes,
@@ -166,11 +168,16 @@ const normalizeTechnicalAttributes = (source = {}, sampleType = "aceite", catalo
   } else if (existing && typeof existing === "object") {
     Object.entries(existing).forEach(([catalogId, value]) => {
       if (value && typeof value === "object") {
-        normalized[catalogId] = {
+        const attribute = {
           item: value?.item || value?.item_id || value?.catalogo_item || "",
           desconocido: Boolean(value?.desconocido),
           observacion: value?.observacion || "",
         };
+        const fieldId = value?.campo_tecnico_muestra || value?.campo_tecnico || value?.campo_tecnico_id;
+        normalized[fieldId || catalogId] = attribute;
+        if (fieldId && String(fieldId) !== String(catalogId)) {
+          normalized[catalogId] = attribute;
+        }
       } else if (value !== undefined && value !== null && value !== "") {
         normalized[catalogId] = {
           item: value,
@@ -180,6 +187,34 @@ const normalizeTechnicalAttributes = (source = {}, sampleType = "aceite", catalo
       }
     });
   }
+
+  // Excel also returns generic flags such as `campo_grasa_desconocido`.
+  // Resolve them using the configured field ID, not a hard-coded list of
+  // legacy aliases. This is what makes newly created technical fields behave
+  // exactly like the built-in ones after importing a spreadsheet.
+  catalogs
+    .filter((catalog) => catalog?.sample_field_id && catalogAppliesToSampleType(catalog, sampleType))
+    .forEach((catalog) => {
+      const key = catalog.sample_field_id || catalog.id;
+      if (normalized[key] || normalized[catalog.id]) return;
+
+      const code = catalog?.sample_field?.codigo || catalog?.codigo;
+      if (!code) return;
+      const rawValue = source[code] ?? source[`${code}_id`];
+      const markedUnknown = Boolean(source[`${code}_desconocido`]) || isUnknownValue(rawValue);
+      const forceUnknown = shouldForceUnknownForCatalog(catalog);
+      if (!markedUnknown && !forceUnknown) return;
+
+      const attribute = {
+        item: "",
+        desconocido: true,
+        observacion: "",
+      };
+      normalized[key] = attribute;
+      if (String(catalog.id) !== String(key)) {
+        normalized[catalog.id] = attribute;
+      }
+    });
 
   const technicalFieldAliases = {
     aceite: [
@@ -446,9 +481,8 @@ const NuevoLoteMuestrasPage = () => {
       const data = await sampleManagementTypesService.getAvailableForCompany(empresaId);
       setTiposGestion(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error("Error cargando tipos de gestión", error);
       setTiposGestion([]);
-      toast.error("No se pudieron cargar los tipos de gestión");
+      notifyApiError(error, "No se pudieron cargar los tipos de gestión.", { scope: "sample-management-types" });
     } finally {
       setLoadingTiposGestion(false);
     }
@@ -461,9 +495,8 @@ const NuevoLoteMuestrasPage = () => {
       const dynamicData = await sampleCatalogsService.getAllSampleFormCatalogs();
       setDynamicTechnicalCatalogs(Array.isArray(dynamicData) ? dynamicData : []);
     } catch (error) {
-      console.error("Error cargando catálogos técnicos de muestras", error);
       setDynamicTechnicalCatalogs([]);
-      toast.error("No se pudieron cargar los catálogos técnicos de aceites/grasas");
+      notifyApiError(error, "No se pudieron cargar los catálogos técnicos de aceites/grasas.", { scope: "sample-technical-catalogs" });
     } finally {
       setLoadingTechnicalCatalogs(false);
     }
@@ -586,12 +619,13 @@ const NuevoLoteMuestrasPage = () => {
           updated.referencia_equipo = "";
           updated.punto_muestreo = "";
           updated.equipo_placa = "";
+          updated.punto_manual = "";
           updated.periodo_servicio_aceite = "";
           updated.periodo_servicio_equipo = "";
         }
 
         if (field === "equipo_modo") {
-          if (value === "catalogo") updated.equipo_placa = "";
+          if (value === "catalogo") { updated.equipo_placa = ""; updated.punto_manual = ""; }
           if (value === "manual") { updated.referencia_equipo = ""; updated.punto_muestreo = ""; }
         }
 
@@ -600,6 +634,7 @@ const NuevoLoteMuestrasPage = () => {
           updated.equipo_modo = "catalogo";
           updated.referencia_equipo = point ? String(point.maquina) : "";
           updated.equipo_placa = "";
+          updated.punto_manual = "";
           if (point?.lubricante_catalogo) updated.lubricante_catalogo = String(point.lubricante_catalogo);
           if (point?.lubricante_catalogo_info) {
             updated.fabricante = point.lubricante_catalogo_info.fabricante || '';
@@ -619,6 +654,7 @@ const NuevoLoteMuestrasPage = () => {
         if (field === "equipo_placa" && value) {
           updated.equipo_modo = "manual";
           updated.referencia_equipo = "";
+          updated.punto_muestreo = "";
         }
 
         if (field === "tipo_muestra") {
@@ -820,6 +856,10 @@ const NuevoLoteMuestrasPage = () => {
         punto_muestreo:
           muestra.condicion === "usada" && muestra.equipo_modo === "catalogo" && muestra.punto_muestreo
             ? muestra.punto_muestreo : null,
+        punto_muestreo_manual:
+          muestra.condicion === "usada" && muestra.equipo_modo === "manual" && muestra.punto_manual.trim()
+            ? muestra.punto_manual.trim()
+            : null,
         equipo_placa:
           muestra.condicion === "usada" &&
           muestra.equipo_modo === "manual" &&
@@ -890,9 +930,18 @@ const NuevoLoteMuestrasPage = () => {
       source.estado_muestra ||
       "usada"
     ).toLowerCase();
+    const importedUnknownFlags = Object.fromEntries(
+      Object.entries(source).filter(([key, value]) =>
+        key.endsWith("_desconocido") && Boolean(value)
+      )
+    );
 
     return {
       ...createEmptyMuestra(),
+      // Keep every dynamic unknown flag from Excel. DynamicSampleTechnicalFields
+      // resolves it using the field's code, so this works for fields created
+      // later as well as the original technical fields.
+      ...importedUnknownFlags,
 
       tempId: source.tempId || row.tempId || `excel_${Date.now()}_${index}`,
 
@@ -919,6 +968,11 @@ const NuevoLoteMuestrasPage = () => {
         source.equipo_placa ||
         source.placa ||
         source.placa_manual ||
+        "",
+
+      punto_manual:
+        source.punto_muestreo_manual ||
+        source.punto_manual ||
         "",
 
       periodo_servicio_aceite:
@@ -1025,7 +1079,7 @@ const NuevoLoteMuestrasPage = () => {
       ),
     };
   };
-  const handleUseImportedRows = (rows) => {
+  const handleUseImportedRows = async (rows) => {
   if (!Array.isArray(rows) || rows.length === 0) {
     toast.warning("No hay filas válidas para cargar");
     return;
@@ -1039,8 +1093,15 @@ const NuevoLoteMuestrasPage = () => {
   const hasManualSamples = muestras.some((muestra) => !isEmptyMuestra(muestra));
 
   if (hasManualSamples) {
-    const confirmed = window.confirm(
-      "Ya tienes muestras cargadas manualmente. Al usar el Excel se reemplazarán por las filas válidas importadas. ¿Deseas continuar?"
+    const confirmed = await appDialog.confirm(
+      "Ya tienes muestras cargadas manualmente. Al importar el Excel, esas muestras serán reemplazadas por las filas válidas del archivo.",
+      {
+        title: "Reemplazar muestras manuales",
+        description: "Esta acción solo reemplaza las muestras que todavía están cargadas en este formulario.",
+        confirmLabel: "Importar y reemplazar",
+        cancelLabel: "Conservar manuales",
+        tone: "warning",
+      }
     );
 
     if (!confirmed) return;
@@ -1092,7 +1153,10 @@ const NuevoLoteMuestrasPage = () => {
       toast.success(estado === "borrador" ? "Borrador guardado correctamente" : "Lote registrado correctamente");
       router.push("/muestras/lotes");
     } catch (error) {
-      console.error("Error al registrar lote", error?.response?.data || error);
+      const apiFieldErrors = getApiFieldErrors(error);
+      if (Object.keys(apiFieldErrors).length) {
+        setErrors((current) => ({ ...current, ...apiFieldErrors }));
+      }
       notifyApiError(error, "No se pudo registrar el lote. Revise la información e inténtelo nuevamente.", { scope: 'sample-batch-create' });
     } finally {
       setSaving(false);
@@ -1452,7 +1516,7 @@ const MuestraRow = ({
                 </div>
               </Field>
               {muestra.equipo_modo !== "manual" ? <Field label="Máquina"><select value={muestra.referencia_equipo} onChange={(e) => updateMuestra(index, "referencia_equipo", e.target.value)} className="input-dark"><option value="">Seleccione máquina</option>{maquinasFiltradas.map((machine) => <option key={machine.id} value={machine.id}>{machine.codigo_equipo || machine.nombre}</option>)}</select></Field> : <Field label="Máquina / identificación manual"><input value={muestra.equipo_placa} onChange={(e) => updateMuestra(index, "equipo_placa", e.target.value)} className="input-dark" placeholder="Ej: PKI203" /></Field>}
-              {muestra.equipo_modo !== "manual" ? <Field label="Punto de medida" error={getError("punto_muestreo")}><select value={muestra.punto_muestreo} onChange={(e) => updateMuestra(index, "punto_muestreo", e.target.value)} className="input-dark" disabled={!muestra.referencia_equipo || loadingOptions}><option value="">Seleccione punto de medida</option>{puntosFiltrados.filter((point) => String(point.maquina) === String(muestra.referencia_equipo)).map((point) => <option key={point.id} value={point.id}>{point.nombre}{point.lubricante ? ` · ${point.lubricante}` : ''}</option>)}</select>{selectedPoint && <span className="mt-1 block text-xs text-gray-400">Predeterminado: {selectedPoint.lubricante || 'sin lubricante'} · cambio {selectedPoint.frecuencia_cambio ? `${selectedPoint.frecuencia_cambio} ${selectedPoint.unidad_frecuencia_cambio}` : 'sin definir'} · análisis {selectedPoint.frecuencia_analisis ? `${selectedPoint.frecuencia_analisis} ${selectedPoint.unidad_frecuencia_analisis}` : 'sin definir'}.</span>}</Field> : <Field label="Punto de medida manual"><input value={muestra.punto_manual} onChange={(e) => updateMuestra(index, "punto_manual", e.target.value)} className="input-dark" placeholder="Ej: Reductor lado motor" /></Field>}
+              {muestra.equipo_modo !== "manual" ? <Field label="Punto de medida" error={getError("punto_muestreo")}><select value={muestra.punto_muestreo} onChange={(e) => updateMuestra(index, "punto_muestreo", e.target.value)} className="input-dark" disabled={!muestra.referencia_equipo || loadingOptions}><option value="">Seleccione punto de medida</option>{puntosFiltrados.filter((point) => String(point.maquina) === String(muestra.referencia_equipo)).map((point) => <option key={point.id} value={point.id}>{point.nombre}{point.lubricante ? ` · ${point.lubricante}` : ''}</option>)}</select>{selectedPoint && <span className="mt-1 block text-xs text-gray-400">Predeterminado: {selectedPoint.lubricante || 'sin lubricante'} · cambio {selectedPoint.frecuencia_cambio ? `${selectedPoint.frecuencia_cambio} ${selectedPoint.unidad_frecuencia_cambio}` : 'sin definir'} · análisis {selectedPoint.frecuencia_analisis ? `${selectedPoint.frecuencia_analisis} ${selectedPoint.unidad_frecuencia_analisis}` : 'sin definir'}.</span>}</Field> : <Field label="Punto de medida manual"><input value={muestra.punto_manual} onChange={(e) => updateMuestra(index, "punto_manual", e.target.value)} className="input-dark" placeholder="Ej: Reductor lado motor" /><span className="mt-1 block text-xs text-gray-400">Al guardar se creará o reutilizará este punto para la máquina manual.</span></Field>}
             </div>
           </div>
         )}

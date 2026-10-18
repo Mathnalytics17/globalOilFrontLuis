@@ -1286,3 +1286,75 @@ body { font-size: 13px; }
     animation: none;
   }
 }
+
+/* Application dialogs: replaces native alert/confirm/prompt browser UI. */
+.go-app-dialog {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.go-app-dialog-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.09);
+  background: rgba(255,255,255,.035);
+  color: #aeb4bd;
+}
+.go-app-dialog--warning .go-app-dialog-icon {
+  border-color: rgba(227,169,57,.28);
+  background: rgba(227,169,57,.09);
+  color: #e5ae45;
+}
+.go-app-dialog--danger .go-app-dialog-icon {
+  border-color: rgba(244,58,69,.28);
+  background: rgba(244,58,69,.09);
+  color: #ff5b65;
+}
+.go-app-dialog--success .go-app-dialog-icon {
+  border-color: rgba(52,211,153,.25);
+  background: rgba(52,211,153,.08);
+  color: #5ddeaa;
+}
+.go-app-dialog-content { min-width: 0; }
+.go-app-dialog-message {
+  margin: 2px 0 0;
+  color: #edf0f3;
+  font-size: 14px;
+  line-height: 1.55;
+  font-weight: 600;
+  white-space: pre-line;
+}
+.go-app-dialog-description {
+  margin: 8px 0 0;
+  color: var(--go-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.go-app-dialog-input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 16px;
+  box-sizing: border-box;
+}
+.go-app-dialog-textarea {
+  min-height: 104px;
+  resize: vertical;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.go-dialog-danger-button {
+  border-color: rgba(244,58,69,.45) !important;
+  background: #ef3340 !important;
+  color: #fff !important;
+}
+.go-dialog-danger-button:hover { background: #ff4652 !important; }
+@media (max-width: 640px) {
+  .go-app-dialog { grid-template-columns: 40px minmax(0,1fr); gap: 12px; }
+  .go-app-dialog-icon { width: 40px; height: 40px; border-radius: 12px; }
+  .go-app-dialog-message { font-size: 13.5px; }
+}

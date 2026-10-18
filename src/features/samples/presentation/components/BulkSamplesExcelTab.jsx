@@ -46,6 +46,7 @@ const normalizeImportedMuestra = (row) => {
     condicion: data.condicion || "usada",
     referencia_equipo: toSelectValue(data.referencia_equipo),
     punto_muestreo: toSelectValue(data.punto_muestreo),
+    punto_manual: data.punto_muestreo_manual || data.punto_manual || "",
     equipo_placa: data.equipo_placa || data.placa_manual || data.placa || "",
     periodo_servicio_aceite: data.periodo_servicio_aceite ?? data.periodo_aceite ?? "",
     unidad_periodo_aceite: data.unidad_periodo_aceite || data.unidad_aceite || "horas",
@@ -310,6 +311,7 @@ Volver a cargar filas válidas
                   <th className="px-3 py-3 text-left">Referencia</th>
                   <th className="px-3 py-3 text-left">Máquina</th>
                   <th className="px-3 py-3 text-left">Punto de medida</th>
+                  <th className="px-3 py-3 text-left">Punto manual</th>
                   <th className="px-3 py-3 text-left">Placa manual</th>
                   <th className="px-3 py-3 text-left">Errores</th>
                 </tr>
@@ -331,6 +333,7 @@ Volver a cargar filas válidas
                     <td className="px-3 py-3">{row.data?.referencia_marca || "-"}</td>
                     <td className="px-3 py-3 break-words">{row.data?.referencia_equipo || "-"}</td>
                     <td className="px-3 py-3 break-words">{row.data?.punto_muestreo || "-"}</td>
+                    <td className="px-3 py-3 break-words">{row.data?.punto_muestreo_manual || "-"}</td>
                     <td className="px-3 py-3 break-words">{row.data?.equipo_placa || "-"}</td>
                     <td className="px-3 py-3 break-words">
                       {row.errors?.length ? (

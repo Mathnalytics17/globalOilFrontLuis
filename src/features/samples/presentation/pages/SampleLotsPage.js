@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { toast } from 'react-toastify';
@@ -14,11 +15,11 @@ import {
   CheckCircle,
   AlertTriangle,
   Filter,
-  ChevronRight,
   ClipboardList,
   FileSpreadsheet,
   BarChart3,
   FileText,
+  CalendarClock,
 } from 'lucide-react';
 
 import { sampleBatchesService } from '@features/samples/infrastructure/sampleBatchesService';
@@ -141,7 +142,11 @@ const getBatchActions = (lote = {}, hasPermission = () => false) => {
 
 const formatDate = (value, withTime = false) => {
   if (!value) return '-';
-  const date = new Date(value);
+  // ISO dates without a time are calendar dates, not UTC instants. Parsing
+  // them as UTC shifts the displayed deadline one day back in Colombia.
+  const date = !withTime && /^\d{4}-\d{2}-\d{2}$/.test(String(value))
+    ? new Date(`${value}T00:00:00`)
+    : new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString('es-CO', withTime ? { dateStyle: 'short', timeStyle: 'short' } : { dateStyle: 'short' });
 };
@@ -150,36 +155,6 @@ const normalizeArrayResponse = (data) => {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.results)) return data.results;
   return [];
-};
-
-const matchesLotFilters = (lote, filters) => {
-  const search = String(filters.search || '').trim().toLocaleLowerCase('es');
-  if (search) {
-    const searchable = [
-      lote.id, lote.codigo, lote.cliente_nombre, lote.cliente?.nombre,
-      lote.contacto_nombre, lote.tipo_gestion_nombre, lote.tipo_gestion,
-    ].filter(Boolean).join(' ').toLocaleLowerCase('es');
-    if (!searchable.includes(search)) return false;
-  }
-  if (filters.estado && filters.estado !== 'todos' && String(lote.estado || '').toLowerCase() !== String(filters.estado).toLowerCase()) return false;
-  if (filters.tipo_cliente && filters.tipo_cliente !== 'todos') {
-    const type = lote.tipo_cliente || lote.cliente_tipo || lote.tipo_gestion || '';
-    if (String(type).toLowerCase() !== String(filters.tipo_cliente).toLowerCase()) return false;
-  }
-  const dateValue = lote.fecha_recepcion || lote.fecha_envio || lote.created_at || lote.fecha_creacion;
-  const date = dateValue ? String(dateValue).slice(0, 10) : '';
-  if (filters.fecha_desde && (!date || date < filters.fecha_desde)) return false;
-  if (filters.fecha_hasta && (!date || date > filters.fecha_hasta)) return false;
-  return true;
-};
-
-const getMuestrasPreview = (loteDetalle, scope = {}) => {
-  const list = Array.isArray(loteDetalle?.muestras) ? loteDetalle.muestras : [];
-  return list.filter((sample) => {
-    if (scope.machine_id && Number(sample.referencia_equipo) !== Number(scope.machine_id)) return false;
-    if (scope.sampling_point_id && Number(sample.punto_muestreo?.id) !== Number(scope.sampling_point_id)) return false;
-    return true;
-  }).slice(0, 6);
 };
 
 const LotesMuestrasPage = () => {
@@ -192,9 +167,9 @@ const LotesMuestrasPage = () => {
   const [samplingPoints, setSamplingPoints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
-  const [selectedLoteId, setSelectedLoteId] = useState(null);
-  const [selectedLoteDetail, setSelectedLoteDetail] = useState(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [expandedLotIds, setExpandedLotIds] = useState([]);
+  const [lotSamples, setLotSamples] = useState({});
+  const [totalLotes, setTotalLotes] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [ordering, setOrdering] = useState({ field: 'fecha_recepcion', direction: 'desc' });
@@ -232,12 +207,6 @@ const LotesMuestrasPage = () => {
     fetchData();
   }, [page, pageSize, ordering, assetScope, router.isReady]);
 
-  useEffect(() => {
-    if (selectedLoteId) {
-      fetchLoteDetail(selectedLoteId);
-    }
-  }, [selectedLoteId]);
-
   const buildParams = () => {
     const params = {};
     Object.entries(filters).forEach(([key, value]) => {
@@ -265,22 +234,16 @@ const LotesMuestrasPage = () => {
     try {
       const params = buildParams();
       const [listData, summaryData] = await Promise.all([
-        // Los filtros también se aplican localmente. Así la vista mantiene el
-        // contrato incluso ante una versión del API que ignore algún parámetro.
-        sampleBatchesService.page({ ...params, page: 1, page_size: 1000 }),
+        sampleBatchesService.page({ ...params, page, page_size: pageSize }),
         sampleBatchesService.resumen(params).catch(() => null),
       ]);
       if (requestId !== listRequestRef.current) return;
       const list = normalizeArrayResponse(listData.results || []);
       setLotes(list);
+      setTotalLotes(Number(listData.count ?? list.length));
+      setExpandedLotIds([]);
+      setLotSamples({});
       setResumen(summaryData);
-      if (list.length && !list.some((item) => item.id === selectedLoteId)) {
-        setSelectedLoteId(list[0].id);
-      }
-      if (!list.length) {
-        setSelectedLoteId(null);
-        setSelectedLoteDetail(null);
-      }
     } catch (error) {
       if (requestId !== listRequestRef.current) return;
       console.error(error);
@@ -290,16 +253,43 @@ const LotesMuestrasPage = () => {
     }
   };
 
-  const fetchLoteDetail = async (id) => {
-    setLoadingDetail(true);
+  const fetchLotSamples = async (loteId, samplePage = 1) => {
+    setLotSamples((current) => ({
+      ...current,
+      [loteId]: { ...(current[loteId] || {}), loading: true, error: null },
+    }));
     try {
-      const detail = await sampleBatchesService.getById(id);
-      setSelectedLoteDetail(detail);
+      const data = await sampleBatchesService.samples(loteId, {
+        page: samplePage,
+        page_size: 10,
+        machine_id: filters.machine_id || undefined,
+        sampling_point_id: filters.sampling_point_id || undefined,
+      });
+      setLotSamples((current) => ({
+        ...current,
+        [loteId]: {
+          results: data.results || [],
+          count: Number(data.count || 0),
+          page: samplePage,
+          pageSize: 10,
+          loading: false,
+          error: null,
+        },
+      }));
     } catch (error) {
-      console.error(error);
-      setSelectedLoteDetail(null);
-    } finally {
-      setLoadingDetail(false);
+      setLotSamples((current) => ({
+        ...current,
+        [loteId]: { ...(current[loteId] || {}), loading: false, error },
+      }));
+    }
+  };
+
+  const toggleLotSamples = (lote, isExpanding) => {
+    setExpandedLotIds((current) => (
+      isExpanding ? [...new Set([...current, lote.id])] : current.filter((id) => id !== lote.id)
+    ));
+    if (isExpanding && !lotSamples[lote.id]?.results && !lotSamples[lote.id]?.loading) {
+      fetchLotSamples(lote.id);
     }
   };
 
@@ -314,11 +304,11 @@ const LotesMuestrasPage = () => {
     try {
       const total = Number(lote.total_muestras ?? lote.progreso?.total ?? 0);
       if (lote.estado === 'borrador' && total === 0) {
-        if (!window.confirm(`¿Eliminar el borrador vacío ${lote.id}?`)) return;
+        if (!await appDialog.confirm(`¿Eliminar el borrador vacío ${lote.id}?`)) return;
         await sampleBatchesService.remove(lote.id);
         toast.success('Borrador vacío eliminado.');
       } else {
-        const reason = window.prompt(`Motivo para cancelar el lote ${lote.id}:`);
+        const reason = await appDialog.prompt(`Motivo para cancelar el lote ${lote.id}:`);
         if (reason === null) return;
         if (!reason.trim()) return toast.error('El motivo es obligatorio para conservar la trazabilidad.');
         await sampleBatchesService.cancel(lote.id, reason.trim());
@@ -353,37 +343,21 @@ const LotesMuestrasPage = () => {
     router.push(action.path(lote.id));
   };
 
-  const filteredLotes = useMemo(
-    () => lotes.filter((lote) => matchesLotFilters(lote, filters)),
-    [lotes, filters]
-  );
-  const visibleLotes = useMemo(
-    () => filteredLotes.slice((page - 1) * pageSize, page * pageSize),
-    [filteredLotes, page, pageSize]
-  );
-
-  useEffect(() => {
-    if (!selectedLoteId && filteredLotes.length) {
-      setSelectedLoteId(filteredLotes[0].id);
-    }
-  }, [filteredLotes, selectedLoteId]);
+  // The API filters by the actual samples, including their equipment and
+  // measurement points. Do not re-filter the page in the browser: doing so
+  // would hide batches whose matching sample is not part of a summary field.
+  const filteredLotes = lotes;
+  const visibleLotes = lotes;
 
   const stats = useMemo(() => {
     if (resumen) return resumen;
     return {
-      total_lotes: filteredLotes.length,
+      total_lotes: totalLotes,
       pendientes: filteredLotes.filter((l) => ['borrador', 'registrado'].includes(l.estado)).length,
       en_laboratorio: filteredLotes.filter((l) => ['en_laboratorio', 'en_analisis', 'parcial'].includes(l.estado)).length,
       reportados: filteredLotes.filter((l) => l.estado === 'reportado').length,
     };
-  }, [filteredLotes, resumen]);
-
-  const selectedListItem = filteredLotes.find((item) => item.id === selectedLoteId);
-  const selectedInfo = selectedLoteDetail || selectedListItem;
-  const muestrasPreview = getMuestrasPreview(selectedLoteDetail, assetScope);
-  const selectedActions = selectedInfo ? getBatchActions(selectedInfo, hasPermission).filter((action) => action.visible && action.enabled) : [];
-  const selectedPrimaryAction = selectedActions[0];
-  const selectedSecondaryActions = selectedActions.slice(1);
+  }, [filteredLotes, resumen, totalLotes]);
 
   if (loadError) {
     return (
@@ -471,14 +445,14 @@ const LotesMuestrasPage = () => {
           </button>
         </section>
 
-        <section className={`batches-workspace ${selectedInfo ? 'with-detail' : ''}`}>
+        <section className="batches-workspace">
           <article className="go-card batches-list-card">
             <div className="go-section-head batches-section-head">
               <div>
-                <h2>Listado de lotes</h2>
-                <p>Seleccione una fila para consultar el detalle sin perder el contexto.</p>
+                <h2>Lotes y muestras</h2>
+                <p>Despliegue un lote para ver sus muestras reales, su equipo, punto de medida y plazo de informe.</p>
               </div>
-              <span className="go-pill"><ClipboardList size={14} /> {filteredLotes.length} lotes</span>
+              <span className="go-pill"><ClipboardList size={14} /> {totalLotes} lotes</span>
             </div>
 
             {loading ? (
@@ -492,30 +466,28 @@ const LotesMuestrasPage = () => {
             ) : (
               <DataTable
                 data={visibleLotes}
+                nestedDataKey="muestras"
                 pagination={false}
-                minWidth={900}
+                minWidth={760}
                 sort={ordering}
                 onSort={toggleOrdering}
-                onRowClick={(row) => setSelectedLoteId(row.id)}
-                rowClassName={(row) => row.id === selectedLoteId ? 'selected-row' : ''}
+                expandedRows={expandedLotIds}
+                onNestedToggle={toggleLotSamples}
+                renderExpandedRow={(row) => (
+                  <LotSamplesPanel
+                    lote={row}
+                    data={lotSamples[row.id]}
+                    onPageChange={(nextPage) => fetchLotSamples(row.id, nextPage)}
+                    onOpenSample={(sample) => router.push(`/muestras/lotes/${row.id}/muestras/${sample.id}`)}
+                  />
+                )}
                 columns={[
-                  {
-                    id: 'selector',
-                    label: '',
-                    sortable: false,
-                    searchable: false,
-                    mobileHidden: true,
-                    width: 36,
-                    render: (row) => <span className={`batch-radio ${row.id === selectedLoteId ? 'active' : ''}`} aria-hidden="true" />,
-                  },
-                  { id: 'equipo_resumen', label: 'Equipo', minWidth: 150, render: (row) => row.equipo_resumen || 'Sin equipo' },
-                  { id: 'punto_muestreo_resumen', label: 'Punto de medida', minWidth: 180, render: (row) => row.punto_muestreo_resumen || 'Sin punto' },
                   {
                     id: 'id',
                     label: 'Código de lote',
                     mobileTitle: true,
                     minWidth: 130,
-                    render: (row) => <button type="button" className="go-link-quiet batch-code" onClick={(event) => { event.stopPropagation(); setSelectedLoteId(row.id); }}>{row.id}</button>,
+                    render: (row) => <button type="button" className="go-link-quiet batch-code" onClick={(event) => { event.stopPropagation(); router.push(`/muestras/lotes/${row.id}`); }}>{row.id}</button>,
                   },
                   {
                     id: 'cliente_empresa__nombre',
@@ -561,83 +533,110 @@ const LotesMuestrasPage = () => {
                 ]}
               />
             )}
-            <PaginationBar count={filteredLotes.length} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPage(1); setPageSize(size); }} />
+            <PaginationBar count={totalLotes} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPage(1); setPageSize(size); }} />
           </article>
-
-          {selectedInfo ? (
-            <aside className="go-card batch-detail-panel">
-              <div className="batch-detail-head">
-                <div>
-                  <span className="batch-detail-label">Información del lote</span>
-                  <div className="batch-detail-title-row">
-                    <h2>{selectedInfo.id}</h2>
-                    <span className={`go-badge ${['en_laboratorio','en_analisis','parcial'].includes(selectedInfo.estado) ? 'go-badge-warning' : selectedInfo.estado === 'reportado' ? 'go-badge-success' : 'go-badge-neutral'}`}>
-                      {estadoLabels[selectedInfo.estado] || selectedInfo.estado || '-'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="batch-detail-actions">
-                {selectedPrimaryAction ? (
-                  <button type="button" className="go-primary flex-1" onClick={() => handleBatchAction(selectedInfo, selectedPrimaryAction)}>
-                    {selectedPrimaryAction.label}
-                  </button>
-                ) : (
-                  <button type="button" className="go-ghost flex-1" onClick={() => router.push(`/muestras/lotes/${selectedInfo.id}`)}>
-                    Ver detalle <ChevronRight size={15} />
-                  </button>
-                )}
-                <OverflowMenu
-                  items={[
-                    { label: 'Ver detalle', icon: Eye, onClick: () => router.push(`/muestras/lotes/${selectedInfo.id}`) },
-                    ...selectedSecondaryActions.map((action) => ({
-                      label: action.label,
-                      icon: action.icon,
-                      onClick: () => handleBatchAction(selectedInfo, action),
-                    })),
-                  ]}
-                />
-              </div>
-
-              <dl className="batch-detail-list">
-                <DetailLine label="Cliente" value={selectedInfo.cliente_nombre || selectedInfo.cliente_ocasional_nombre || '-'} />
-                <DetailLine label="Tipo de gestión" value={selectedInfo.tipo_gestion_info?.nombre || selectedInfo.tipo_gestion || '-'} />
-                <DetailLine label="Fecha recepción" value={formatDate(selectedInfo.fecha_recepcion || selectedInfo.updated_at, true)} />
-                <DetailLine label="# de muestras" value={selectedInfo.total_muestras ?? selectedInfo.progreso?.total ?? selectedInfo.muestras?.length ?? 0} />
-              </dl>
-
-              <div className="batch-detail-divider" />
-              <div>
-                <span className="batch-detail-label">Muestras</span>
-                {loadingDetail ? (
-                  <div className="go-empty-state small">Cargando muestras...</div>
-                ) : muestrasPreview.length ? (
-                  <div className="batch-sample-preview">
-                    {muestrasPreview.map((muestra) => (
-                      <button key={muestra.id} type="button" className="batch-sample-item" onClick={() => router.push(`/muestras/lotes/${selectedInfo.id}/muestras/${muestra.id}`)}>
-                        <span><strong>{muestra.id}</strong><small>{tipoMuestraLabel[muestra.tipo_muestra] || muestra.tipo_muestra || '-'}</small></span>
-                        <ChevronRight size={14} />
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="batch-detail-empty">No hay muestras disponibles.</p>
-                )}
-              </div>
-            </aside>
-          ) : null}
         </section>
       </div>
     </div>
   );
 };
 
-const DetailLine = ({ label, value }) => (
-  <div className="batch-detail-row">
-    <dt>{label}</dt>
-    <dd>{value}</dd>
-  </div>
-);
+const sampleStateClass = (code) => ({
+  reportada: 'go-badge-success',
+  revisada: 'go-badge-success',
+  resultados_completos: 'go-badge-success',
+  en_laboratorio: 'go-badge-warning',
+  invalidada: 'go-badge-danger',
+}[code] || 'go-badge-neutral');
+
+const deadlineClass = (status) => ({
+  vencida: 'bg-red-950/50 text-red-200 border-red-800',
+  vence_hoy: 'bg-amber-950/50 text-amber-200 border-amber-800',
+  entregada: 'bg-emerald-950/40 text-emerald-200 border-emerald-800',
+}[status] || 'bg-slate-900 text-slate-200 border-slate-700');
+
+const LotSamplesPanel = ({ lote, data, onPageChange, onOpenSample }) => {
+  if (!data?.results && data?.loading) {
+    return <div className="p-5 text-sm text-gray-400">Cargando muestras de {lote.id}…</div>;
+  }
+  if (data?.error) {
+    return <div className="p-5 text-sm text-red-300">No fue posible cargar las muestras. Cierre y vuelva a desplegar el lote.</div>;
+  }
+  if (!data?.results) {
+    return <div className="p-5 text-sm text-gray-400">Preparando el detalle de muestras…</div>;
+  }
+  if (!data.results.length) {
+    return <div className="p-5 text-sm text-gray-400">No hay muestras que coincidan con los filtros activos.</div>;
+  }
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-black/20 p-3 md:p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="m-0 text-sm font-semibold text-white">Muestras del lote {lote.id}</p>
+          <p className="m-0 mt-1 text-xs text-gray-400">Cada fila conserva su propio equipo, punto de medida y fecha de compromiso.</p>
+        </div>
+        <span className="go-pill compact-count">{data.count} muestra(s)</span>
+      </div>
+      <div className="go-table-scroll">
+        <table className="w-full min-w-[850px] text-left text-sm">
+          <thead className="text-xs uppercase tracking-wide text-gray-400">
+            <tr className="border-b border-white/10">
+              <th className="px-3 py-2">Muestra</th>
+              <th className="px-3 py-2">Equipo</th>
+              <th className="px-3 py-2">Punto de medida</th>
+              <th className="px-3 py-2">Toma</th>
+              <th className="px-3 py-2">Flujo</th>
+              <th className="px-3 py-2">Entrega de informe</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.results.map((sample) => {
+              const deadline = sample.plazo_entrega || {};
+              const progress = Number(deadline.progress_percent || 0);
+              return (
+                <tr key={sample.id} className="border-b border-white/[0.06] last:border-0">
+                  <td className="px-3 py-3 align-top">
+                    <button type="button" onClick={() => onOpenSample(sample)} className="go-link-quiet font-semibold">{sample.id}</button>
+                    <small className="mt-1 block text-gray-500">{tipoMuestraLabel[sample.tipo_muestra] || sample.tipo_muestra} · {sample.condicion}</small>
+                  </td>
+                  <td className="px-3 py-3 align-top">
+                    <span>{sample.equipo?.label || 'Sin equipo'}</span>
+                    {sample.equipo?.manual && <small className="mt-1 block text-gray-500">Identificación manual</small>}
+                  </td>
+                  <td className="px-3 py-3 align-top">{sample.punto_muestreo?.nombre || 'Sin punto de medida'}</td>
+                  <td className="px-3 py-3 align-top">{formatDate(sample.fecha_toma, true)}</td>
+                  <td className="px-3 py-3 align-top"><span className={`go-badge ${sampleStateClass(sample.estado_flujo?.code)}`}>{sample.estado_flujo?.label || '—'}</span></td>
+                  <td className="px-3 py-3 align-top min-w-[220px]">
+                    {deadline.configured ? <>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`rounded border px-2 py-1 text-xs font-semibold ${deadlineClass(deadline.status)}`}>{deadline.label}</span>
+                        <span className="text-xs text-gray-400">{deadline.due_date ? formatDate(deadline.due_date) : '—'}</span>
+                      </div>
+                      <div className="mt-2 h-1.5 overflow-hidden rounded bg-white/10" aria-label={`Plazo de entrega: ${progress}% transcurrido`}>
+                        <div className={`h-full rounded ${deadline.status === 'vencida' ? 'bg-red-500' : deadline.status === 'entregada' ? 'bg-emerald-500' : 'bg-sky-500'}`} style={{ width: `${progress}%` }} />
+                      </div>
+                      <small className="mt-1 flex items-center gap-1 text-gray-500"><CalendarClock size={12} /> {deadline.basis === 'habiles' ? 'Días hábiles' : 'Días calendario'} · {deadline.total_days} configurado(s)</small>
+                    </> : <span className="text-xs text-gray-500">Sin plazo en el tipo de gestión</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <PaginationBar
+        count={data.count}
+        page={data.page || 1}
+        pageSize={data.pageSize || 10}
+        pageSizeOptions={[10]}
+        onPageChange={onPageChange}
+        onPageSizeChange={() => {}}
+        compact
+        className="mt-3"
+      />
+    </div>
+  );
+};
 
 export default LotesMuestrasPage;

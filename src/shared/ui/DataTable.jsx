@@ -17,6 +17,9 @@ export default function DataTable({
   data = [],
   nestedDataKey = null,
   nestedColumns = [],
+  renderExpandedRow = null,
+  onNestedToggle = null,
+  expandedRows: controlledExpandedRows,
   actions = [],
   selectable = false,
   pagination = true,
@@ -49,7 +52,8 @@ export default function DataTable({
   const [rowsPerPage, setRowsPerPage] = useState(initialRowsPerPage);
   const [selected, setSelected] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedRows, setExpandedRows] = useState([]);
+  const [localExpandedRows, setLocalExpandedRows] = useState([]);
+  const expandedRows = controlledExpandedRows || localExpandedRows;
 
   useEffect(() => { setPage(0); }, [resetPageKey]);
 
@@ -91,7 +95,12 @@ export default function DataTable({
     setOrder((current) => orderBy === id && current === 'asc' ? 'desc' : 'asc');
     setOrderBy(id);
   };
-  const toggleRow = (id) => setExpandedRows((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const toggleRow = (id, row) => {
+    const isExpanding = !expandedRows.includes(id);
+    const next = isExpanding ? [...expandedRows, id] : expandedRows.filter((item) => item !== id);
+    if (controlledExpandedRows === undefined) setLocalExpandedRows(next);
+    onNestedToggle?.(row, isExpanding);
+  };
   const toggleSelected = (id) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const toggleAll = () => setSelected((current) => allSelected ? current.filter((id) => !visibleIds.includes(id)) : [...new Set([...current, ...visibleIds])]);
 
@@ -167,22 +176,24 @@ export default function DataTable({
                 <React.Fragment key={id}>
                   <tr className={`${onRowClick ? 'go-data-row-clickable' : ''} ${rowClassName?.(row) || ''}`} onClick={() => onRowClick?.(row)}>
                     {nestedDataKey ? (
-                      <td className="go-data-cell-control"><Button size="sm" iconOnly onClick={(event) => { event.stopPropagation(); toggleRow(id); }}>{expanded ? <ChevronUp /> : <ChevronDown />}</Button></td>
+                      <td className="go-data-cell-control"><Button size="sm" iconOnly onClick={(event) => { event.stopPropagation(); toggleRow(id, row); }}>{expanded ? <ChevronUp /> : <ChevronDown />}</Button></td>
                     ) : null}
                     {selectable ? <td className="go-data-cell-control"><input type="checkbox" checked={selected.includes(id)} onClick={(event) => event.stopPropagation()} onChange={() => toggleSelected(id)} /></td> : null}
                     {columns.map((column) => <td key={column.id} className={column.cellClassName || ''}>{renderCell(row, column)}</td>)}
                     {actions.length ? <td className="go-data-actions-cell">{renderActions(row)}</td> : null}
                   </tr>
-                  {nestedDataKey && expanded && Array.isArray(row[nestedDataKey]) ? (
+                  {nestedDataKey && expanded ? (
                     <tr className="go-data-nested-row">
                       <td colSpan={columns.length + (selectable ? 1 : 0) + 2}>
-                        <div className="go-data-nested-title">Detalles</div>
-                        <div className="go-table-scroll">
-                          <table className="go-data-nested-table">
-                            <thead><tr>{nestedColumns.map((column) => <th key={column.id}>{column.label}</th>)}</tr></thead>
-                            <tbody>{row[nestedDataKey].map((nested, nestedIndex) => <tr key={nested.id || nestedIndex}>{nestedColumns.map((column) => <td key={column.id}>{renderCell(nested, column)}</td>)}</tr>)}</tbody>
-                          </table>
-                        </div>
+                        {renderExpandedRow ? renderExpandedRow(row) : Array.isArray(row[nestedDataKey]) ? <>
+                          <div className="go-data-nested-title">Detalles</div>
+                          <div className="go-table-scroll">
+                            <table className="go-data-nested-table">
+                              <thead><tr>{nestedColumns.map((column) => <th key={column.id}>{column.label}</th>)}</tr></thead>
+                              <tbody>{row[nestedDataKey].map((nested, nestedIndex) => <tr key={nested.id || nestedIndex}>{nestedColumns.map((column) => <td key={column.id}>{renderCell(nested, column)}</td>)}</tr>)}</tbody>
+                            </table>
+                          </div>
+                        </> : null}
                       </td>
                     </tr>
                   ) : null}
@@ -219,10 +230,10 @@ export default function DataTable({
                     </div>
                   ))}
                 </dl>
-                {nestedDataKey && Array.isArray(row[nestedDataKey]) ? (
+                {nestedDataKey ? (
                   <div className="go-data-card-nested">
-                    <Button size="sm" onClick={(event) => { event.stopPropagation(); toggleRow(id); }}>{expanded ? 'Ocultar detalles' : `Ver detalles (${row[nestedDataKey].length})`}</Button>
-                    {expanded ? <div className="go-data-mobile-nested">{row[nestedDataKey].map((nested, nestedIndex) => <div key={nested.id || nestedIndex} className="go-data-mobile-nested-item">{nestedColumns.map((column) => <div key={column.id}><span>{column.label}</span><strong>{renderCell(nested, column) || '—'}</strong></div>)}</div>)}</div> : null}
+                    <Button size="sm" onClick={(event) => { event.stopPropagation(); toggleRow(id, row); }}>{expanded ? 'Ocultar muestras' : 'Ver muestras'}</Button>
+                    {expanded ? renderExpandedRow ? <div className="go-data-mobile-nested">{renderExpandedRow(row)}</div> : Array.isArray(row[nestedDataKey]) ? <div className="go-data-mobile-nested">{row[nestedDataKey].map((nested, nestedIndex) => <div key={nested.id || nestedIndex} className="go-data-mobile-nested-item">{nestedColumns.map((column) => <div key={column.id}><span>{column.label}</span><strong>{renderCell(nested, column) || '—'}</strong></div>)}</div>)}</div> : null : null}
                   </div>
                 ) : null}
               </article>

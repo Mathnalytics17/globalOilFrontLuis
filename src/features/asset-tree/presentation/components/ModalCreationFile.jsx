@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 
@@ -15,8 +16,8 @@ const ModalCreationFile = ({ show, onHide, onCreate }) => {
 
   const close = () => onHide?.();
   const handleCreate = () => {
-    if (!name.trim()) return alert('El nombre no puede estar vacío.');
-    if (type === 'machine' && !descripcion.trim()) return alert('Ingrese la descripción de la máquina.');
+    if (!name.trim()) return appDialog.alert('El nombre no puede estar vacío.');
+    if (type === 'machine' && !descripcion.trim()) return appDialog.alert('Ingrese la descripción de la máquina.');
     const machineData = type === 'machine' ? { nombre: name.trim(), descripcion: descripcion.trim(), isMachine: true } : null;
     onCreate(machineData, name.trim(), type);
     close();

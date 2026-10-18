@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import {
@@ -366,7 +367,7 @@ function ReviewResultsPage() {
       toast.warning('Este ensayo todavía no tiene un resultado para invalidar.');
       return;
     }
-    const reason = window.prompt('Indique el motivo de invalidación. El resultado permanecerá en el historial:');
+    const reason = await appDialog.prompt('Indique el motivo de invalidación. El resultado permanecerá en el historial:');
     if (!reason?.trim()) return;
     setSaving(true);
     try {

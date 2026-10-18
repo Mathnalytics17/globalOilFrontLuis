@@ -1,3 +1,4 @@
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { toast } from 'react-toastify';
@@ -270,11 +271,11 @@ const LotesMuestrasPage = () => {
     try {
       const total = Number(lote.total_muestras ?? lote.progreso?.total ?? 0);
       if (lote.estado === 'borrador' && total === 0) {
-        if (!window.confirm(`¿Eliminar el borrador vacío ${lote.id}?`)) return;
+        if (!await appDialog.confirm(`¿Eliminar el borrador vacío ${lote.id}?`)) return;
         await sampleBatchesService.remove(lote.id);
         toast.success('Borrador vacío eliminado.');
       } else {
-        const reason = window.prompt(`Motivo para cancelar el lote ${lote.id}:`);
+        const reason = await appDialog.prompt(`Motivo para cancelar el lote ${lote.id}:`);
         if (reason === null) return;
         if (!reason.trim()) return toast.error('El motivo es obligatorio para conservar la trazabilidad.');
         await sampleBatchesService.cancel(lote.id, reason.trim());

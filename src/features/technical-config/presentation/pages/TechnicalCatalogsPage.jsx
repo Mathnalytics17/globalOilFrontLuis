@@ -1,4 +1,5 @@
 
+import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowDownToLine, ArrowLeft, ChevronRight, Pencil as Edit3, FileUp, MoreHorizontal, Plus, Search, Trash2, X } from 'lucide-react';
@@ -344,7 +345,7 @@ export default function TechnicalCatalogsPage() {
 
   const deleteCatalog = async (catalog) => {
     if (!catalog?.id) return;
-    if (!window.confirm(`Desactivar el catálogo "${catalog.nombre}"?`)) return;
+    if (!await appDialog.confirm(`Desactivar el catálogo "${catalog.nombre}"?`)) return;
     try {
       await technicalConfigService.deleteCatalog(catalog.id);
       toast.success('Catálogo desactivado.');
@@ -357,7 +358,7 @@ export default function TechnicalCatalogsPage() {
 
   const deleteItem = async (item) => {
     if (!item?.id) return;
-    if (!window.confirm(`Desactivar el item "${item.nombre}"?`)) return;
+    if (!await appDialog.confirm(`Desactivar el item "${item.nombre}"?`)) return;
     try {
       await technicalConfigService.deleteCatalogItem(item.id);
       toast.success('Item desactivado.');
