@@ -66,6 +66,9 @@
 .field label { color:#b8bdc5;font-size:12px;font-weight:650; }
 .field b { color:var(--go-red); }
 .help { color:#777d86;font-size:11px;line-height:1.4; }
+.checkList { display:grid;gap:7px;max-height:190px;overflow:auto;padding:8px;border:1px solid #34383f;border-radius:7px;background:#141518; }
+.checkRow { display:flex !important;align-items:center;gap:8px;color:#d7dade !important;font-size:12px !important;font-weight:500 !important;cursor:pointer; }
+.checkRow input { accent-color:var(--go-red); }
 .drawerFooter { margin-top:auto;border-top:1px solid var(--go-border-soft);padding-top:16px;display:flex;justify-content:flex-end;gap:8px; }
 .gridTwo { display:grid;grid-template-columns:minmax(240px,320px) minmax(0,1fr);gap:16px; }
 .roleMatrixLayout { display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr);gap:16px;align-items:start;max-width:100%; }
