@@ -24,6 +24,7 @@ import PageHeader from '@shared/ui/PageHeader';
 import MetricStrip from '@shared/ui/MetricStrip';
 import OverflowMenu from '@shared/ui/OverflowMenu';
 import Modal from '@shared/ui/Modal';
+import { useAuth } from '@features/auth/presentation/context/AuthContext';
 
 
 const fmt = (value) => {
@@ -51,6 +52,7 @@ const statusClass = (value) => {
 
 export default function ReportsPage() {
   const router = useRouter();
+  const { hasPermission } = useAuth();
   const [data, setData] = useState({ summary: {}, groups: [], results: [] });
   const [companies, setCompanies] = useState([]);
   const [machines, setMachines] = useState([]);
@@ -412,12 +414,12 @@ export default function ReportsPage() {
             <OverflowMenu
               label="Opciones del lote"
               items={[
-                { label: 'Descargar PDF consolidado', icon: Download, onClick: () => downloadBatch('pdf') },
-                { label: 'Descargar ZIP individual', icon: Download, onClick: () => downloadBatch('zip') },
-                { separator: true },
-                { label: 'Enviar PDF', icon: Mail, onClick: () => setBatchPendingSend({ format: 'pdf', lotId: filters.lote }) },
-                { label: 'Enviar ZIP', icon: Mail, onClick: () => setBatchPendingSend({ format: 'zip', lotId: filters.lote }) },
-              ]}
+                hasPermission('reportes.descargar_pdf') ? { label: 'Descargar PDF consolidado', icon: Download, onClick: () => downloadBatch('pdf') } : null,
+                hasPermission('reportes.descargar_pdf') ? { label: 'Descargar ZIP individual', icon: Download, onClick: () => downloadBatch('zip') } : null,
+                hasPermission('reportes.descargar_pdf') && hasPermission('reportes.enviar_email') ? { separator: true } : null,
+                hasPermission('reportes.enviar_email') ? { label: 'Enviar PDF', icon: Mail, onClick: () => setBatchPendingSend({ format: 'pdf', lotId: filters.lote }) } : null,
+                hasPermission('reportes.enviar_email') ? { label: 'Enviar ZIP', icon: Mail, onClick: () => setBatchPendingSend({ format: 'zip', lotId: filters.lote }) } : null,
+              ].filter(Boolean)}
             />
           </section>
         ) : null}
@@ -449,15 +451,15 @@ export default function ReportsPage() {
                 width: 72,
                 render: (report) => {
                   const menu = [
-                    { label: 'Vista previa', icon: Eye, onClick: () => previewReport(report.id) },
-                    { label: 'Descargar PDF', icon: Download, onClick: () => downloadReport(report.id, `${report.consecutivo}_v${report.version}`) },
-                    !report.fecha_aprobacion && !['aprobado', 'enviado', 'anulado'].includes(report.estatus) ? { label: 'Aprobar reporte', icon: CheckCircle2, onClick: () => setReportPendingApproval(report) } : null,
-                    report.fecha_aprobacion || ['aprobado', 'enviado'].includes(report.estatus) ? { label: 'Enviar por correo', icon: Mail, onClick: () => sendReport(report) } : null,
-                    report.fecha_aprobacion || ['aprobado', 'enviado'].includes(report.estatus) ? { label: report.visible_cliente ? 'Ocultar al cliente' : 'Mostrar al cliente', icon: report.visible_cliente ? EyeOff : Eye, onClick: () => togglePublish(report) } : null,
-                    { separator: true },
-                    { label: 'Modificar desde interpretación', icon: Settings, onClick: () => router.push(`/muestras/interpretacion?lote=${report.lote_id}&muestra=${report.muestra_id}&fromReport=${report.id}`) },
-                    !report.fecha_envio && !report.visible_cliente && report.estatus !== 'anulado' ? { label: 'Anular reporte', icon: Trash2, danger: true, onClick: () => annulReport(report) } : null,
-                  ];
+                    hasPermission('reportes.descargar_pdf') ? { label: 'Vista previa', icon: Eye, onClick: () => previewReport(report.id) } : null,
+                    hasPermission('reportes.descargar_pdf') ? { label: 'Descargar PDF', icon: Download, onClick: () => downloadReport(report.id, `${report.consecutivo}_v${report.version}`) } : null,
+                    hasPermission('reportes.aprobar') && !report.fecha_aprobacion && !['aprobado', 'enviado', 'anulado'].includes(report.estatus) ? { label: 'Aprobar reporte', icon: CheckCircle2, onClick: () => setReportPendingApproval(report) } : null,
+                    hasPermission('reportes.enviar_email') && (report.fecha_aprobacion || ['aprobado', 'enviado'].includes(report.estatus)) ? { label: 'Enviar por correo', icon: Mail, onClick: () => sendReport(report) } : null,
+                    (report.fecha_aprobacion || ['aprobado', 'enviado'].includes(report.estatus)) && hasPermission(report.visible_cliente ? 'reportes.despublicar_cliente' : 'reportes.publicar_cliente') ? { label: report.visible_cliente ? 'Ocultar al cliente' : 'Mostrar al cliente', icon: report.visible_cliente ? EyeOff : Eye, onClick: () => togglePublish(report) } : null,
+                    hasPermission('interpretacion.editar') ? { separator: true } : null,
+                    hasPermission('interpretacion.editar') ? { label: 'Modificar desde interpretación', icon: Settings, onClick: () => router.push(`/muestras/interpretacion?lote=${report.lote_id}&muestra=${report.muestra_id}&fromReport=${report.id}`) } : null,
+                    hasPermission('reportes.anular') && !report.fecha_envio && !report.visible_cliente && report.estatus !== 'anulado' ? { label: 'Anular reporte', icon: Trash2, danger: true, onClick: () => annulReport(report) } : null,
+                  ].filter(Boolean);
                   return <div className="flex justify-end"><OverflowMenu items={menu} /></div>;
                 },
               },

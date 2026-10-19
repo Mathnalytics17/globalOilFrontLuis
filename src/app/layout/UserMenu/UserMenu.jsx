@@ -27,7 +27,16 @@ export default function UserMenu({ user }) {
     .toUpperCase();
 
   const displayName = user?.name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Mi cuenta';
-  const companyName = user?.company?.name || user?.company_name || user?.empresa?.name || 'Global Oil';
+  // `/users/me/` exposes empresa as a display string and the company profile
+  // separately.  Support both shapes so the header never falls back to the
+  // unrelated Global Oil label for a company user.
+  const companyName = user?.company?.name
+    || user?.company_name
+    || user?.empresa?.name
+    || user?.empresa_nombre
+    || user?.profile?.empresa_nombre
+    || (typeof user?.empresa === 'string' ? user.empresa : '')
+    || 'Global Oil';
 
   return (
     <div className="relative" ref={dropdownRef}>

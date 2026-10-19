@@ -6,8 +6,10 @@ import { toast } from 'react-toastify';
 import ModalCreationFile from './ModalCreationFile';
 import { assetTreeService } from '@features/asset-tree/infrastructure/assetTreeService';
 import { foldersService } from '@features/asset-tree/infrastructure/foldersService';
+import { companiesService } from '@features/companies/infrastructure/companiesService';
 import { machinesService } from '@features/machines/infrastructure/machinesService';
 import { sampleBatchesService } from '@features/samples/infrastructure/sampleBatchesService';
+import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import OverflowMenu from '@shared/ui/OverflowMenu';
 import GlobalOilLoader from '@shared/ui/GlobalOilLoader';
 
@@ -25,7 +27,9 @@ function Button({ children, onClick, disabled, className = '', variant }) { retu
 const transformStructure = (folders = []) =>
   folders.map((folder) => ({
     id: folder.id,
-    name: folder.nombre,
+    // The root has one source of truth: Empresa.nombre.  This fallback also
+    // renders old trees correctly until the API reconciles their saved label.
+    name: folder.typeFolder === 'root' ? (folder.compania_info?.nombre || folder.nombre) : folder.nombre,
     type: folder.typeFolder,
     company: folder.compania_info,
     machine: folder.machine_info,
@@ -58,6 +62,7 @@ const TreeSkeleton = () => (
 );
 
 const TreeNode = ({ node, reload }) => {
+  const { loadUser } = useAuth();
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -126,6 +131,23 @@ const TreeNode = ({ node, reload }) => {
     }
   };
 
+  const renameCompany = async () => {
+    if (!node.company?.id) {
+      toast.error('No fue posible identificar la empresa de este nodo.');
+      return;
+    }
+    const name = await appDialog.prompt('Nuevo nombre de la empresa:', node.company.nombre || node.name);
+    if (name === null || !name.trim() || name.trim() === node.company.nombre) return;
+    try {
+      await companiesService.patch(node.company.id, { nombre: name.trim() });
+      await loadUser({ silent: true });
+      toast.success('Empresa renombrada. El nodo raíz se actualizó automáticamente.');
+      reload();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || error.response?.data?.nombre?.[0] || 'No se pudo renombrar la empresa');
+    }
+  };
+
   const openFilteredLots = () => {
     const params = new URLSearchParams();
     if (node.type === 'sampling-point') params.set('sampling_point_id', node.point.id);
@@ -147,7 +169,8 @@ const TreeNode = ({ node, reload }) => {
         <span className="min-w-0 flex-1 truncate text-sm text-[#e5e7ea]">{node.name}</span>
         <OverflowMenu items={[
           canCreate ? { label: 'Crear carpeta o máquina', icon: FolderPlus, onClick: () => setCreateOpen(true) } : null,
-          ['folder', 'root'].includes(node.type) ? { label: 'Renombrar carpeta', icon: Pencil, onClick: renameFolder } : null,
+          node.type === 'root' ? { label: 'Cambiar nombre de empresa', icon: Pencil, onClick: renameCompany } : null,
+          node.type === 'folder' ? { label: 'Renombrar carpeta', icon: Pencil, onClick: renameFolder } : null,
           node.type === 'machine' ? { label: 'Ver lotes de este equipo', icon: ListFilter, onClick: openFilteredLots } : null,
           node.type === 'machine' ? { label: 'Crear punto de muestreo', icon: MapPin, onClick: () => setPointOpen(true) } : null,
           node.type === 'machine' ? { label: 'Ver máquina', icon: Eye, onClick: () => setDetailOpen(true) } : null,
