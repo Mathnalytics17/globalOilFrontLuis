@@ -141,9 +141,17 @@ function TrendCard({ series }) {
 }
 
 function buildRows(machines) {
-  // El endpoint de histórico ya entrega filas normalizadas. Se conserva la
-  // conversión antigua únicamente para compatibilidad con datos en memoria.
-  if (machines.every((item) => item?.seriesId)) return machines;
+  // El endpoint de histórico entrega filas normalizadas, pero el valor aún
+  // llega como texto para conservar precisión y la unidad en el registro.
+  // La gráfica necesita explícitamente su representación numérica.
+  if (machines.every((item) => item?.seriesId)) {
+    return machines.map((item) => ({
+      ...item,
+      machineId: String(item.machineId || ''),
+      pointId: String(item.pointId || ''),
+      numeric: numericValue(item.value),
+    }));
+  }
   return machines.flatMap((machine) => (
     (machine.muestras || []).flatMap((sample) => {
       const tests = sample.pruebas_asignadas || sample.resultados || [];
