@@ -31,6 +31,14 @@ const emptyInvite = {
   transfer_existing: false,
 };
 
+const DATA_SCOPE_OPTIONS = [
+  { value: '', label: 'Heredar del rol' },
+  { value: 'OWN_COMPANY', label: 'Solo su empresa' },
+  { value: 'ALL_COMPANIES', label: 'Todas las empresas' },
+  { value: 'ASSIGNED_COMPANIES', label: 'Empresas asignadas' },
+  { value: 'GLOBAL_OIL_ONLY', label: 'Solo Global Oil' },
+];
+
 const getNumericId = (...values) => {
   for (const value of values) {
     const id = getId(value);
@@ -53,7 +61,9 @@ export default function SecurityUsersPage() {
   const [drawer, setDrawer] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [reason, setReason] = useState('');
-  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', phone: '', empresa: '', role: '', home_path: '' });
+  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', phone: '', empresa: '', role: '', home_path: '', data_scope_override: '' });
+  const [scopeAssignments, setScopeAssignments] = useState([]);
+  const [assignedCompanyIds, setAssignedCompanyIds] = useState([]);
   const [loading, setLoading] = useState(false);
   const companyId = getNumericId(user?.empresa_id, user?.profile?.empresa_id, user?.profile?.empresa, user?.empresa);
   const canInvite = global || hasPermission('usuarios.invitar');
@@ -183,6 +193,7 @@ export default function SecurityUsersPage() {
 
   const openEdit = (item) => {
     setSelectedUser(item);
+    const override = item.data_scope_override || '';
     setEditForm({
       first_name: item.first_name || '',
       last_name: item.last_name || '',
@@ -190,7 +201,19 @@ export default function SecurityUsersPage() {
       empresa: getNumericId(item.empresa, item.company, item.profile?.empresa),
       role: getNumericId(item.profile?.role, item.security_role),
       home_path: item.home_path || '',
+      data_scope_override: override,
     });
+    setScopeAssignments([]);
+    setAssignedCompanyIds((item.assigned_company_ids || []).map(String));
+    if (global) {
+      securityService.dataScopeCompanies.list({ user: item.id })
+        .then((rows) => {
+          const normalized = getList(rows);
+          setScopeAssignments(normalized);
+          setAssignedCompanyIds(normalized.map((row) => String(row.empresa_id || row.empresa?.id || row.empresa)));
+        })
+        .catch(() => toast.error('No se pudieron cargar las empresas asignadas.'));
+    }
     setDrawer('edit');
   };
 
@@ -203,7 +226,16 @@ export default function SecurityUsersPage() {
         last_name: editForm.last_name,
         phone: editForm.phone,
         home_path: editForm.home_path,
+        ...(global ? { data_scope_override: editForm.data_scope_override } : {}),
       });
+      if (global) {
+        const currentByCompany = new Map(scopeAssignments.map((row) => [String(row.empresa_id || row.empresa?.id || row.empresa), row]));
+        const desired = new Set(assignedCompanyIds.map(String));
+        await Promise.all([
+          ...scopeAssignments.filter((row) => !desired.has(String(row.empresa_id || row.empresa?.id || row.empresa))).map((row) => securityService.dataScopeCompanies.remove(row.id)),
+          ...assignedCompanyIds.filter((companyId) => !currentByCompany.has(String(companyId))).map((empresa) => securityService.dataScopeCompanies.create({ user: selectedUser.id, empresa })),
+        ]);
+      }
       const previousCompany = getNumericId(selectedUser.empresa, selectedUser.company, selectedUser.profile?.empresa);
       if (global && editForm.empresa && editForm.empresa !== previousCompany) {
         await securityService.users.reinvite(selectedUser.id, {
@@ -378,6 +410,8 @@ export default function SecurityUsersPage() {
             <div className={s.field}><label>Teléfono</label><input className={s.input} value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} /></div>
             {global ? <div className={s.field}><label>Empresa</label><select className={s.select} value={editForm.empresa} onChange={(e) => setEditForm((p) => ({ ...p, empresa: e.target.value }))}>{companies.map((company) => <option key={company.id} value={company.id}>{getName(company)}</option>)}</select><span className={s.help}>Cambiar la empresa genera una invitación y solo se aplica cuando el usuario la acepta.</span></div> : null}
             <div className={s.field}><label>Rol</label><select className={s.select} value={editForm.role} onChange={(e) => setEditForm((p) => ({ ...p, role: e.target.value }))}><option value="">Seleccione rol</option>{visibleRoles.map((role) => <option key={role.id} value={role.id}>{role.nombre || role.name || role.code}</option>)}</select></div>
+            {global ? <div className={s.field}><label>Alcance de datos</label><select className={s.select} value={editForm.data_scope_override} onChange={(e) => setEditForm((p) => ({ ...p, data_scope_override: e.target.value }))}>{DATA_SCOPE_OPTIONS.map((option) => <option key={option.value || 'inherit'} value={option.value}>{option.value ? option.label : `Heredar del rol (${selectedUser?.effective_data_scope || selectedUser?.profile?.role_data_scope || 'OWN_COMPANY'})`}</option>)}</select><span className={s.help}>Una excepción por usuario tiene prioridad sobre el alcance definido en su rol.</span></div> : null}
+            {global && (editForm.data_scope_override === 'ASSIGNED_COMPANIES' || (!editForm.data_scope_override && selectedUser?.profile?.role_data_scope === 'ASSIGNED_COMPANIES')) ? <div className={s.field}><label>Empresas autorizadas</label><div className={s.checkList}>{companies.map((company) => { const companyId = String(company.id); return <label key={companyId} className={s.checkRow}><input type="checkbox" checked={assignedCompanyIds.includes(companyId)} onChange={(e) => setAssignedCompanyIds((current) => e.target.checked ? [...new Set([...current, companyId])] : current.filter((id) => id !== companyId))} />{getName(company)}</label>; })}</div><span className={s.help}>Puede asignar una o varias empresas sin alterar la empresa contractual del usuario.</span></div> : null}
             <div className={s.field}><label>Página de inicio</label><select className={s.select} value={editForm.home_path} onChange={(e) => setEditForm((p) => ({ ...p, home_path: e.target.value }))}>{HOME_OPTIONS.filter((option) => !option.globalOnly || isGlobalUser(selectedUser)).map((option) => <option key={option.value || 'automatic'} value={option.value}>{option.label}</option>)}</select><span className={s.help}>Si la página deja de estar permitida para el usuario, se aplicará el inicio automático de su rol.</span></div>
           </form>
         </Drawer>

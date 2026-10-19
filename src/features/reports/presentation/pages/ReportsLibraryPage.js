@@ -16,9 +16,6 @@ import {
 import { toast } from 'react-toastify';
 
 import { reportsService } from '@features/reports/infrastructure/reportsService';
-import { companiesService } from '@features/companies/infrastructure/companiesService';
-import { machinesService } from '@features/machines/infrastructure/machinesService';
-import { assetTreeService } from '@features/asset-tree/infrastructure/assetTreeService';
 import DataTable from '@shared/ui/DataTable';
 import PageHeader from '@shared/ui/PageHeader';
 import MetricStrip from '@shared/ui/MetricStrip';
@@ -92,6 +89,13 @@ export default function ReportsPage() {
     try {
       const payload = await reportsService.dashboard(cleanFilters);
       setData(payload);
+      // Las opciones proceden del mismo conjunto de reportes autorizado. No
+      // exigimos permisos de administración de activos para consultar o
+      // filtrar la biblioteca de reportes.
+      const options = payload?.filter_options || {};
+      setCompanies(options.companies || []);
+      setMachines(options.machines || []);
+      setSamplingPoints(options.sampling_points || []);
     } catch (error) {
       console.error(error);
       toast.error('No se pudieron cargar los reportes.');
@@ -102,18 +106,6 @@ export default function ReportsPage() {
 
   useEffect(() => {
     loadReports();
-  }, []);
-
-  useEffect(() => {
-    Promise.all([
-      companiesService.list({ page_size: 1000 }),
-      machinesService.list({ activo: true }),
-      assetTreeService.listSamplingPoints({ activo: true, page_size: 1000 }),
-    ]).then(([companyData, machineData, pointData]) => {
-      setCompanies(Array.isArray(companyData) ? companyData : companyData?.results || []);
-      setMachines(Array.isArray(machineData) ? machineData : machineData?.results || []);
-      setSamplingPoints(Array.isArray(pointData) ? pointData : pointData?.results || []);
-    }).catch(() => toast.error('No se pudieron cargar los filtros de activos.'));
   }, []);
 
   useEffect(() => {

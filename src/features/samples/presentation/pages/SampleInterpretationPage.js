@@ -443,6 +443,11 @@ function InterpretationPage() {
   }, [batch, search]);
 
   const selectedSample = useMemo(() => (batch?.muestras || []).find((sample) => sample.id === selectedSampleId), [batch, selectedSampleId]);
+  const nextSample = useMemo(() => {
+    const samples = batch?.muestras || [];
+    const index = samples.findIndex((sample) => sample.id === selectedSampleId);
+    return index >= 0 ? samples[index + 1] || null : null;
+  }, [batch, selectedSampleId]);
   const selectedTests = useMemo(() => sampleData?.sample_tests || getSampleTests(batch, selectedSampleId), [sampleData, batch, selectedSampleId]);
   const evaluatedTests = useMemo(() => selectedTests.map(buildEvaluationTest), [selectedTests]);
   const diagnosticCounts = useMemo(() => evaluatedTests.reduce((counts, test) => {
@@ -960,7 +965,7 @@ function InterpretationPage() {
             <div className="sampleWorkActions">
               <span>El contenido se guarda por muestra y alimenta su reporte individual.</span>
               <button type="button" className="btn red" onClick={saveAndNext} disabled={saving || !selectedSampleId}>
-                <Save size={16} /> Guardar y seguir con la siguiente
+                <Save size={16} /> {nextSample ? 'Guardar y seguir con la siguiente' : 'Guardar interpretación'}
               </button>
             </div>
           </section>
@@ -970,7 +975,7 @@ function InterpretationPage() {
               <div className="blockTitle">3. Tendencias históricas <small>Alcance: {trendScope}</small></div>
               <label className="switchLine">
                 <input type="checkbox" checked={graphsEnabled} onChange={(e) => setGraphsEnabled(e.target.checked)} />
-                Activar gráficas
+                Incluir tendencias en el informe
               </label>
               <div className="chips">
                 {graphOptions.map((option) => (

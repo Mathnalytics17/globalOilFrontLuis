@@ -21,6 +21,13 @@ const groupByModule = (permissions) =>
 const roleIsLocked = (role) =>
   role?.editable === false || role?.is_protected === true || role?.protected === true;
 
+const DATA_SCOPE_OPTIONS = [
+  { value: 'OWN_COMPANY', label: 'Solo empresa del usuario' },
+  { value: 'ALL_COMPANIES', label: 'Todas las empresas' },
+  { value: 'ASSIGNED_COMPANIES', label: 'Empresas asignadas por usuario' },
+  { value: 'GLOBAL_OIL_ONLY', label: 'Solo Global Oil' },
+];
+
 function SecurityRolesPermissionsContent() {
   const [roles, setRoles] = useState([]);
   const [permissions, setPermissions] = useState([]);
@@ -184,6 +191,7 @@ function SecurityRolesPermissionsContent() {
     scope: role?.scope || 'COMPANY',
     description: role?.description || role?.descripcion || '',
     default_home_path: role?.default_home_path || '',
+    data_scope: role?.data_scope || 'OWN_COMPANY',
     active: role?.active !== false,
   });
 
@@ -200,6 +208,7 @@ function SecurityRolesPermissionsContent() {
         scope: roleEditor.scope,
         description: roleEditor.description.trim(),
         default_home_path: roleEditor.default_home_path,
+        data_scope: roleEditor.data_scope,
         active: roleEditor.active,
         editable: true,
       };
@@ -315,7 +324,7 @@ function SecurityRolesPermissionsContent() {
                     </button>
                   ) : null}
                   <h2>{getName(selectedRole, 'Seleccione un rol')}</h2>
-                  <p>{selectedRole?.descripcion || selectedRole?.description || 'Seleccione los permisos efectivos para este rol.'}</p>
+                  <p><strong>Accesos a lugares y acciones.</strong> {selectedRole?.descripcion || selectedRole?.description || 'Seleccione los permisos efectivos para este rol.'}</p>
                 </div>
                 <div className={s.summaryPills}>
                   <span>{selectedCodes.length} activos</span>
@@ -399,6 +408,7 @@ function SecurityRolesPermissionsContent() {
                   <label className={s.field}><b>Nombre</b><input className={s.input} value={roleEditor.name} onChange={(event) => setRoleEditor((current) => ({ ...current, name: event.target.value }))} /></label>
                   <label className={s.field}><b>Código</b><input className={s.input} value={roleEditor.code} onChange={(event) => setRoleEditor((current) => ({ ...current, code: event.target.value }))} /></label>
                   <label className={s.field}><b>Alcance</b><select className={s.select} value={roleEditor.scope} onChange={(event) => setRoleEditor((current) => ({ ...current, scope: event.target.value }))}><option value="COMPANY">Empresa</option><option value="INTERNAL">Interno</option><option value="GLOBAL">GlobalOil</option></select></label>
+                  <label className={s.field}><b>Alcance de datos: empresas que puede consultar</b><select className={s.select} value={roleEditor.data_scope} onChange={(event) => setRoleEditor((current) => ({ ...current, data_scope: event.target.value }))}>{DATA_SCOPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><span className={s.small}>Esta opción no otorga lugares ni acciones: eso se administra en la matriz de permisos de este rol.</span></label>
                   <label className={s.field}><b>Pantalla principal del rol</b><select className={s.select} value={roleEditor.default_home_path} onChange={(event) => setRoleEditor((current) => ({ ...current, default_home_path: event.target.value }))}>{HOME_OPTIONS.filter((option) => !option.globalOnly || roleEditor.scope === 'GLOBAL').map((option) => <option key={option.value || 'automatic'} value={option.value}>{option.label}</option>)}</select><span className={s.small}>Se usa al iniciar sesión, salvo que el usuario tenga una página propia asignada.</span></label>
                   <label className={s.field}><b>Descripción</b><textarea className={s.textarea} value={roleEditor.description} onChange={(event) => setRoleEditor((current) => ({ ...current, description: event.target.value }))} /></label>
                 </div>

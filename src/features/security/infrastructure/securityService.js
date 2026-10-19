@@ -81,6 +81,20 @@ export const securityService = {
     },
   },
 
+  dataScopeCompanies: {
+    async list(params = {}) {
+      const { data } = await apiClient.get('/security/data-scope-companies/', { params: normalizeParams(params) });
+      return unwrap(data);
+    },
+    async create(payload) {
+      const { data } = await apiClient.post('/security/data-scope-companies/', payload);
+      return data;
+    },
+    async remove(id) {
+      await apiClient.delete(`/security/data-scope-companies/${id}/`);
+    },
+  },
+
   invitations: {
     async list(params = {}) {
       const { data } = await apiClient.get('/security/invitations/', { params: normalizeParams(params) });
