@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import { getPrimaryRole } from '@features/auth/application/sessionAccess';
+import { resolveHomeRoute } from '@features/auth/application/homeRoute';
 
 import Sidebar from './Sidebar/Sidebar';
 import Topbar from './Topbar/Topbar';
@@ -13,6 +14,7 @@ export default function AppLayout({ children }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isDesktopOpen, setIsDesktopOpen] = useState(false);
   const userRole = getPrimaryRole(user) || 'EMPRESA';
+  const homePath = resolveHomeRoute(user, hasPermission);
 
   useEffect(() => {
     try {
@@ -69,6 +71,7 @@ export default function AppLayout({ children }) {
         isDesktopOpen={isDesktopOpen}
         isMobileOpen={isMobileOpen}
         user={user}
+        homePath={homePath}
       />
 
       <main

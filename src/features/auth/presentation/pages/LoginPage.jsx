@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { resolveHomeRoute } from '@features/auth/application/homeRoute';
 
 export default function Login() {
   const [formData, setFormData] = useState({
@@ -11,7 +12,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
-  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { login, isAuthenticated, isLoading: authLoading, user, hasPermission } = useAuth();
   const router = useRouter();
 
   // Redirigir si ya está autenticado - CON TIMEOUT DE SEGURIDAD
@@ -21,12 +22,12 @@ export default function Login() {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       if (isAuthenticated()) {
-        router.push('/dashboard');
+        router.push(resolveHomeRoute(user, hasPermission));
       }
     };
 
     checkAuth();
-  }, [isAuthenticated, router]);
+  }, [hasPermission, isAuthenticated, router, user]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

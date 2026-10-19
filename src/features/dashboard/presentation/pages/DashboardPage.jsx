@@ -7,6 +7,9 @@ import { toast } from 'react-toastify';
 import operationalDashboardService from '@features/dashboard/infrastructure/operationalDashboardService';
 import DataTable from '@shared/ui/DataTable';
 import PageHeader from '@shared/ui/PageHeader';
+import { useAuth } from '@features/auth/presentation/context/AuthContext';
+import { isGlobalUser } from '@features/auth/application/sessionAccess';
+import { resolveHomeRoute } from '@features/auth/application/homeRoute';
 
 const STAGE_TONES = { shipping: 'neutral', received: 'info', analysis: 'warning', approval: 'danger' };
 const formatDate = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateString('es-CO') : 'Sin fecha';
@@ -20,11 +23,13 @@ function StageKpi({ stage, onClick }) {
 
 export default function OperationalDashboardPage() {
   const router = useRouter();
+  const { user, hasPermission } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ cliente: '', tipo_gestion: '', periodo: 'todos' });
   const [stageFilter, setStageFilter] = useState('');
 
+  const global = isGlobalUser(user);
   const load = async (activeFilters = filters) => {
     setLoading(true);
     try { setData(await operationalDashboardService.getCenter(activeFilters)); }
@@ -32,7 +37,15 @@ export default function OperationalDashboardPage() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [filters.cliente, filters.tipo_gestion, filters.periodo]);
+  useEffect(() => {
+    if (!user) return;
+    if (!global) {
+      router.replace(resolveHomeRoute(user, hasPermission));
+      return;
+    }
+    load();
+  }, [filters.cliente, filters.tipo_gestion, filters.periodo, global]);
+  if (!user || !global) return null;
   const operational = data?.operational || {};
   const stages = operational.stages || [];
   const allDelayed = operational.delayed_samples || [];

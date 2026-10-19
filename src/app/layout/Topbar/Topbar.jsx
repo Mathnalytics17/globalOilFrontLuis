@@ -38,7 +38,7 @@ const routeNames = {
   usuarios: 'Usuarios',
 };
 
-function Breadcrumb() {
+function Breadcrumb({ homePath }) {
   const router = useRouter();
   const parts = router.pathname.split('/').filter(Boolean).filter((part) => !part.startsWith('['));
   const segments = parts
@@ -50,7 +50,7 @@ function Breadcrumb() {
 
   return (
     <div className="flex min-w-0 items-center gap-2 text-xs text-[#747a83]">
-      <Link href="/dashboard" className="shrink-0 transition hover:text-[#dfe3e8]">Inicio</Link>
+      <Link href={homePath} className="shrink-0 transition hover:text-[#dfe3e8]">Inicio</Link>
       {segments.map((segment, index) => (
         <span key={`${segment.href}-${index}`} className="flex min-w-0 items-center gap-2">
           <span className="text-[#4d5259]">/</span>
@@ -70,7 +70,7 @@ function Breadcrumb() {
   );
 }
 
-export default function Topbar({ onToggleNavigation, isDesktopOpen, isMobileOpen, user }) {
+export default function Topbar({ onToggleNavigation, isDesktopOpen, isMobileOpen, user, homePath }) {
   const desktopLeft = isDesktopOpen ? 'xl:left-[var(--go-sidebar-width)]' : 'xl:left-[var(--go-sidebar-rail-width)]';
   return (
     <header className={`fixed left-0 right-0 top-0 z-30 h-[var(--go-topbar-height)] border-b border-white/[0.06] bg-[#121315]/95 backdrop-blur transition-[left] duration-300 ease-out ${desktopLeft}`}>
@@ -86,7 +86,7 @@ export default function Topbar({ onToggleNavigation, isDesktopOpen, isMobileOpen
             <span className="xl:hidden"><Menu className="h-5 w-5" /></span>
             <span className="hidden xl:inline-flex">{isDesktopOpen ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}</span>
           </button>
-          <Breadcrumb />
+          <Breadcrumb homePath={homePath} />
         </div>
 
         <div className="flex shrink-0 items-center gap-2">

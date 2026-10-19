@@ -6,6 +6,7 @@ import { securityService } from '../../infrastructure/securityService';
 import { companiesService } from '@features/companies/infrastructure/companiesService';
 import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import { isGlobalUser } from '@features/auth/application/sessionAccess';
+import { HOME_OPTIONS } from '@features/auth/application/homeRoute';
 import s from '../components/Security.module.css';
 import DataTable from '@shared/ui/DataTable';
 import useTableSort from '@shared/hooks/useTableSort';
@@ -52,7 +53,7 @@ export default function SecurityUsersPage() {
   const [drawer, setDrawer] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [reason, setReason] = useState('');
-  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', phone: '', empresa: '', role: '' });
+  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', phone: '', empresa: '', role: '', home_path: '' });
   const [loading, setLoading] = useState(false);
   const companyId = getNumericId(user?.empresa_id, user?.profile?.empresa_id, user?.profile?.empresa, user?.empresa);
   const canInvite = global || hasPermission('usuarios.invitar');
@@ -188,6 +189,7 @@ export default function SecurityUsersPage() {
       phone: item.phone || '',
       empresa: getNumericId(item.empresa, item.company, item.profile?.empresa),
       role: getNumericId(item.profile?.role, item.security_role),
+      home_path: item.home_path || '',
     });
     setDrawer('edit');
   };
@@ -200,6 +202,7 @@ export default function SecurityUsersPage() {
         first_name: editForm.first_name,
         last_name: editForm.last_name,
         phone: editForm.phone,
+        home_path: editForm.home_path,
       });
       const previousCompany = getNumericId(selectedUser.empresa, selectedUser.company, selectedUser.profile?.empresa);
       if (global && editForm.empresa && editForm.empresa !== previousCompany) {
@@ -375,6 +378,7 @@ export default function SecurityUsersPage() {
             <div className={s.field}><label>Teléfono</label><input className={s.input} value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} /></div>
             {global ? <div className={s.field}><label>Empresa</label><select className={s.select} value={editForm.empresa} onChange={(e) => setEditForm((p) => ({ ...p, empresa: e.target.value }))}>{companies.map((company) => <option key={company.id} value={company.id}>{getName(company)}</option>)}</select><span className={s.help}>Cambiar la empresa genera una invitación y solo se aplica cuando el usuario la acepta.</span></div> : null}
             <div className={s.field}><label>Rol</label><select className={s.select} value={editForm.role} onChange={(e) => setEditForm((p) => ({ ...p, role: e.target.value }))}><option value="">Seleccione rol</option>{visibleRoles.map((role) => <option key={role.id} value={role.id}>{role.nombre || role.name || role.code}</option>)}</select></div>
+            <div className={s.field}><label>Página de inicio</label><select className={s.select} value={editForm.home_path} onChange={(e) => setEditForm((p) => ({ ...p, home_path: e.target.value }))}>{HOME_OPTIONS.filter((option) => !option.globalOnly || isGlobalUser(selectedUser)).map((option) => <option key={option.value || 'automatic'} value={option.value}>{option.label}</option>)}</select><span className={s.help}>Si la página deja de estar permitida para el usuario, se aplicará el inicio automático de su rol.</span></div>
           </form>
         </Drawer>
       ) : null}

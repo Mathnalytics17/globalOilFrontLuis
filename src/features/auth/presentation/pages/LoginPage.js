@@ -5,21 +5,22 @@ import { LogIn } from 'lucide-react';
 
 import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import AuthShell from '@features/auth/presentation/AuthShell';
+import { resolveHomeRoute } from '@features/auth/application/homeRoute';
 
 export default function Login() {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { login, isAuthenticated, isLoading: authLoading, user, hasPermission } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     const checkAuth = async () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
-      if (isAuthenticated()) router.push('/dashboard');
+      if (isAuthenticated()) router.push(resolveHomeRoute(user, hasPermission));
     };
     checkAuth();
-  }, [isAuthenticated, router]);
+  }, [hasPermission, isAuthenticated, router, user]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import { ChevronLeft as KeyboardArrowLeft, ChevronRight as KeyboardArrowRight, Pencil as Edit, Plus as Add, RefreshCcw as Refresh, RotateCcw as RestartAlt, Save, Search, Trash2 as DeleteOutline } from 'lucide-react';
 import RequirePermission from '@features/auth/presentation/RequirePermission';
 import { securityService } from '../../infrastructure/securityService';
 import s from '../components/Security.module.css';
 import { BackLink, getErrorMessage, getList, getName } from '../components/securityUi';
+import { HOME_OPTIONS } from '@features/auth/application/homeRoute';
 
 const getCode = (permission) => permission.code || permission.codigo || permission.codename || permission.name;
 
@@ -34,6 +35,7 @@ function SecurityRolesPermissionsContent() {
   const [roleEditor, setRoleEditor] = useState(null);
   const [roleSaving, setRoleSaving] = useState(false);
   const [showInactiveRoles, setShowInactiveRoles] = useState(false);
+  const matrixRequestId = useRef(0);
 
   const selectedRole = useMemo(
     () => roles.find((role) => String(role.id) === String(selectedRoleId)),
@@ -83,6 +85,7 @@ function SecurityRolesPermissionsContent() {
   };
 
   const loadRoleMatrix = async (roleId) => {
+    const requestId = ++matrixRequestId.current;
     if (!roleId) {
       setSelectedCodes([]);
       setOriginalCodes([]);
@@ -96,6 +99,7 @@ function SecurityRolesPermissionsContent() {
         matrix.codes ||
         [];
       const clean = codes.filter(Boolean);
+      if (requestId !== matrixRequestId.current) return;
       setSelectedCodes(clean);
       setOriginalCodes(clean);
     } catch {
@@ -105,6 +109,7 @@ function SecurityRolesPermissionsContent() {
         role?.permissions?.map((item) => (typeof item === 'string' ? item : getCode(item))) ||
         [];
       const clean = fallback.filter(Boolean);
+      if (requestId !== matrixRequestId.current) return;
       setSelectedCodes(clean);
       setOriginalCodes(clean);
     }
@@ -140,9 +145,20 @@ function SecurityRolesPermissionsContent() {
     if (!selectedRoleId || locked) return;
     setSaving(true);
     try {
-      await securityService.roles.updateMatrix(selectedRoleId, selectedCodes);
+      const saved = await securityService.roles.updateMatrix(selectedRoleId, selectedCodes);
+      // Invalida cualquier lectura anterior aún en tránsito y adopta la
+      // matriz que el servidor acaba de confirmar. Así el usuario no ve una
+      // matriz vacía hasta hacer F5.
+      matrixRequestId.current += 1;
+      const confirmedCodes = (
+        saved.permission_codes ||
+        saved.permissions?.map((item) => (typeof item === 'string' ? item : getCode(item))) ||
+        selectedCodes
+      ).filter(Boolean);
+      setSelectedCodes(confirmedCodes);
+      setOriginalCodes(confirmedCodes);
+      setRoles((current) => current.map((role) => String(role.id) === String(saved.id) ? { ...role, ...saved } : role));
       toast.success('Matriz de permisos actualizada.');
-      await loadRoleMatrix(selectedRoleId);
     } catch (error) {
       toast.error(getErrorMessage(error, 'No se pudo guardar la matriz.'));
     } finally {
@@ -167,6 +183,7 @@ function SecurityRolesPermissionsContent() {
     code: role?.code || role?.codigo || '',
     scope: role?.scope || 'COMPANY',
     description: role?.description || role?.descripcion || '',
+    default_home_path: role?.default_home_path || '',
     active: role?.active !== false,
   });
 
@@ -182,6 +199,7 @@ function SecurityRolesPermissionsContent() {
         code: roleEditor.code.trim().toLowerCase().replace(/\s+/g, '-'),
         scope: roleEditor.scope,
         description: roleEditor.description.trim(),
+        default_home_path: roleEditor.default_home_path,
         active: roleEditor.active,
         editable: true,
       };
@@ -381,6 +399,7 @@ function SecurityRolesPermissionsContent() {
                   <label className={s.field}><b>Nombre</b><input className={s.input} value={roleEditor.name} onChange={(event) => setRoleEditor((current) => ({ ...current, name: event.target.value }))} /></label>
                   <label className={s.field}><b>Código</b><input className={s.input} value={roleEditor.code} onChange={(event) => setRoleEditor((current) => ({ ...current, code: event.target.value }))} /></label>
                   <label className={s.field}><b>Alcance</b><select className={s.select} value={roleEditor.scope} onChange={(event) => setRoleEditor((current) => ({ ...current, scope: event.target.value }))}><option value="COMPANY">Empresa</option><option value="INTERNAL">Interno</option><option value="GLOBAL">GlobalOil</option></select></label>
+                  <label className={s.field}><b>Pantalla principal del rol</b><select className={s.select} value={roleEditor.default_home_path} onChange={(event) => setRoleEditor((current) => ({ ...current, default_home_path: event.target.value }))}>{HOME_OPTIONS.filter((option) => !option.globalOnly || roleEditor.scope === 'GLOBAL').map((option) => <option key={option.value || 'automatic'} value={option.value}>{option.label}</option>)}</select><span className={s.small}>Se usa al iniciar sesión, salvo que el usuario tenga una página propia asignada.</span></label>
                   <label className={s.field}><b>Descripción</b><textarea className={s.textarea} value={roleEditor.description} onChange={(event) => setRoleEditor((current) => ({ ...current, description: event.target.value }))} /></label>
                 </div>
                 <div className={s.actions}>

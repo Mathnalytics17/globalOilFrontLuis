@@ -6,6 +6,7 @@ import apiClient, { setSessionExpiredHandler } from '@infrastructure/api/apiClie
 import { authService } from '@features/auth/infrastructure/authService';
 import { getApiErrorMessage } from '@shared/utils/errors';
 import { isGlobalUser } from '@features/auth/application/sessionAccess';
+import { resolveHomeRoute } from '@features/auth/application/homeRoute';
 
 const AuthContext = createContext(null);
 const PUBLIC_ROUTES = [
@@ -81,7 +82,9 @@ export function AuthProvider({ children }) {
     try {
       const { user: loggedInUser } = await authService.login({ email, password });
       setUser(loggedInUser);
-      router.replace('/dashboard');
+      router.replace(resolveHomeRoute(loggedInUser, (permission) => (
+        loggedInUser.is_superuser || isGlobalUser(loggedInUser) || (loggedInUser.permissions || []).includes(permission)
+      )));
       return { success: true, user: loggedInUser };
     } catch (error) {
       const message = getApiErrorMessage(error, 'Error al iniciar sesión.');

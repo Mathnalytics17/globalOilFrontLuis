@@ -79,8 +79,8 @@ export const SIDEBAR_NAVIGATION = [
     compactHref: '/dashboard',
     compactLabel: 'Dashboard',
     icon: Gauge,
-    roles: BUSINESS,
-    permissionsAny: ['dashboard.ver_global', 'dashboard.ver_empresa', 'dashboard.ver_laboratorio', 'dashboard.ver_reportes'],
+    roles: [ROLE.GLOBAL],
+    permissionsAny: ['dashboard.ver_global'],
   },
   {
     id: 'reports',
@@ -89,7 +89,7 @@ export const SIDEBAR_NAVIGATION = [
     compactHref: '/reportes',
     compactLabel: 'Reportes',
     icon: FileText,
-    roles: BUSINESS,
+    roles: EVERYONE,
     permissionsAny: ['reportes.ver'],
   },
   {
@@ -99,8 +99,8 @@ export const SIDEBAR_NAVIGATION = [
     compactHref: '/trazabilidad',
     compactLabel: 'Trazabilidad y control',
     icon: History,
-    roles: BUSINESS,
-    permissionsAny: ['dashboard.ver_empresa'],
+    roles: EVERYONE,
+    permissionsAny: ['trazabilidad.ver'],
   },
   {
     id: 'users',
