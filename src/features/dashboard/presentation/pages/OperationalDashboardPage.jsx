@@ -74,7 +74,7 @@ function QueueTable({ rows, router }) {
               <td>{item.management_type}</td>
               <td>
                 <span className={`pill ${urgencyClass[item.due?.urgency] || 'muted'}`}>{item.due?.label || 'Sin SLA'}</span>
-                <small>{formatDate(item.due?.due_date)}</small>
+                <small>{item.due?.due_date ? formatDate(item.due.due_date) : 'Pendiente de recepción'}</small>
               </td>
               <td>{item.status_label}</td>
               <td>

@@ -1710,16 +1710,18 @@ function AsignacionPruebasPage() {
 
                   return (
                     <div className={`editorRow ${aplicarLimites ? '' : 'withoutLimits'}`} key={row.key}>
-                      <select value={row.prueba} onChange={(e) => updateRow(row.key, 'prueba', e.target.value)}>
-                        <option value="">Variable...</option>
-                        {tests.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.acronimo} · {item.nombre_variable}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="editorField" data-label="Variable">
+                        <select value={row.prueba} onChange={(e) => updateRow(row.key, 'prueba', e.target.value)}>
+                          <option value="">Variable...</option>
+                          {tests.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.acronimo} · {item.nombre_variable}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                      {aplicarLimites ? <select
+                      {aplicarLimites ? <div className="editorField" data-label="Límites aplicados"><select
                         value={row.fuente_limite}
                         disabled={!row.prueba}
                         onChange={(e) => updateRow(row.key, 'fuente_limite', e.target.value)}
@@ -1731,18 +1733,20 @@ function AsignacionPruebasPage() {
                             V{source.version || 1}{source.activo !== false && !source.deleted_at ? ' · activa' : ' · inactiva / histórica'}
                           </option>
                         ))}
-                      </select> : null}
+                      </select></div> : null}
 
-                      <select value={row.condicion} onChange={(e) => updateRow(row.key, 'condicion', e.target.value)}>
-                        <option value="">Sin condición</option>
-                        {conditions.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.nombre} · {item.valor} {item.unidad_info?.simbolo || ''}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="editorField" data-label="Condición">
+                        <select value={row.condicion} onChange={(e) => updateRow(row.key, 'condicion', e.target.value)}>
+                          <option value="">Sin condición</option>
+                          {conditions.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.nombre} · {item.valor} {item.unidad_info?.simbolo || ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                      {aplicarLimites ? <div className="criterionCell">
+                      {aplicarLimites ? <div className="criterionCell" data-label="Criterio límite">
                         {(() => {
                           const sources = getSourcesForRow(row);
                           const catalogSources = getCatalogLimitSources(sources);
@@ -1921,19 +1925,21 @@ function AsignacionPruebasPage() {
                         })()}
                       </div> : null}
 
-                      <button
-                        type="button"
-                        className="resultConfigButton"
-                        onClick={() => setResultConfigRowKey(row.key)}
-                        title="Revisar unidad y condición por resultado"
-                      >
-                        <strong>{row.unidad || 'Sin unidad'}</strong>
-                        <small>
-                          {Object.keys(row.configuracion_resultados || {}).length || 1} resultado(s)
-                        </small>
-                      </button>
+                      <div className="editorField" data-label="Unidad">
+                        <button
+                          type="button"
+                          className="resultConfigButton"
+                          onClick={() => setResultConfigRowKey(row.key)}
+                          title="Revisar unidad y condición por resultado"
+                        >
+                          <strong>{row.unidad || 'Sin unidad'}</strong>
+                          <small>
+                            {Object.keys(row.configuracion_resultados || {}).length || 1} resultado(s)
+                          </small>
+                        </button>
+                      </div>
 
-                      <div className="rowActions">
+                      <div className="rowActions" data-label="Acciones">
                         <button
                           type="button"
                           title="Cómo se evaluará esta prueba"
@@ -2764,9 +2770,15 @@ function AsignacionPruebasPage() {
 
         .predefinedLine {
           display: grid;
-          grid-template-columns: 250px minmax(280px, 1fr) 150px;
+          grid-template-columns: minmax(220px, 280px) minmax(300px, 1fr) auto;
           gap: 14px;
           align-items: end;
+        }
+
+        .predefinedLine > .btn {
+          min-width: 160px;
+          width: auto;
+          justify-self: end;
         }
 
         .checkLine,
@@ -2847,14 +2859,14 @@ function AsignacionPruebasPage() {
 
         .editorRow {
           display: grid;
-          grid-template-columns: minmax(170px, 1.1fr) minmax(145px, .8fr) minmax(135px, .75fr) minmax(220px, 1.3fr) minmax(86px, .55fr) 74px;
+          grid-template-columns: minmax(170px, 1.1fr) minmax(145px, .8fr) minmax(135px, .75fr) minmax(220px, 1.3fr) minmax(120px, .65fr) 96px;
           gap: 0;
           align-items: center;
           border-top: 1px solid #333;
         }
 
         .editorRow.withoutLimits {
-          grid-template-columns: minmax(190px, 1.25fr) minmax(160px, .9fr) minmax(120px, .7fr) 74px;
+          grid-template-columns: minmax(190px, 1.25fr) minmax(160px, .9fr) minmax(140px, .8fr) 96px;
         }
 
         .editorRow:first-child {
@@ -2871,6 +2883,16 @@ function AsignacionPruebasPage() {
 
         .editorHead div {
           padding: 0 10px;
+        }
+
+        .editorField {
+          min-width: 0;
+          overflow: hidden;
+        }
+
+        .editorField > select,
+        .editorField > input {
+          width: 100%;
         }
 
         .editorRow select,
@@ -3213,8 +3235,14 @@ function AsignacionPruebasPage() {
 
         .rowActions {
           display: flex;
+          align-items: center;
           justify-content: center;
-          gap: 6px;
+          gap: 8px;
+          width: 100%;
+          min-width: 0;
+          padding: 0 8px;
+          box-sizing: border-box;
+          overflow: hidden;
         }
 
         .iconDanger,
@@ -3239,6 +3267,8 @@ function AsignacionPruebasPage() {
         .resultConfigButton {
           min-height: 38px;
           width: 100%;
+          min-width: 0;
+          overflow: hidden;
           display: grid;
           align-content: center;
           gap: 2px;
@@ -3249,6 +3279,16 @@ function AsignacionPruebasPage() {
           color: #fff;
           text-align: left;
           cursor: pointer;
+        }
+
+        .resultConfigButton strong,
+        .resultConfigButton small {
+          display: block;
+          min-width: 0;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .resultConfigButton strong {
@@ -3628,20 +3668,63 @@ function AsignacionPruebasPage() {
           }
         }
 
+        @media (max-width: 1180px) {
+          .predefinedLine {
+            grid-template-columns: minmax(210px, .8fr) minmax(280px, 1.4fr) auto;
+          }
+
+          .editorRow {
+            grid-template-columns: minmax(150px, 1.05fr) minmax(130px, .75fr) minmax(120px, .72fr) minmax(190px, 1.2fr) minmax(115px, .7fr) 92px;
+          }
+        }
+
         @media (max-width: 1000px) {
           .assignPage {
             padding: 0 0 18px;
           }
 
           .topBar {
-            align-items: flex-start;
+            align-items: stretch;
             flex-direction: column;
           }
 
-          .lotHeader,
-          .predefinedLine,
+          .topActions {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .topActions .btn {
+            width: 100%;
+          }
+
+          .lotHeader {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            align-items: start;
+          }
+
+          .lotIcon {
+            display: none;
+          }
+
+          .lotSelectWrap {
+            grid-column: 1 / -1;
+          }
+
+          .predefinedLine {
+            grid-template-columns: minmax(220px, .9fr) minmax(0, 1.6fr);
+            align-items: end;
+          }
+
+          .predefinedLine > .btn {
+            grid-column: 2;
+            width: auto;
+            min-width: 170px;
+            justify-self: end;
+          }
+
           .templateGrid {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
           .lotSelectorLine {
@@ -3656,18 +3739,87 @@ function AsignacionPruebasPage() {
           .samplesTableWrap { overflow-x: auto; }
 
           .editorHead { display: none; }
-          .editorRow {
-            grid-template-columns: minmax(0, 1fr);
-            gap: 8px;
-            padding: 10px;
+          .editorRow,
+          .editorRow.withoutLimits {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px 12px;
+            padding: 12px;
             border: 1px solid #333;
-            border-radius: 9px;
+            border-radius: 10px;
             margin-bottom: 10px;
+            background: #121315;
           }
-          .editorRow select,
-          .editorRow input,
+
+          .editorField,
           .criterionCell,
-          .editorRow > * { width: 100%; min-width: 0; }
+          .rowActions {
+            display: grid;
+            gap: 6px;
+            min-width: 0;
+            border-right: 0;
+            padding: 0;
+          }
+
+          .editorField::before,
+          .criterionCell::before,
+          .rowActions::before {
+            content: attr(data-label);
+            color: #9299a4;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .055em;
+          }
+
+          .editorRow select,
+          .editorRow input {
+            width: 100%;
+            min-width: 0;
+            height: 39px;
+            border: 1px solid #3b3f46;
+            border-radius: 8px;
+            background: #0d0e10;
+          }
+
+          .criterionCell select,
+          .criterionCell input {
+            border: 1px solid #3b3f46;
+            border-radius: 8px;
+          }
+
+          .resultConfigButton {
+            min-height: 39px;
+          }
+
+          .rowActions {
+            grid-auto-flow: column;
+            grid-template-columns: repeat(2, 40px);
+            justify-content: start;
+            align-content: end;
+          }
+
+          .rowActions::before {
+            grid-column: 1 / -1;
+          }
+
+          .underTableActions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .underTableActions .btn {
+            width: 100%;
+          }
+
+          .applyLine {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px 12px;
+          }
+
+          .applyLine > span {
+            grid-column: 1 / -1;
+          }
 
           .resultConfigRow,
           .limitInfoRow {
@@ -3685,6 +3837,175 @@ function AsignacionPruebasPage() {
 
           .footerBar {
             gap: 10px;
+          }
+
+          .footerBar .btn {
+            flex: 1 1 0;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .assignPage {
+            padding-bottom: 10px;
+          }
+
+          .assignShell {
+            min-width: 0;
+          }
+
+          .topBar {
+            margin-bottom: 8px;
+          }
+
+          .titleBlock {
+            gap: 9px;
+          }
+
+          .titleBlock h1 {
+            font-size: 19px;
+          }
+
+          .titleBlock p {
+            font-size: 11.5px;
+          }
+
+          .topActions {
+            grid-template-columns: 1fr;
+            gap: 7px;
+          }
+
+          .lotHeader {
+            grid-template-columns: 1fr;
+            gap: 0;
+            padding: 10px 12px;
+          }
+
+          .lotSelectWrap,
+          .lotInfo {
+            grid-column: auto;
+            padding: 8px 0;
+            border-bottom: 1px solid #292c31;
+          }
+
+          .lotInfo:last-child {
+            border-bottom: 0;
+          }
+
+          .flowPanel,
+          .flowPanel.compact {
+            padding: 12px 10px;
+            border-radius: 10px;
+          }
+
+          .flowTitle {
+            gap: 10px;
+            margin-bottom: 10px;
+          }
+
+          .flowTitle > span {
+            width: 25px;
+            height: 25px;
+            border-radius: 7px;
+          }
+
+          .flowTitle h2 {
+            font-size: 15px;
+          }
+
+          .flowTitle p {
+            font-size: 11px;
+            line-height: 1.35;
+          }
+
+          .predefinedLine,
+          .templateGrid,
+          .editorRow,
+          .editorRow.withoutLimits,
+          .applyLine,
+          .underTableActions {
+            grid-template-columns: 1fr;
+          }
+
+          .predefinedLine > .btn {
+            grid-column: auto;
+            width: 100%;
+            min-width: 0;
+            justify-self: stretch;
+          }
+
+          .checkLine {
+            min-height: auto;
+            padding: 2px 0;
+          }
+
+          .limitSwitch {
+            width: 100%;
+            box-sizing: border-box;
+            align-items: flex-start;
+            padding: 10px 11px;
+            margin-bottom: 12px;
+          }
+
+          .limitSwitchTrack {
+            flex: 0 0 auto;
+            margin-top: 1px;
+          }
+
+          .limitSwitch strong {
+            font-size: 12px;
+          }
+
+          .limitSwitch small {
+            font-size: 10px;
+            line-height: 1.35;
+          }
+
+          .editorRow,
+          .editorRow.withoutLimits {
+            padding: 11px;
+            gap: 10px;
+          }
+
+          .rowActions {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .rowActions .iconInfo,
+          .rowActions .iconDanger {
+            width: 100%;
+            height: 38px;
+          }
+
+          .applyLine > span {
+            grid-column: auto;
+          }
+
+          .samplesTable {
+            min-width: 720px;
+          }
+
+          .samplesTableWrap {
+            max-height: 300px;
+          }
+
+          .footerBar {
+            position: static;
+            display: grid;
+            grid-template-columns: 1fr;
+            padding: 10px;
+          }
+
+          .footerBar .btn {
+            width: 100%;
+          }
+
+          .criterionModalFooter {
+            align-items: stretch;
+            flex-direction: column-reverse;
+          }
+
+          .criterionModalFooter .btn {
+            width: 100%;
           }
         }
       `}</style>

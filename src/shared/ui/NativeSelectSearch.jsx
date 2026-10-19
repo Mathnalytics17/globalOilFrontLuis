@@ -29,7 +29,7 @@ const getPopupPosition = (select) => {
   const rect = select.getBoundingClientRect();
   const gap = 6;
   const viewportPadding = 10;
-  const minWidth = Math.min(320, window.innerWidth - viewportPadding * 2);
+  const minWidth = Math.min(280, window.innerWidth - viewportPadding * 2);
   const width = Math.max(rect.width, minWidth);
   const safeWidth = Math.min(width, window.innerWidth - viewportPadding * 2);
   const maxHeight = Math.min(420, Math.max(220, window.innerHeight * 0.56));
@@ -149,6 +149,9 @@ export default function NativeSelectSearch() {
       if (popupRef.current?.contains(event.target) || activeSelect.contains(event.target)) return;
       close({ restoreFocus: false });
     };
+    const onDocumentKeyDown = (event) => {
+      if (event.key === 'Escape') close({ restoreFocus: false });
+    };
 
     const observer = new MutationObserver(() => setRevision((current) => current + 1));
     observer.observe(activeSelect, { childList: true, subtree: true, attributes: true });
@@ -156,11 +159,13 @@ export default function NativeSelectSearch() {
     window.addEventListener('resize', refresh);
     window.addEventListener('scroll', refresh, true);
     document.addEventListener('pointerdown', onOutsidePointerDown, true);
+    document.addEventListener('keydown', onDocumentKeyDown);
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', refresh);
       window.removeEventListener('scroll', refresh, true);
       document.removeEventListener('pointerdown', onOutsidePointerDown, true);
+      document.removeEventListener('keydown', onDocumentKeyDown);
     };
   }, [activeSelect, close]);
 

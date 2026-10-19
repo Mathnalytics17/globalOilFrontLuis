@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
+import { createPortal } from 'react-dom';
 import {
   FileSpreadsheet,
   Save,
@@ -44,6 +45,64 @@ const getStatusClass = (status) => {
 
 const isFilled = (value) => value !== undefined && value !== null && String(value).trim() !== '';
 
+const FloatingActionMenu = ({ open, anchorRef, onClose, width = 250, className = '', children }) => {
+  const panelRef = useRef(null);
+  const [position, setPosition] = useState(null);
+
+  useLayoutEffect(() => {
+    if (!open || !anchorRef.current || typeof window === 'undefined') return undefined;
+    const update = () => {
+      const rect = anchorRef.current.getBoundingClientRect();
+      const gap = 6;
+      const padding = 10;
+      const safeWidth = Math.min(width, window.innerWidth - padding * 2);
+      const panelHeight = Math.min(panelRef.current?.offsetHeight || 250, 360);
+      const roomBelow = window.innerHeight - rect.bottom - padding;
+      const roomAbove = rect.top - padding;
+      const openUp = roomBelow < panelHeight && roomAbove > roomBelow;
+      const left = Math.max(padding, Math.min(rect.right - safeWidth, window.innerWidth - safeWidth - padding));
+      const top = openUp
+        ? Math.max(padding, rect.top - panelHeight - gap)
+        : Math.min(rect.bottom + gap, window.innerHeight - panelHeight - padding);
+      setPosition({ top: Math.max(padding, top), left, width: safeWidth });
+    };
+    update();
+    const frame = window.requestAnimationFrame(update);
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open, anchorRef, width]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event) => {
+      if (anchorRef.current?.contains(event.target) || panelRef.current?.contains(event.target)) return;
+      onClose();
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open, anchorRef, onClose]);
+
+  if (!open || !position || typeof document === 'undefined') return null;
+  return createPortal(
+    <div ref={panelRef} className={`excelMenuPanel floatingActionMenu ${className}`} role="menu" style={position}>
+      {children}
+    </div>,
+    document.body,
+  );
+};
+
 function ResultEntryPage() {
   const router = useRouter();
   const [batches, setBatches] = useState([]);
@@ -69,6 +128,8 @@ function ResultEntryPage() {
   const [equipment, setEquipment] = useState([]);
   const [methods, setMethods] = useState([]);
   const [executionConfig, setExecutionConfig] = useState({ equipo_prueba: '', metodo_equipo: '' });
+  const saveMenuRef = useRef(null);
+  const excelMenuRef = useRef(null);
   const formCacheRef = useRef({});
   const excelPreviewValuesRef = useRef({});
   const selectedTestRef = useRef('');
@@ -584,7 +645,7 @@ function ResultEntryPage() {
         </div>
 
         <div className="topActions">
-          <div className="saveMenu">
+          <div className="saveMenu" ref={saveMenuRef}>
             <div className="saveSplit">
               <button type="button" className="btn secondary" onClick={saveAllResults} disabled={saving || !selectedBatchId}>
                 <Save size={16} />
@@ -593,7 +654,7 @@ function ResultEntryPage() {
               <button
                 type="button"
                 className="btn secondary saveMenuToggle"
-                onClick={() => setSaveMenuOpen((current) => !current)}
+                onClick={() => { setExcelMenuOpen(false); setSaveMenuOpen((current) => !current); }}
                 disabled={saving || excelLoading || !selectedBatchId}
                 aria-label="Más acciones para todos los resultados"
                 aria-expanded={saveMenuOpen}
@@ -602,27 +663,25 @@ function ResultEntryPage() {
                 <ChevronDown size={16} />
               </button>
             </div>
-            {saveMenuOpen && (
-              <div className="excelMenuPanel saveMenuPanel" role="menu">
-                <strong className="excelMenuTitle">Acciones del lote</strong>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => { setSaveMenuOpen(false); confirmAllResults(); }}
-                  disabled={stats.total === 0 || stats.proceso === 0}
-                  title={stats.proceso > 0 ? 'Confirma todos los borradores completos y los envía a revisión.' : 'No hay borradores pendientes de confirmar.'}
-                >
-                  <ClipboardCheck size={15} /> Confirmar todos los resultados
-                </button>
-                <small>Solo se confirmarán resultados completos.</small>
-              </div>
-            )}
+            <FloatingActionMenu open={saveMenuOpen} anchorRef={saveMenuRef} onClose={() => setSaveMenuOpen(false)} width={286} className="saveMenuPanel">
+              <strong className="excelMenuTitle">Acciones del lote</strong>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => { setSaveMenuOpen(false); confirmAllResults(); }}
+                disabled={stats.total === 0 || stats.proceso === 0}
+                title={stats.proceso > 0 ? 'Confirma todos los borradores completos y los envía a revisión.' : 'No hay borradores pendientes de confirmar.'}
+              >
+                <ClipboardCheck size={15} /> Confirmar todos los resultados
+              </button>
+              <small>Solo se confirmarán resultados completos.</small>
+            </FloatingActionMenu>
           </div>
-          <div className="excelMenu">
+          <div className="excelMenu" ref={excelMenuRef}>
             <button
               type="button"
               className="btn secondary"
-              onClick={() => setExcelMenuOpen((current) => !current)}
+              onClick={() => { setSaveMenuOpen(false); setExcelMenuOpen((current) => !current); }}
               disabled={!selectedBatchId || excelLoading}
               aria-expanded={excelMenuOpen}
               aria-haspopup="menu"
@@ -630,18 +689,16 @@ function ResultEntryPage() {
               <FileSpreadsheet size={16} />
               Excel
             </button>
-            {excelMenuOpen && (
-              <div className="excelMenuPanel" role="menu">
-                <strong className="excelMenuTitle">Plantilla de carga</strong>
-                <button type="button" role="menuitem" onClick={() => downloadTemplate('consolidado')}>Descargar · todos los resultados</button>
-                <button type="button" role="menuitem" onClick={() => downloadTemplate('por_muestra')}>Descargar · una hoja por muestra</button>
-                <div className="excelMenuDivider" />
-                <label className="excelUploadMenu" role="menuitem">
-                  <Upload size={15} /> Cargar archivo y validar
-                  <input type="file" accept=".xlsx" hidden onChange={previewExcel} />
-                </label>
-              </div>
-            )}
+            <FloatingActionMenu open={excelMenuOpen} anchorRef={excelMenuRef} onClose={() => setExcelMenuOpen(false)} width={250}>
+              <strong className="excelMenuTitle">Plantilla de carga</strong>
+              <button type="button" role="menuitem" onClick={() => { setExcelMenuOpen(false); downloadTemplate('consolidado'); }}>Descargar · todos los resultados</button>
+              <button type="button" role="menuitem" onClick={() => { setExcelMenuOpen(false); downloadTemplate('por_muestra'); }}>Descargar · una hoja por muestra</button>
+              <div className="excelMenuDivider" />
+              <label className="excelUploadMenu" role="menuitem">
+                <Upload size={15} /> Cargar archivo y validar
+                <input type="file" accept=".xlsx" hidden onChange={(event) => { setExcelMenuOpen(false); previewExcel(event); }} />
+              </label>
+            </FloatingActionMenu>
           </div>
           <button
             type="button"
@@ -1041,6 +1098,16 @@ function ResultEntryPage() {
 
         .saveMenuPanel {
           width: 286px;
+        }
+
+        .floatingActionMenu {
+          position: fixed !important;
+          z-index: 5000 !important;
+          top: auto;
+          right: auto;
+          max-height: min(360px, calc(100vh - 20px));
+          overflow-y: auto;
+          border-radius: 10px;
         }
 
         .saveMenuPanel button {
