@@ -49,11 +49,28 @@ jobs:
                       echo "=== Eliminando contenedor frontend anterior ==="
                       docker compose -f docker-compose.prod.yml rm -f frontend || true
 
+                      # The original container may have been created by an
+                      # older Compose project name. Remove only the explicitly
+                      # reserved frontend container as a safe compatibility
+                      # cleanup; do not touch unrelated containers.
+                      docker rm -f frontend 2>/dev/null || true
+
                       echo "=== Verificando puerto 3000 antes del arranque ==="
-                      sudo ss -ltnp | grep :3000 || true
+                      port_holders="$(docker ps --filter publish=3000 --format '{{.ID}} {{.Names}} {{.Ports}}')"
+                      if [ -n "${port_holders}" ]; then
+                        echo "El puerto 3000 sigue ocupado por un contenedor no administrado:"
+                        echo "${port_holders}"
+                        exit 1
+                      fi
+
+                      if sudo ss -ltnp '( sport = :3000 )' | grep -q LISTEN; then
+                        echo "El puerto 3000 está ocupado por un proceso del host, no por Docker:"
+                        sudo ss -ltnp '( sport = :3000 )'
+                        exit 1
+                      fi
 
                       echo "=== Levantando nuevo frontend ==="
-                      docker compose -f docker-compose.prod.yml up -d --no-build --remove-orphans frontend
+                      docker compose -f docker-compose.prod.yml up -d --no-build --force-recreate --remove-orphans frontend
 
                       echo "=== Estado del frontend ==="
                       docker compose -f docker-compose.prod.yml ps frontend
