@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Info, MessageSquareText } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import Modal from './Modal';
 
 let dialogHandler = null;
@@ -70,7 +70,6 @@ const DEFAULTS = {
 function DialogIcon({ type, tone }) {
   if (tone === 'danger' || tone === 'warning') return <AlertTriangle size={22} />;
   if (tone === 'success') return <CheckCircle2 size={22} />;
-  if (type === 'prompt') return <MessageSquareText size={22} />;
   return <Info size={22} />;
 }
 

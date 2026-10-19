@@ -12,20 +12,35 @@ export default function OverflowMenu({ items = [], label = 'Más acciones', alig
     const button = ref.current?.querySelector('button');
     if (!button) return;
     const rect = button.getBoundingClientRect();
-    const menuWidth = 185;
-    const viewportPadding = 8;
+    const menuWidth = 210;
+    const menuHeight = Math.min(menuRef.current?.offsetHeight || 260, 360);
+    const viewportPadding = 10;
+    const gap = 6;
     const left = align === 'left'
-      ? Math.min(rect.left, window.innerWidth - menuWidth - viewportPadding)
-      : Math.max(viewportPadding, rect.right - menuWidth);
-    setPosition({ top: rect.bottom + 6, left });
+      ? Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - menuWidth - viewportPadding))
+      : Math.max(viewportPadding, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - viewportPadding));
+    const roomBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const roomAbove = rect.top - viewportPadding;
+    const openUp = roomBelow < menuHeight && roomAbove > roomBelow;
+    const top = openUp
+      ? Math.max(viewportPadding, rect.top - menuHeight - gap)
+      : Math.min(rect.bottom + gap, window.innerHeight - menuHeight - viewportPadding);
+    setPosition({ top: Math.max(viewportPadding, top), left, width: menuWidth });
   };
 
   useEffect(() => {
     const close = (event) => {
       if (!ref.current?.contains(event.target) && !menuRef.current?.contains(event.target)) setOpen(false);
     };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', close, true);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', close, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
   }, []);
 
   useLayoutEffect(() => {
@@ -59,8 +74,8 @@ export default function OverflowMenu({ items = [], label = 'Más acciones', alig
         <div
           role="menu"
           ref={menuRef}
-          className="fixed z-[100] min-w-[185px] overflow-hidden rounded-lg border border-white/[0.08] bg-[#1b1d20] p-1.5 shadow-2xl"
-          style={{ top: position.top, left: position.left }}
+          className="fixed z-[1000] max-h-[min(360px,calc(100vh-20px))] overflow-y-auto rounded-xl border border-white/[0.10] bg-[#17191c] p-1.5 shadow-2xl"
+          style={{ top: position.top, left: position.left, width: position.width }}
         >
           {visible.map((item, index) => {
             if (item.separator) return <div key={`sep-${index}`} className="my-1 border-t border-white/[0.06]" />;

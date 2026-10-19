@@ -54,7 +54,7 @@ export default function GlobalNavigationLoader() {
     <div className="go-navigation-loader" role="presentation">
       <div className="go-navigation-loader__scrim" />
       <div className="go-navigation-loader__panel">
-        <GlobalOilLoader label="Cargando vista..." />
+        <GlobalOilLoader label="Cargando" />
       </div>
     </div>
   );

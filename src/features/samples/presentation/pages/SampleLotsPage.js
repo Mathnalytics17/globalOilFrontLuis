@@ -553,6 +553,7 @@ const deadlineClass = (status) => ({
   vencida: 'bg-red-950/50 text-red-200 border-red-800',
   vence_hoy: 'bg-amber-950/50 text-amber-200 border-amber-800',
   entregada: 'bg-emerald-950/40 text-emerald-200 border-emerald-800',
+  pendiente_recepcion: 'bg-slate-800/70 text-slate-200 border-slate-600',
 }[status] || 'bg-slate-900 text-slate-200 border-slate-700');
 
 const LotSamplesPanel = ({ lote, data, onPageChange, onOpenSample }) => {
@@ -608,7 +609,10 @@ const LotSamplesPanel = ({ lote, data, onPageChange, onOpenSample }) => {
                   <td className="px-3 py-3 align-top">{formatDate(sample.fecha_toma, true)}</td>
                   <td className="px-3 py-3 align-top"><span className={`go-badge ${sampleStateClass(sample.estado_flujo?.code)}`}>{sample.estado_flujo?.label || '—'}</span></td>
                   <td className="px-3 py-3 align-top min-w-[220px]">
-                    {deadline.configured ? <>
+                    {deadline.configured ? deadline.waiting_reception ? <>
+                      <span className={`rounded border px-2 py-1 text-xs font-semibold ${deadlineClass(deadline.status)}`}>{deadline.label}</span>
+                      <small className="mt-2 flex items-center gap-1 text-gray-500"><CalendarClock size={12} /> El conteo se activa al registrar el ingreso al laboratorio.</small>
+                    </> : <>
                       <div className="flex items-center justify-between gap-2">
                         <span className={`rounded border px-2 py-1 text-xs font-semibold ${deadlineClass(deadline.status)}`}>{deadline.label}</span>
                         <span className="text-xs text-gray-400">{deadline.due_date ? formatDate(deadline.due_date) : '—'}</span>
