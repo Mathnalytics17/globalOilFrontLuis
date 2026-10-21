@@ -36,14 +36,31 @@ const formatDate = (value) => {
   return date.toLocaleString('es-CO');
 };
 
-const getStatusClass = (status) => {
-  if (['aprobado', 'completado'].includes(status)) return 'ok';
-  if (['en_proceso', 'preliminar'].includes(status)) return 'draft';
-  if (['rechazado'].includes(status)) return 'bad';
-  return 'pending';
+const STATUS_PRESENTATION = {
+  aprobado: { label: 'Aprobado', className: 'ok' },
+  completado: { label: 'Pendiente de revisión', className: 'awaiting' },
+  en_proceso: { label: 'Borrador', className: 'draft' },
+  preliminar: { label: 'Pendiente de revisión', className: 'awaiting' },
+  rechazado: { label: 'Requiere corrección', className: 'bad' },
+  pendiente: { label: 'Pendiente', className: 'pending' },
 };
 
+const getStatusPresentation = (status) => STATUS_PRESENTATION[status] || STATUS_PRESENTATION.pendiente;
+const getStatusClass = (status) => getStatusPresentation(status).className;
+const getStatusLabel = (status) => getStatusPresentation(status).label;
+
+const getBatchStatusLabel = (status) => ({
+  resultados_completos: 'Listo para revisión',
+  parcial: 'En revisión',
+  en_laboratorio: 'En laboratorio',
+}[status] || status || '-');
+
 const isFilled = (value) => value !== undefined && value !== null && String(value).trim() !== '';
+
+const newConfirmationKey = () => (
+  globalThis.crypto?.randomUUID?.()
+  || `${Date.now()}-${Math.random().toString(36).slice(2)}`
+);
 
 const FloatingActionMenu = ({ open, anchorRef, onClose, width = 250, className = '', children }) => {
   const panelRef = useRef(null);
@@ -133,6 +150,7 @@ function ResultEntryPage() {
   const formCacheRef = useRef({});
   const excelPreviewValuesRef = useRef({});
   const selectedTestRef = useRef('');
+  const saveInFlightRef = useRef(false);
 
   useEffect(() => {
     loadBatches();
@@ -179,11 +197,15 @@ function ResultEntryPage() {
         return data;
       }
       const queryMuestra = router.query?.muestra ? String(router.query.muestra) : '';
+      const queryTest = router.query?.prueba_muestra ? String(router.query.prueba_muestra) : '';
+      const byQueryTest = queryTest
+        ? data.sample_tests?.find((item) => String(item.id) === queryTest)
+        : null;
       const byQuerySample = queryMuestra
         ? data.sample_tests?.find((item) => String(item.muestra_id || item.muestra) === queryMuestra)
         : null;
       const firstPending = data.sample_tests?.find((item) => !['completado', 'aprobado'].includes(item.estatus));
-      const first = byQuerySample || firstPending || data.sample_tests?.[0];
+      const first = byQueryTest || byQuerySample || firstPending || data.sample_tests?.[0];
       setSelectedTestId(first ? String(first.id) : '');
     } catch (error) {
       console.error(error);
@@ -222,6 +244,7 @@ function ResultEntryPage() {
           equipo_prueba: data.prueba_muestra?.equipo_configurado || data.prueba_muestra?.equipo_configurado_info?.id || '',
           metodo_equipo: data.prueba_muestra?.metodo_configurado || data.prueba_muestra?.metodo_configurado_info?.id || '',
         },
+        confirmationKey: null,
         dirty: false,
       };
       formCacheRef.current[cacheKey] = draft;
@@ -312,6 +335,7 @@ function ResultEntryPage() {
   };
 
   const selectedTest = formData?.prueba_muestra;
+  const selectedTestIsInvalidated = selectedTest?.estatus === 'rechazado' || formData?.current_result?.estatus === 'rechazado';
   const filteredMethods = useMemo(
     () => methods.filter((method) => !executionConfig.equipo_prueba || String(method.equipo_prueba) === String(executionConfig.equipo_prueba)),
     [executionConfig.equipo_prueba, methods]
@@ -347,6 +371,7 @@ function ResultEntryPage() {
       const cached = formCacheRef.current[String(selectedTestId)];
       if (cached) {
         cached.valueMap = next;
+        cached.confirmationKey = null;
         cached.dirty = true;
       }
       return next;
@@ -358,6 +383,7 @@ function ResultEntryPage() {
     const cached = formCacheRef.current[String(selectedTestId)];
     if (cached) {
       cached.observaciones = value;
+      cached.confirmationKey = null;
       cached.dirty = true;
     }
   };
@@ -368,6 +394,7 @@ function ResultEntryPage() {
       const cached = formCacheRef.current[String(selectedTestId)];
       if (cached) {
         cached.executionConfig = next;
+        cached.confirmationKey = null;
         cached.dirty = true;
       }
       return next;
@@ -401,13 +428,36 @@ function ResultEntryPage() {
     fecha_medicion: new Date().toISOString(),
     equipo_prueba: draft?.executionConfig?.equipo_prueba || null,
     metodo_equipo: draft?.executionConfig?.metodo_equipo || null,
+    idempotency_key: draft?.confirmationKey || null,
   });
 
-  const updateLocalStatus = (testId, status) => {
+  const syncSavedResult = (testId, savedTest, savedResult, fallbackStatus) => {
+    const previous = formCacheRef.current[String(testId)];
+    if (!previous?.formData) return;
+    const nextStatus = savedTest?.estatus || fallbackStatus;
+    const nextFormData = {
+      ...previous.formData,
+      prueba_muestra: {
+        ...previous.formData.prueba_muestra,
+        ...savedTest,
+        estatus: nextStatus,
+      },
+      current_result: {
+        ...previous.formData.current_result,
+        estatus: savedResult?.estatus || previous.formData.current_result?.estatus,
+        observaciones: savedResult?.observaciones ?? previous.formData.current_result?.observaciones,
+      },
+    };
+    previous.formData = nextFormData;
+    previous.dirty = false;
+    formCacheRef.current[String(testId)] = previous;
+    setFormData(nextFormData);
     setBatchDetail((current) => current ? {
       ...current,
       sample_tests: (current.sample_tests || []).map((item) => (
-        String(item.id) === String(testId) ? { ...item, estatus: status } : item
+        String(item.id) === String(testId)
+          ? { ...item, ...savedTest, estatus: nextStatus }
+          : item
       )),
     } : current);
   };
@@ -417,36 +467,34 @@ function ResultEntryPage() {
       toast.warning('Seleccione una prueba asignada.');
       return;
     }
+    if (saveInFlightRef.current) return;
 
+    saveInFlightRef.current = true;
     setSaving(true);
     try {
       const cached = formCacheRef.current[String(selectedTestId)];
       const willComplete = currentFormComplete && !draftOnly;
       if (willComplete) {
-        await resultEntryService.confirm(selectedTestId, buildPayloadFromDraft(cached));
+        cached.confirmationKey ||= newConfirmationKey();
+        const response = await resultEntryService.confirm(selectedTestId, buildPayloadFromDraft(cached));
+        syncSavedResult(selectedTestId, response?.prueba_muestra, response?.resultado, 'completado');
+        if (selectedTestIsInvalidated) {
+          toast.success('Corrección confirmada. Continúe con la revisión del ensayo.');
+          window.location.assign(`/muestras/revision-resultados?lote=${selectedBatchId}${selectedSampleId ? `&muestra=${selectedSampleId}` : ''}`);
+          return;
+        }
         toast.success('Resultado completo guardado.');
       } else {
-        await resultEntryService.saveDraft(selectedTestId, buildPayloadFromDraft(cached));
+        const response = await resultEntryService.saveDraft(selectedTestId, buildPayloadFromDraft(cached));
+        syncSavedResult(selectedTestId, response?.prueba_muestra, response?.resultado, 'en_proceso');
         toast.success('Avance guardado como borrador.');
       }
-      if (cached?.formData?.prueba_muestra) {
-        cached.dirty = false;
-        cached.formData = {
-          ...cached.formData,
-          prueba_muestra: {
-            ...cached.formData.prueba_muestra,
-            estatus: willComplete ? 'completado' : 'en_proceso',
-            completada: willComplete,
-          },
-        };
-        setFormData(cached.formData);
-      }
-      updateLocalStatus(selectedTestId, willComplete ? 'completado' : 'en_proceso');
     } catch (error) {
       console.error(error);
       const msg = error?.response?.data?.detail || 'No se pudo guardar el resultado.';
       toast.error(msg);
     } finally {
+      saveInFlightRef.current = false;
       setSaving(false);
     }
   };
@@ -726,10 +774,10 @@ function ResultEntryPage() {
 
         <LotInfo label="Cliente" value={batchDetail?.cliente_nombre || '-'} />
         <LotInfo label="Tipo gestión" value={batchDetail?.tipo_gestion_nombre || '-'} />
-        <LotInfo label="Estado lote" value={batchDetail?.estado || '-'} />
+        <LotInfo label="Estado lote" value={getBatchStatusLabel(batchDetail?.estado)} />
         <LotInfo label="Faltantes" value={stats.pendientes} strong />
         <LotInfo label="En proceso" value={stats.proceso} strong />
-        <LotInfo label="Completadas" value={stats.completadas} strong />
+        <LotInfo label="Listas para revisión" value={stats.completadas} strong />
       </section>
 
       {excelPreview ? (
@@ -785,7 +833,7 @@ function ResultEntryPage() {
                       <strong>{item.prueba?.acronimo || item.prueba?.nombre_variable}</strong>
                       <small>{item.prueba?.nombre_variable} · {item.condicion_configurada || 'Sin condición'}</small>
                     </span>
-                    <em className={getStatusClass(item.estatus)}>{item.estatus || 'pendiente'}</em>
+                    <em className={getStatusClass(item.estatus)}>{getStatusLabel(item.estatus)}</em>
                   </button>
                 ))}
               </div>
@@ -822,7 +870,7 @@ function ResultEntryPage() {
               <button type="button" onClick={() => navigateTest(-1)} disabled={selectedTestPosition <= 0} aria-label="Prueba anterior"><ChevronLeft size={17} /></button>
               <span>{selectedTestPosition >= 0 ? selectedTestPosition + 1 : 0} / {filteredSampleTests.length}</span>
               <button type="button" onClick={() => navigateTest(1)} disabled={selectedTestPosition < 0 || selectedTestPosition >= filteredSampleTests.length - 1} aria-label="Prueba siguiente"><ChevronRight size={17} /></button>
-              <span className={`statusBadge ${getStatusClass(selectedTest?.estatus)}`}>{selectedTest?.estatus || '-'}</span>
+              <span className={`statusBadge ${getStatusClass(selectedTest?.estatus)}`}>{getStatusLabel(selectedTest?.estatus)}</span>
             </div>
           </div>
 
@@ -830,6 +878,7 @@ function ResultEntryPage() {
             <div className="emptyState big">Cargando formulario...</div>
           ) : formData?.fields?.length ? (
             <>
+              {selectedTestIsInvalidated ? <div className="invalidatedResultNotice"><div><strong>Resultado invalidado: requiere corrección</strong><span>Corrija los valores y confirme el resultado. Después volverá a Revisión para una nueva validación; el reporte anterior fue anulado.</span></div></div> : null}
               <div className="executionGrid">
                 <label>
                   <span>Equipo de medición</span>
@@ -923,7 +972,7 @@ function ResultEntryPage() {
                 </button>
                 <button type="button" className="btn red" onClick={() => saveResult()} disabled={saving || !currentFormComplete}>
                   <ClipboardCheck size={16} />
-                  Confirmar resultado
+                  {selectedTestIsInvalidated ? 'Confirmar corrección' : 'Confirmar resultado'}
                 </button>
               </div>
             </>
@@ -1413,6 +1462,12 @@ function ResultEntryPage() {
           border-color: rgba(234,179,8,.35) !important;
         }
 
+        .awaiting {
+          color: #bfdbfe;
+          background: rgba(59,130,246,.14);
+          border-color: rgba(59,130,246,.38) !important;
+        }
+
         .bad {
           color: #fecaca;
           background: rgba(239,68,68,.14);
@@ -1534,6 +1589,20 @@ function ResultEntryPage() {
           justify-content: flex-end;
           margin-top: 10px;
         }
+
+        .invalidatedResultNotice {
+          margin: 0 0 12px;
+          border: 1px solid rgba(239, 68, 68, .62);
+          background: rgba(127, 29, 29, .28);
+          color: #fee2e2;
+          border-radius: 9px;
+          padding: 12px 14px;
+        }
+
+        .invalidatedResultNotice strong,
+        .invalidatedResultNotice span { display: block; }
+        .invalidatedResultNotice strong { font-size: 13px; }
+        .invalidatedResultNotice span { margin-top: 4px; color: #fecaca; font-size: 12px; line-height: 1.4; }
 
         .emptyState {
           min-height: 110px;

@@ -32,7 +32,12 @@ const resourceService = (path) => {
 
 const catalogFields = resourceService('technical-config/catalog-fields');
 const catalogItems = resourceService('technical-config/catalog-items');
-const catalogVersions = resourceService('technical-config/catalog-versions');
+const catalogVersionsBase = resourceService('technical-config/catalog-versions');
+const catalogVersions = {
+  ...catalogVersionsBase,
+  makeCurrent: async (id) => unwrap(await apiClient.post(`${endpoint('technical-config/catalog-versions')}${id}/make-current/`)),
+  deactivate: async (id) => unwrap(await apiClient.post(`${endpoint('technical-config/catalog-versions')}${id}/deactivate/`)),
+};
 const catalogItemValues = resourceService('technical-config/catalog-item-values');
 const limitSourcesBase = resourceService('technical-config/limit-sources');
 
@@ -80,6 +85,7 @@ export const dynamicTechnicalConfigService = {
   testEquipment: resourceService('technical-catalogs/test-equipment'),
   equipmentMethods: resourceService('technical-catalogs/equipment-methods'),
   units: resourceService('technical-catalogs/units'),
+  unitCategories: resourceService('technical-catalogs/unit-categories'),
   conditions: resourceService('technical-catalogs/conditions'),
 };
 

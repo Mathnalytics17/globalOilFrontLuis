@@ -4,8 +4,10 @@ export function userCanSeeItem(item, userRole, hasPermission = () => true) {
   const roleAllowed = !item.roles?.length || item.roles.includes(userRole);
   const permissionAllowed =
     !item.permissionsAny?.length || item.permissionsAny.some((permission) => hasPermission(permission));
+  const requiredPermissionsAllowed =
+    !item.permissionsAll?.length || item.permissionsAll.every((permission) => hasPermission(permission));
 
-  return roleAllowed && permissionAllowed;
+  return roleAllowed && permissionAllowed && requiredPermissionsAllowed;
 }
 
 export function filterNavigation(items, userRole, hasPermission = () => true) {

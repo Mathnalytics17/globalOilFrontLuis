@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { LogIn } from 'lucide-react';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
 
 import { useAuth } from '@features/auth/presentation/context/AuthContext';
 import AuthShell from '@features/auth/presentation/AuthShell';
@@ -9,6 +9,7 @@ import { resolveHomeRoute } from '@features/auth/application/homeRoute';
 
 export default function Login() {
   const [formData, setFormData] = useState({ email: '', password: '' });
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const { login, isAuthenticated, isLoading: authLoading, user, hasPermission } = useAuth();
@@ -75,7 +76,12 @@ export default function Login() {
           {errors.email ? <span className="text-[11px] text-[#e58b91]">{errors.email}</span> : null}
         </label>
         <label className="go-stack !gap-1.5 text-xs font-semibold text-[#b8bdc5]">Contraseña
-          <input className="min-h-10 rounded-md border border-[#353940] bg-[#141518] px-3 text-sm text-white outline-none focus:border-[#595f68]" type="password" name="password" value={formData.password} onChange={handleChange} placeholder="••••••••" />
+          <div className="relative">
+            <input className="min-h-10 w-full rounded-md border border-[#353940] bg-[#141518] px-3 pr-10 text-sm text-white outline-none focus:border-[#595f68]" type={passwordVisible ? 'text' : 'password'} name="password" value={formData.password} onChange={handleChange} placeholder="••••••••" />
+            <button type="button" onClick={() => setPasswordVisible((visible) => !visible)} className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-[#9aa2ad] hover:text-white" aria-label={passwordVisible ? 'Ocultar contraseña' : 'Mostrar contraseña'} title={passwordVisible ? 'Ocultar contraseña' : 'Mostrar contraseña'}>
+              {passwordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
           {errors.password ? <span className="text-[11px] text-[#e58b91]">{errors.password}</span> : null}
         </label>
         <button type="submit" disabled={isLoading} className="go-primary mt-2 w-full"><LogIn className="h-4 w-4" /> {isLoading ? 'Ingresando...' : 'Ingresar'}</button>

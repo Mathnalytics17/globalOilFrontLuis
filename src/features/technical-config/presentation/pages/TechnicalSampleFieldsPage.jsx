@@ -41,6 +41,17 @@ const behaviorOptions = [
 const getCatalogName = (field) =>
   field?.catalogo_info?.nombre || field?.catalogo_nombre || field?.catalogo?.nombre || field?.catalogo || '-';
 
+const catalogSupportsSampleKind = (catalog, sampleKind) => {
+  const catalogKind = catalog?.tipo_muestra || 'ambos';
+  if (sampleKind === 'ambos') return catalogKind === 'ambos';
+  return catalogKind === sampleKind || catalogKind === 'ambos';
+};
+
+const catalogFilterHelp = (sampleKind) => {
+  if (sampleKind === 'ambos') return 'Solo se muestran catálogos generales, porque este campo aparecerá tanto en aceite como en grasa.';
+  return `Solo se muestran catálogos de ${sampleKind === 'grasa' ? 'grasa' : 'aceite'} y catálogos generales.`;
+};
+
 export default function TechnicalSampleFieldsPage() {
   const [fields, setFields] = useState([]);
   const [catalogs, setCatalogs] = useState([]);
@@ -52,6 +63,10 @@ export default function TechnicalSampleFieldsPage() {
   const activeCatalogs = useMemo(
     () => catalogs.filter((catalog) => catalog.activo !== false && !catalog.deleted_at),
     [catalogs]
+  );
+  const compatibleCatalogs = useMemo(
+    () => activeCatalogs.filter((catalog) => catalogSupportsSampleKind(catalog, form.tipo_muestra)),
+    [activeCatalogs, form.tipo_muestra]
   );
 
   const reload = async () => {
@@ -75,11 +90,18 @@ export default function TechnicalSampleFieldsPage() {
   }, []);
 
   const update = (key, value) => {
-    setForm((prev) => ({
-      ...prev,
-      [key]: value,
-      ...(key === 'nombre_visible' && !editingId ? { codigo: slugify(value) } : {}),
-    }));
+    setForm((prev) => {
+      const next = {
+        ...prev,
+        [key]: value,
+        ...(key === 'nombre_visible' && !editingId ? { codigo: slugify(value) } : {}),
+      };
+      if (key === 'tipo_muestra' && prev.catalogo) {
+        const currentCatalog = activeCatalogs.find((catalog) => String(catalog.id) === String(prev.catalogo));
+        if (currentCatalog && !catalogSupportsSampleKind(currentCatalog, value)) next.catalogo = '';
+      }
+      return next;
+    });
   };
 
   const reset = () => {
@@ -237,10 +259,12 @@ export default function TechnicalSampleFieldsPage() {
                   <span className={pageStyles.label}>Catálogo asociado *</span>
                   <select className={pageStyles.select} value={form.catalogo} onChange={(e) => update('catalogo', e.target.value)}>
                     <option value="">Seleccione catálogo</option>
-                    {activeCatalogs.map((catalog) => (
+                    {compatibleCatalogs.map((catalog) => (
                       <option key={catalog.id} value={catalog.id}>{catalog.nombre}</option>
                     ))}
                   </select>
+                  <small className={pageStyles.catalogHelp}>{catalogFilterHelp(form.tipo_muestra)}</small>
+                  {!compatibleCatalogs.length ? <small className={pageStyles.catalogEmpty}>No hay catálogos activos compatibles. Cree uno para este tipo de muestra o use un catálogo general.</small> : null}
                 </label>
 
                 <label className={`${pageStyles.field} ${pageStyles.fieldFull}`}>

@@ -39,6 +39,7 @@ const commonSeparators = ["/", "-", "+", "@", ":", "|"];
 const PruebaForm = ({ mode = "create", id }) => {
   const router = useRouter();
   const [units, setUnits] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [conditions, setConditions] = useState([]);
   const [scales, setScales] = useState([]);
   const [form, setForm] = useState(initialForm);
@@ -49,8 +50,8 @@ const PruebaForm = ({ mode = "create", id }) => {
   const [openResult, setOpenResult] = useState(0);
   const [dragItem, setDragItem] = useState(null);
   const [catalogModal, setCatalogModal] = useState(null);
-  const [unitForm, setUnitForm] = useState({ nombre: "", simbolo: "", magnitud: "" });
-  const [conditionForm, setConditionForm] = useState({ nombre: "", magnitud: "temperatura", valor: "", unidad: "" });
+  const [unitForm, setUnitForm] = useState({ nombre: "", simbolo: "", categoria: "" });
+  const [conditionForm, setConditionForm] = useState({ nombre: "", magnitud_categoria: "", valor: "", unidad: "" });
 
   useEffect(() => {
     init();
@@ -61,13 +62,15 @@ const PruebaForm = ({ mode = "create", id }) => {
     setLoading(true);
     setError("");
     try {
-      const [unitsResponse, conditionsResponse, scalesResponse, prueba] = await Promise.all([
+      const [unitsResponse, categoriesResponse, conditionsResponse, scalesResponse, prueba] = await Promise.all([
         apiClient.get("/technical-catalogs/units/", { params: { activo: "true" } }),
+        apiClient.get("/technical-catalogs/unit-categories/", { params: { activo: "true" } }),
         apiClient.get("/technical-catalogs/conditions/", { params: { activo: "true" } }),
         apiClient.get("/technical-config/comparison-scales/", { params: { activo: "true" } }).catch(() => ({ data: [] })),
         mode === "edit" && id ? testsService.getById(id) : Promise.resolve(null),
       ]);
       setUnits(Array.isArray(unitsResponse.data) ? unitsResponse.data : unitsResponse.data?.results || []);
+      setCategories(Array.isArray(categoriesResponse.data) ? categoriesResponse.data : categoriesResponse.data?.results || []);
       setConditions(Array.isArray(conditionsResponse.data) ? conditionsResponse.data : conditionsResponse.data?.results || []);
       setScales(Array.isArray(scalesResponse.data) ? scalesResponse.data : scalesResponse.data?.results || []);
 
@@ -95,11 +98,11 @@ const PruebaForm = ({ mode = "create", id }) => {
   const setField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
   const createUnit = async () => {
-    if (!unitForm.nombre.trim() || !unitForm.simbolo.trim()) return setError("Nombre y símbolo son obligatorios.");
+    if (!unitForm.nombre.trim() || !unitForm.simbolo.trim() || !unitForm.categoria) return setError("Nombre, símbolo y magnitud son obligatorios.");
     try {
       const response = await apiClient.post("/technical-catalogs/units/", { ...unitForm, activo: true });
       setUnits((current) => [...current, response.data]);
-      setUnitForm({ nombre: "", simbolo: "", magnitud: "" });
+      setUnitForm({ nombre: "", simbolo: "", categoria: "" });
       setCatalogModal(null);
     } catch (err) {
       setError(getApiErrorMessage(err, "No se pudo crear la unidad."));
@@ -107,12 +110,12 @@ const PruebaForm = ({ mode = "create", id }) => {
   };
 
   const createCondition = async () => {
-    if (!conditionForm.nombre.trim() || !conditionForm.valor || !conditionForm.unidad) return setError("Complete nombre, valor y unidad.");
+    if (!conditionForm.nombre.trim() || !conditionForm.magnitud_categoria || conditionForm.valor === '' || !conditionForm.unidad) return setError("Complete nombre, magnitud, valor y unidad.");
     try {
       const response = await apiClient.post("/technical-catalogs/conditions/", { ...conditionForm, activo: true });
       setConditions((current) => [...current, response.data]);
       setField("condicion_catalogo", response.data.id);
-      setConditionForm({ nombre: "", magnitud: "temperatura", valor: "", unidad: "" });
+      setConditionForm({ nombre: "", magnitud_categoria: "", valor: "", unidad: "" });
       setCatalogModal(null);
     } catch (err) {
       setError(getApiErrorMessage(err, "No se pudo crear la condición."));
@@ -549,14 +552,15 @@ const PruebaForm = ({ mode = "create", id }) => {
                 <div className="modal-fields">
                   <label>Nombre *<input value={unitForm.nombre} onChange={(event) => setUnitForm({ ...unitForm, nombre: event.target.value })} /></label>
                   <label>Símbolo *<input value={unitForm.simbolo} onChange={(event) => setUnitForm({ ...unitForm, simbolo: event.target.value })} /></label>
-                  <label>Magnitud<input value={unitForm.magnitud} onChange={(event) => setUnitForm({ ...unitForm, magnitud: event.target.value })} placeholder="Ej: volumen" /></label>
+                  <label>Magnitud *<select value={unitForm.categoria} onChange={(event) => setUnitForm({ ...unitForm, categoria: event.target.value })}><option value="">Seleccione</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.nombre}</option>)}</select></label>
                   <button className="save-button" type="button" onClick={createUnit}>Crear unidad</button>
                 </div>
               ) : (
                 <div className="modal-fields">
                   <label>Nombre *<input value={conditionForm.nombre} onChange={(event) => setConditionForm({ ...conditionForm, nombre: event.target.value })} /></label>
+                  <label>Magnitud *<select value={conditionForm.magnitud_categoria} onChange={(event) => setConditionForm({ ...conditionForm, magnitud_categoria: event.target.value, unidad: "" })}><option value="">Seleccione</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.nombre}</option>)}</select></label>
                   <label>Valor *<input type="number" value={conditionForm.valor} onChange={(event) => setConditionForm({ ...conditionForm, valor: event.target.value })} /></label>
-                  <label>Unidad *<select value={conditionForm.unidad} onChange={(event) => setConditionForm({ ...conditionForm, unidad: event.target.value })}><option value="">Seleccione</option>{units.map((unit) => <option key={unit.id} value={unit.id}>{unitLabel(unit)}</option>)}</select></label>
+                  <label>Unidad *<select value={conditionForm.unidad} disabled={!conditionForm.magnitud_categoria} onChange={(event) => setConditionForm({ ...conditionForm, unidad: event.target.value })}><option value="">{conditionForm.magnitud_categoria ? "Seleccione" : "Primero seleccione una magnitud"}</option>{units.filter((unit) => String(unit.categoria) === String(conditionForm.magnitud_categoria)).map((unit) => <option key={unit.id} value={unit.id}>{unitLabel(unit)}</option>)}</select></label>
                   <button className="save-button" type="button" onClick={createCondition}>Crear condición</button>
                 </div>
               )}

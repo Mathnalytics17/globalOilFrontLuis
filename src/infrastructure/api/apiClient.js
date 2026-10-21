@@ -44,10 +44,21 @@ const mutationKeyFor = (config) => {
 };
 
 let onSessionExpiredCallback = null;
+let sessionExpiryNotified = false;
 
 export const setSessionExpiredHandler = (callback) => {
   onSessionExpiredCallback = callback;
 };
+
+export const resetSessionExpiryNotification = () => {
+  sessionExpiryNotified = false;
+};
+
+export const isSessionExpiredError = (error) => Boolean(
+  error?.isSessionExpired
+  || error?.response?.headers?.['x-session-expired'] === '1'
+  || (error?.response?.status === 401 && !isAuthEndpoint(error?.config?.url || ''))
+);
 
 const getCookie = (name) => {
   if (typeof document === 'undefined') return null;
@@ -87,6 +98,7 @@ apiClient.interceptors.response.use(
     const request = error.config || {};
     const status = error?.response?.status;
     const presentation = getErrorPresentation(error);
+    const serverMarkedExpired = error?.response?.headers?.['x-session-expired'] === '1';
 
     // Some legacy callers still read response.data.detail directly. Normalize
     // sensitive transport/access failures here so those paths cannot turn a
@@ -103,12 +115,19 @@ apiClient.interceptors.response.use(
     }
 
     if (
-      status === 401
+      (status === 401 || serverMarkedExpired)
       && !request._skipSessionExpired
       && !isAuthEndpoint(request.url)
       && typeof onSessionExpiredCallback === 'function'
     ) {
-      onSessionExpiredCallback();
+      // Every protected request may fail at once after a session expires. Mark
+      // the error and notify once so callers can safely finish/cancel without
+      // Next.js presenting several technical Axios overlays.
+      error.isSessionExpired = true;
+      if (!sessionExpiryNotified) {
+        sessionExpiryNotified = true;
+        onSessionExpiredCallback();
+      }
     }
     return Promise.reject(error);
   }

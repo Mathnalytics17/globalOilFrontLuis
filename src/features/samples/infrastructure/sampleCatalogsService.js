@@ -15,6 +15,18 @@ const normalizeText = (value) =>
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 
+const uniqueItems = (items = []) => {
+  const seen = new Set();
+  return items.filter((item) => {
+    // Versions/imports can contain distinct rows with the same business value.
+    // The intake form must never offer the same value twice.
+    const key = normalizeText(item?.codigo || item?.nombre || item?.valor || item?.label);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 const normalizeCatalog = (entry) => {
   const isSampleField = Boolean(entry?.catalogo_info || entry?.catalogo?.items);
   const catalog = isSampleField ? (entry.catalogo_info || entry.catalogo || {}) : entry;
@@ -41,10 +53,10 @@ const normalizeCatalog = (entry) => {
     permite_desconocido: isSampleField ? entry.permite_desconocido !== false : catalog?.permite_desconocido !== false,
     orden: Number(entry?.orden ?? catalog?.orden ?? 0),
     ayuda: entry?.ayuda || catalog?.descripcion || '',
-    items: asArray(catalog?.items).map((item) => ({
+    items: uniqueItems(asArray(catalog?.items).map((item) => ({
       ...item,
       activo: item?.activo !== false,
-    })),
+    }))),
   };
 };
 
@@ -92,7 +104,22 @@ export const sampleCatalogsService = {
 
     const byId = new Map();
     catalogs.forEach((catalog) => {
-      if (catalog?.id) byId.set(String(catalog.sample_field_id || catalog.id), catalog);
+      if (!catalog?.id) return;
+      const key = String(catalog.sample_field_id || catalog.id);
+      const existing = byId.get(key);
+      if (!existing) {
+        byId.set(key, catalog);
+        return;
+      }
+      // A field returned once for aceite and once for grasa represents one
+      // shared field, not two form controls. Preserve its applicability.
+      byId.set(key, {
+        ...existing,
+        tipo_muestra: existing.tipo_muestra === catalog.tipo_muestra ? existing.tipo_muestra : 'ambos',
+        campo_tipo_muestra: existing.campo_tipo_muestra === catalog.campo_tipo_muestra ? existing.campo_tipo_muestra : 'ambos',
+        catalogo_tipo_muestra: existing.catalogo_tipo_muestra === catalog.catalogo_tipo_muestra ? existing.catalogo_tipo_muestra : 'ambos',
+        items: uniqueItems([...(existing.items || []), ...(catalog.items || [])]),
+      });
     });
 
     return Array.from(byId.values()).sort((a, b) => {

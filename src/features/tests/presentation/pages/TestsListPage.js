@@ -139,7 +139,10 @@ export default function PruebasPage() {
 
       setItems(Array.isArray(data.results) ? data.results : []);
     } catch (error) {
-      console.error("Error cargando pruebas:", error);
+      // A 401 is handled centrally by AuthContext and immediately redirects
+      // to login. Logging the Axios object makes Next dev render a technical
+      // error overlay even though this screen recovered correctly.
+      if (error?.response?.status !== 401) console.warn("No se pudieron cargar las pruebas.");
       setItems([]);
     } finally {
       setLoading(false);
@@ -198,8 +201,7 @@ export default function PruebasPage() {
       await testsService.remove(p.id);
       await load();
     } catch (error) {
-      console.error("Error eliminando prueba:", error);
-      appDialog.alert("No se pudo eliminar la prueba.");
+      if (error?.response?.status !== 401) appDialog.alert("No se pudo eliminar la prueba.");
     }
   };
 
@@ -208,8 +210,7 @@ export default function PruebasPage() {
       await testsService.restore(p.id);
       await load();
     } catch (error) {
-      console.error("Error restaurando prueba:", error);
-      appDialog.alert("No se pudo restaurar la prueba.");
+      if (error?.response?.status !== 401) appDialog.alert("No se pudo restaurar la prueba.");
     }
   };
 

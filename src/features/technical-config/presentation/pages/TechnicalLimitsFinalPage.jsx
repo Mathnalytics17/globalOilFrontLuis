@@ -362,14 +362,40 @@ function buildCatalogCombinations(selectedCatalogs, catalogs, items) {
   return combine(0, []).map((selecciones, index) => ({ key: `catalog-${selecciones.map((s) => s.item).join('-')}`, nombre: selecciones.map((s) => s.item_nombre).join(' / '), tipo_criterio: 'catalogo_item', catalogo_item: selecciones.length === 1 ? selecciones[0].item : null, selecciones_catalogo: selecciones, valores: {}, orden: index + 1 }));
 }
 
+function catalogSelectionKey(criterion) {
+  const selections = list(criterion?.selecciones_catalogo)
+    .map((selection) => {
+      const catalogId = idOf(selection?.catalogo || selection?.catalogo_info);
+      const itemId = idOf(selection?.item || selection?.item_info);
+      return catalogId && itemId ? `${catalogId}:${itemId}` : '';
+    })
+    .filter(Boolean)
+    .sort();
+  return selections.join('|');
+}
+
+function criterionIdentity(criterion) {
+  return catalogSelectionKey(criterion)
+    || String(criterion?.codigo || criterion?.key || criterion?.nombre || '');
+}
+
 function mergeExistingCriteria(rows, criteria) {
   return rows.map((row) => {
+    const rowSelectionKey = catalogSelectionKey(row);
     const old = criteria.find((item) => (
-      (item.key && row.key && item.key === row.key)
+      (rowSelectionKey && rowSelectionKey === catalogSelectionKey(item))
+      || (item.key && row.key && item.key === row.key)
       || (item.nombre && row.nombre && item.nombre === row.nombre)
       || (item.codigo && row.codigo && item.codigo === row.codigo)
     ));
-    return { ...row, valores: old?.valores || old?.valores_limite || row.valores || {} };
+    return {
+      ...row,
+      // The synthetic key belongs only to the editor. Keep the persisted
+      // code so import/export and an already-created source address the same
+      // rule after a test label changes its slug.
+      codigo: old?.codigo || row.codigo,
+      valores: old?.valores || old?.valores_limite || row.valores || {},
+    };
   });
 }
 
@@ -377,6 +403,7 @@ function valueInputForField(field, value, onChange, scaleItems = []) {
   const rule = normalizeLimitRule(value, field.operador);
   const patch = (changes) => onChange({ ...rule, ...changes });
   if (field.origen_limite === 'asignacion') return <span className={styles.inlineNote}>Configuración heredada: se convertirá en regla base al guardar.</span>;
+  if (field.operador === 'informativo') return <span className={styles.inlineNote}>No evalúa el resultado técnico.</span>;
   if (field.tipo_comparacion === 'booleano') return <select value={normalizeBooleanLimitValue(field, rule.valor_esperado)} onChange={(event) => patch({ valor_esperado: event.target.value, usar_amarillo: false })}>{booleanOptions(field).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>;
   const isScale = field.tipo_comparacion === 'escala';
   if (['eq', 'neq', 'in', 'not_in'].includes(field.operador)) {
@@ -483,6 +510,10 @@ function mergeConfiguredField(field, saved) {
 
   return {
     ...field,
+    // A saved configuration is the contract used by the API, Excel and the
+    // evaluator. Retaining its code avoids regenerating a different slug
+    // when labels include symbols such as "µm".
+    codigo: saved.codigo || field.codigo,
     operador: operator,
     origen_limite: informative ? 'informativo' : source,
     participa: informative ? false : (saved.participa ?? field.participa),
@@ -494,6 +525,27 @@ function mergeConfiguredField(field, saved) {
     ),
     evaluacion_booleano: saved.evaluacion_booleano ?? field.evaluacion_booleano,
   };
+}
+
+// Field labels are editable and can contain symbols (for example, "µm").
+// The API configuration is therefore the canonical source of the field code:
+// Excel rules are stored under that code and must be rendered under the same
+// one when the wizard is opened again or an import finishes.
+function reconcileFieldsWithConfiguration(fields, source) {
+  const configuredFields = list(source?.configuracion_regla?.campos);
+  if (!configuredFields.length) return fields;
+
+  return fields.map((field) => {
+    const configured = configuredFields.find((item) => (
+      String(item.codigo || '') === String(field.codigo || '')
+      || (
+        String(item.resultado || '') === String(field.resultado || '')
+        && String(item.division || '') === String(field.division || '')
+        && String(item.componente || '') === String(field.componente || '')
+      )
+    ));
+    return mergeConfiguredField(field, configured);
+  });
 }
 
 export default function TechnicalLimitsFinalPage({ initialMode = 'list', initialSourceId = '' }) {
@@ -561,11 +613,7 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
         const sourceTest = await loadTestDetail(tests.find((item) => String(item.id) === String(sourceTestId)) || source.prueba_info || source.prueba);
         if (cancelled) return;
         const baseFields = flattenTest(sourceTest).map(defaultField);
-        const configFields = Array.isArray(source.configuracion_regla?.campos) ? source.configuracion_regla.campos : [];
-        const hydrated = baseFields.map((field) => {
-          const old = configFields.find((item) => String(item.codigo) === String(field.codigo) || (String(item.resultado || '') === String(field.resultado || '') && String(item.componente || '') === String(field.componente || '')));
-          return mergeConfiguredField(field, old);
-        });
+        const hydrated = reconcileFieldsWithConfiguration(baseFields, source);
         setTest(sourceTest);
         setFields(hydrated);
         const existingCriteria = list(source.criterios || source.criterios_limite);
@@ -642,7 +690,7 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
 
   const setCriterionValue = (criterionKey, fieldCode, value) => setCriteria((current) => {
     const rows = catalogCriteria.map((row) => ({ ...row, valores: { ...(row.valores || {}) } }));
-    const index = rows.findIndex((row) => row.key === criterionKey);
+    const index = rows.findIndex((row) => row.key === criterionKey || criterionIdentity(row) === criterionKey);
     if (index >= 0) rows[index].valores[fieldCode] = value;
     return rows;
   });
@@ -650,18 +698,19 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
   const refreshImportedMatrix = async (sourceId) => {
     const updatedSource = await api.limitSources.get(sourceId);
     const updatedCriteria = list(updatedSource?.criterios || updatedSource?.criterios_limite);
+    setFields((current) => reconcileFieldsWithConfiguration(current, updatedSource));
     setCriteria(updatedCriteria);
     setSources((current) => current.map((source) => (
       String(source.id) === String(sourceId) ? { ...source, ...updatedSource } : source
     )));
   };
 
-  const nextError = () => {
-    if (step === 0 && !test) return 'Seleccione una prueba.';
-    if (step === 2 && catalogFields.length && !selectedCatalogs.length) return 'Seleccione al menos un catalogo para los campos que dependen de catalogo.';
-    if (step === 3 && scaleFieldsWithoutItems.length) return `La prueba tiene campos de escala sin escala asociada: ${scaleFieldsWithoutItems.map((field) => field.nombre).join(', ')}. Edite la prueba y asigne la escala en su estructura.`;
-    if (step === 3 && catalogFields.length && !catalogCriteria.length) return 'El catalogo seleccionado no tiene valores disponibles.';
-    if (step === 3) {
+  const nextError = (stepToValidate = step) => {
+    if (stepToValidate === 0 && !test) return 'Seleccione una prueba.';
+    if (stepToValidate === 2 && catalogFields.length && !selectedCatalogs.length) return 'Seleccione al menos un catalogo para los campos que dependen de catalogo.';
+    if (stepToValidate === 3 && scaleFieldsWithoutItems.length) return `La prueba tiene campos de escala sin escala asociada: ${scaleFieldsWithoutItems.map((field) => field.nombre).join(', ')}. Edite la prueba y asigne la escala en su estructura.`;
+    if (stepToValidate === 3 && catalogFields.length && !catalogCriteria.length) return 'El catalogo seleccionado no tiene valores disponibles.';
+    if (stepToValidate === 3) {
       for (const field of directFields) {
         const error = validateRule(field, field.valor_global, field.nombre, scaleItemsForField(field, scaleItemsByScale));
         if (error) return error;
@@ -685,6 +734,21 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
     const error = nextError();
     if (error) return toast.warn(error);
     setStep((value) => Math.min(value + 1, STEPS.length - 1));
+  };
+
+  const goToStep = (targetStep) => {
+    if (targetStep <= step) {
+      setStep(targetStep);
+      return;
+    }
+    for (let stepToValidate = step; stepToValidate < targetStep; stepToValidate += 1) {
+      const error = nextError(stepToValidate);
+      if (error) {
+        toast.warn(error);
+        return;
+      }
+    }
+    setStep(targetStep);
   };
 
   const buildConfigurationPayload = () => {
@@ -737,6 +801,8 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
       const source = await api.limitSources.configure({ ...buildConfigurationPayload(), borrador_matriz: true });
       if (!source?.id) throw new Error('No se pudo preparar la matriz.');
       setDraftSourceId(source.id);
+      setFields((current) => reconcileFieldsWithConfiguration(current, source));
+      setCriteria(list(source.criterios || source.criterios_limite));
       setSources((current) => [...current.filter((item) => String(item.id) !== String(source.id)), source]);
       return source.id;
     } catch (error) {
@@ -750,7 +816,7 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
 
   const save = async () => {
     if (saveInFlight.current) return;
-    const error = nextError();
+    const error = nextError(3);
     if (error) return toast.warn(error);
     saveInFlight.current = true;
     setSaving(true);
@@ -774,7 +840,7 @@ export default function TechnicalLimitsFinalPage({ initialMode = 'list', initial
   return (
     <main className={styles.page}>
       <header className={styles.header}><div><h1>{editing ? 'Crear nueva versión de límites' : 'Nueva configuración de límites'}</h1></div><p>{editing ? 'La versión consultada se usa como base; al guardar se conservará intacta y se publicará una versión nueva.' : 'La estructura viene de la prueba. Cada campo define su propio origen de límite.'}</p></header>
-      <nav className={styles.steps} style={{ gridTemplateColumns: `repeat(${STEPS.length}, 1fr)` }}>{STEPS.map((name, index) => <button key={name} className={index === step ? styles.activeStep : index < step ? styles.doneStep : ''} onClick={() => setStep(index)}><span>{index < step ? <Check size={16} /> : index + 1}</span>{name}</button>)}</nav>
+      <nav className={styles.steps} style={{ gridTemplateColumns: `repeat(${STEPS.length}, 1fr)` }}>{STEPS.map((name, index) => <button key={name} className={index === step ? styles.activeStep : index < step ? styles.doneStep : ''} onClick={() => goToStep(index)}><span>{index < step ? <Check size={16} /> : index + 1}</span>{name}</button>)}</nav>
       <section className={styles.panel}>
         {loading && <GlobalOilLoader label="Cargando configuración de límites..." />}
         {!loading && step === 0 && <TestStep tests={tests} selected={test} onSelect={selectTest} />}
@@ -986,8 +1052,19 @@ function SourceMapStep({ fields, catalogs, selectedCatalogs, setSelectedCatalogs
 
 function MatrixStep({ catalogFields, directFields, criteria, setCriterionValue, updateField, scaleItemsByScale, sourceId, onPrepareDraft, onImported }) {
   const fileRef = useRef(null);
+  const hydratedSourceRef = useRef('');
   const hasPersistedSource = Boolean(sourceId);
   const getMatrixSourceId = async () => sourceId || await onPrepareDraft?.();
+  useEffect(() => {
+    const sourceKey = String(sourceId || '');
+    if (!sourceKey || hydratedSourceRef.current === sourceKey) return;
+    hydratedSourceRef.current = sourceKey;
+    const refresh = onImported?.(sourceId);
+    refresh?.catch(() => {
+      // The standard import action will surface a request error.  This
+      // background hydration only keeps an already-created draft in sync.
+    });
+  }, [sourceId, onImported]);
   const downloadTemplate = async () => {
     try {
       const matrixSourceId = await getMatrixSourceId();
@@ -1017,7 +1094,7 @@ function MatrixStep({ catalogFields, directFields, criteria, setCriterionValue, 
       valor_global: normalizeLimitRule(field.valor_global, operator),
     });
     criteria.forEach((criterion) => {
-      setCriterionValue(criterion.key, field.codigo, { ...normalizeLimitRule(criterion.valores?.[field.codigo], operator), operador: operator });
+      setCriterionValue(criterionIdentity(criterion), field.codigo, { ...normalizeLimitRule(criterion.valores?.[field.codigo], operator), operador: operator });
     });
   };
   return (
@@ -1032,7 +1109,7 @@ function MatrixStep({ catalogFields, directFields, criteria, setCriterionValue, 
         </div>
         <input ref={fileRef} type="file" accept=".xlsx" onChange={importMatrix} hidden />
       </div>
-      {!!catalogFields.length && <section className={styles.limitSection}><h3>Campos dependientes de catalogo</h3><p className={styles.muted}>Cada combinación puede usar una operación distinta para cada campo.</p><div className={styles.tableWrap}><table><thead><tr><th>Combinacion</th>{catalogFields.map((field) => <th key={field.codigo}><strong>{field.nombre}</strong></th>)}</tr></thead><tbody>{criteria.map((criterion) => <tr key={criterion.key}><td><strong>{criterion.nombre}</strong></td>{catalogFields.map((field) => { const rule = criterion.valores?.[field.codigo] || {}; const operator = rule.operador || field.operador; return <td key={field.codigo}><select value={operator} onChange={(event) => setCriterionValue(criterion.key, field.codigo, { ...normalizeLimitRule(rule, event.target.value), operador: event.target.value })}>{operatorsForField(field).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><LimitValueInput field={field} value={{ ...rule, operador: operator }} onChange={(value) => setCriterionValue(criterion.key, field.codigo, { ...value, operador: operator })} scaleItemsByScale={scaleItemsByScale} /></td>; })}</tr>)}</tbody></table></div></section>}
+      {!!catalogFields.length && <section className={styles.limitSection}><h3>Campos dependientes de catalogo</h3><p className={styles.muted}>Cada combinación puede usar una operación distinta para cada campo.</p><div className={styles.tableWrap}><table><thead><tr><th>Combinacion</th>{catalogFields.map((field) => <th key={field.codigo}><strong>{field.nombre}</strong></th>)}</tr></thead><tbody>{criteria.map((criterion) => <tr key={criterion.key}><td><strong>{criterion.nombre}</strong></td>{catalogFields.map((field) => { const rule = criterion.valores?.[field.codigo] || {}; const operator = rule.operador || field.operador; return <td key={field.codigo}><select value={operator} onChange={(event) => setCriterionValue(criterionIdentity(criterion), field.codigo, { ...normalizeLimitRule(rule, event.target.value), operador: event.target.value })}>{operatorsForField(field).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><LimitValueInput field={field} value={{ ...rule, operador: operator }} onChange={(value) => setCriterionValue(criterionIdentity(criterion), field.codigo, { ...value, operador: operator })} scaleItemsByScale={scaleItemsByScale} /></td>; })}</tr>)}</tbody></table></div></section>}
       {!!directFields.length && <section className={styles.limitSection}><h3>Reglas base, escalas y valores esperados</h3><p className={styles.muted}>La regla base se aplica a todas las muestras. Los ajustes permitidos al asignar una prueba conservan esta misma evaluación.</p><div className={styles.directGrid}>{directFields.map((field) => <div key={field.codigo} className={styles.directField}><strong>{field.nombre}</strong><small>{SOURCE_LABELS[field.origen_limite]}</small><select value={field.operador} onChange={(event) => changeOperator(field, event.target.value)}>{operatorsForField(field).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><LimitValueInput field={field} value={field.valor_global} onChange={(value) => updateField(field.codigo, { valor_global: value })} scaleItemsByScale={scaleItemsByScale} /></div>)}</div></section>}
     </div>
   );

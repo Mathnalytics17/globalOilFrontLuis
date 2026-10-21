@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import {
   BarChart3,
+  AlertTriangle,
   Eye,
   FileSpreadsheet,
   FileText,
@@ -203,7 +204,11 @@ function InterpretationPage() {
   const [selectedComments, setSelectedComments] = useState([]);
   const [manualComment, setManualComment] = useState('');
   const [manualComments, setManualComments] = useState([]);
-  const [graphsEnabled, setGraphsEnabled] = useState(true);
+  const [savedInterpretationKey, setSavedInterpretationKey] = useState('');
+  // Ver tendencias es una preferencia de trabajo; incluirlas en el PDF es una
+  // decisión editorial persistida en la interpretación.
+  const [trendsVisible, setTrendsVisible] = useState(true);
+  const [includeTrendsInReport, setIncludeTrendsInReport] = useState(false);
   const [selectedGraphs, setSelectedGraphs] = useState([]);
   const [signatureModal, setSignatureModal] = useState(false);
   const [responsable, setResponsable] = useState('');
@@ -270,6 +275,7 @@ function InterpretationPage() {
     // Eso evitaba una consulta de tendencias con una combinación incorrecta.
     setSampleData(null);
     setSelectedGraphs([]);
+    setSavedInterpretationKey('');
     setTrends([]);
     setTrendGroups([]);
     setTrendScope('máquina');
@@ -280,6 +286,7 @@ function InterpretationPage() {
     if (
       !selectedSampleId
       || sampleData?.muestra?.id !== selectedSampleId
+      || !trendsVisible
       || !selectedGraphs.length
     ) {
       activeTrendKeyRef.current = '';
@@ -294,7 +301,7 @@ function InterpretationPage() {
       loadTrends(selectedSampleId, selectedGraphs, { silent: true });
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [selectedSampleId, sampleData?.muestra?.id, selectedGraphs.join('|')]);
+  }, [selectedSampleId, sampleData?.muestra?.id, selectedGraphs.join('|'), trendsVisible]);
 
   useEffect(() => {
     if (signatureModal && signatureMode === 'draw') {
@@ -338,8 +345,16 @@ function InterpretationPage() {
     setSelectedComments(Array.isArray(data.selected_predefined_comments) ? data.selected_predefined_comments : comments);
     setManualComments(data.comentarios_manuales || []);
     setManualComment('');
-    setGraphsEnabled(data.graficas_activas !== false);
+    setTrendsVisible(true);
+    setIncludeTrendsInReport(Boolean(data.graficas_activas));
     setSelectedGraphs(data.graficas_seleccionadas || []);
+    setSavedInterpretationKey(JSON.stringify({
+      conclusion: data.conclusion || '',
+      selectedComments: Array.isArray(data.selected_predefined_comments) ? data.selected_predefined_comments : comments,
+      manualComments: data.comentarios_manuales || [],
+      includeTrendsInReport: Boolean(data.graficas_activas),
+      selectedGraphs: data.graficas_seleccionadas || [],
+    }));
     setExpandedTests([]);
   };
 
@@ -443,12 +458,18 @@ function InterpretationPage() {
   }, [batch, search]);
 
   const selectedSample = useMemo(() => (batch?.muestras || []).find((sample) => sample.id === selectedSampleId), [batch, selectedSampleId]);
-  const nextSample = useMemo(() => {
-    const samples = batch?.muestras || [];
-    const index = samples.findIndex((sample) => sample.id === selectedSampleId);
-    return index >= 0 ? samples[index + 1] || null : null;
-  }, [batch, selectedSampleId]);
+  const interpretationKey = JSON.stringify({ conclusion, selectedComments, manualComments, includeTrendsInReport, selectedGraphs });
+  const interpretationHasContent = Boolean(conclusion.trim() || selectedComments.length || manualComments.length);
+  const interpretationHasUnsavedChanges = selectedSample?.has_interpretation && interpretationKey !== savedInterpretationKey;
+  const batchReportBlockers = useMemo(() => (batch?.muestras || []).filter((sample) => (
+    !sample.is_revisado || !sample.has_interpretation
+  )), [batch]);
+  const batchCanGenerateReports = batchReportBlockers.length === 0;
   const selectedTests = useMemo(() => sampleData?.sample_tests || getSampleTests(batch, selectedSampleId), [sampleData, batch, selectedSampleId]);
+  const invalidatedTest = useMemo(
+    () => selectedTests.find((test) => test.resultado_invalidado || test?.resultado?.estatus === 'rechazado'),
+    [selectedTests]
+  );
   const evaluatedTests = useMemo(() => selectedTests.map(buildEvaluationTest), [selectedTests]);
   const diagnosticCounts = useMemo(() => evaluatedTests.reduce((counts, test) => {
     if (test.status === 'NORMAL') counts.normal += 1;
@@ -460,8 +481,12 @@ function InterpretationPage() {
   }, { normal: 0, warning: 0, critical: 0, informative: 0, pending: 0 }), [evaluatedTests]);
   const graphOptions = useMemo(() => selectedTests.map((test) => test.prueba?.acronimo).filter(Boolean), [selectedTests]);
 
-  const saveInterpretation = async () => {
-    if (!selectedSampleId) return;
+  const saveInterpretation = async ({ quiet = false } = {}) => {
+    if (!selectedSampleId) return false;
+    if (!interpretationHasContent) {
+      if (!quiet) toast.warning('Agregue una conclusión o al menos un comentario antes de guardar la interpretación.');
+      return false;
+    }
     beginRequest(`Guardando el contenido de ${selectedSampleId}...`);
     setSaving(true);
     try {
@@ -469,23 +494,26 @@ function InterpretationPage() {
         conclusion,
         comentarios_predefinidos: selectedComments,
         comentarios_manuales: manualComments,
-        graficas_activas: graphsEnabled,
+        graficas_activas: includeTrendsInReport,
         graficas_seleccionadas: selectedGraphs,
       });
-      toast.success('Interpretación guardada.');
+      if (!quiet) toast.success('Interpretación guardada en esta muestra.');
       setBatch((current) => current ? {
         ...current,
         muestras: (current.muestras || []).map((sample) => (
           sample.id === selectedSampleId ? {
             ...sample,
-            has_interpretation: Boolean(conclusion.trim() || selectedComments.length || manualComments.length),
+            has_interpretation: true,
           } : sample
         )),
       } : current);
+      setSavedInterpretationKey(interpretationKey);
       await loadSample(selectedSampleId, { force: true, silent: true });
+      return true;
     } catch (error) {
       console.error(error);
-      toast.error('No se pudo guardar la interpretación.');
+      toast.error(error?.response?.data?.detail || 'No se pudo guardar la interpretación.');
+      return false;
     } finally {
       setSaving(false);
       endRequest();
@@ -567,17 +595,12 @@ function InterpretationPage() {
       return;
     }
 
+    const saved = await saveInterpretation({ quiet: true });
+    if (!saved) return;
+
     beginRequest(`Generando la vista previa de ${selectedSampleId}...`);
     setSaving(true);
     try {
-      await reviewInterpretationService.saveInterpretationSample(selectedSampleId, {
-        conclusion,
-        comentarios_predefinidos: selectedComments,
-        comentarios_manuales: manualComments,
-        graficas_activas: graphsEnabled,
-        graficas_seleccionadas: selectedGraphs,
-      });
-
       const response = await reportsService.previewFromInterpretation(selectedSampleId);
       const blob = new Blob([response.data], { type: response.headers?.['content-type'] || 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
@@ -597,10 +620,11 @@ function InterpretationPage() {
       toast.warning('Seleccione una muestra.');
       return;
     }
-    if (reportScope === 'sample' && !selectedSample?.is_revisado) {
+    if (!selectedSample?.is_revisado) {
       toast.warning('Primero debe completar la revisión de todos los resultados de esta muestra.');
       return;
     }
+    setReportScope('sample');
     setResponsable((current) => current || user?.full_name || user?.email || '');
     setSignatureMode(user?.firma_predeterminada ? 'default' : 'draw');
     setSignatureModal(true);
@@ -619,19 +643,14 @@ function InterpretationPage() {
       return;
     }
 
+    if (reportScope !== 'batch' && !await saveInterpretation({ quiet: true })) return;
+
     beginRequest(reportScope === 'batch'
       ? `Generando los reportes de las ${batch?.muestras?.length || 0} muestras...`
       : `Generando el reporte de ${selectedSampleId}...`);
     setSaving(true);
     try {
-      await reviewInterpretationService.saveInterpretationSample(selectedSampleId, {
-        conclusion,
-        comentarios_predefinidos: selectedComments,
-        comentarios_manuales: manualComments,
-        graficas_activas: graphsEnabled,
-        graficas_seleccionadas: selectedGraphs,
-      });
-
+      // El reporte del lote usa únicamente interpretaciones ya guardadas.
       let firma_ruta = '';
       if (signatureFile) {
         const signature = await reportsService.uploadSignature(signatureFile);
@@ -643,15 +662,17 @@ function InterpretationPage() {
         firma_base64: signatureMode === 'draw' ? drawnSignature : '',
         responsable: responsable || undefined,
       };
+      let generatedMessage = '';
       if (reportScope === 'batch') {
         const result = await reportsService.generateBatchFromInterpretation(batchId, reportPayload);
-        toast.success(result.detail || `${result.generated || 0} reportes generados.`);
+        generatedMessage = result.detail || `${result.generated || 0} reportes generados.`;
       } else {
         const report = await reportsService.generateFromInterpretation(selectedSampleId, reportPayload);
-        toast.success(`Reporte ${report.consecutivo} v${report.version} generado.`);
+        generatedMessage = `Reporte ${report.consecutivo} v${report.version} generado.`;
       }
       setSignatureModal(false);
-      router.push('/reportes');
+      await loadSample(selectedSampleId, { force: true, silent: true });
+      toast.success(`${generatedMessage} Puede continuar trabajando aquí.`);
     } catch (error) {
       console.error(error);
       toast.error(error?.response?.data?.detail || 'No se pudo generar el reporte.');
@@ -728,15 +749,6 @@ function InterpretationPage() {
     setManualComments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const saveAndNext = async () => {
-    await saveInterpretation();
-    const samples = batch?.muestras || [];
-    const index = samples.findIndex((sample) => sample.id === selectedSampleId);
-    if (index >= 0 && index < samples.length - 1) {
-      setSelectedSampleId(samples[index + 1].id);
-    }
-  };
-
   const goToRelativeSample = (step) => {
     const samples = batch?.muestras || [];
     const index = samples.findIndex((sample) => sample.id === selectedSampleId);
@@ -766,7 +778,10 @@ function InterpretationPage() {
 
         <div className="topActions">
           <button type="button" className="btn red" onClick={openGenerateReport} disabled={saving || !selectedSampleId}>
-            <FileText size={17} /> Crear reporte(s)
+            <FileText size={17} /> Generar reporte
+          </button>
+          <button type="button" className="btn secondary" onClick={() => router.push(`/reportes${batchId ? `?lote=${batchId}` : ''}`)}>
+            <FileText size={17} /> Ver reportes
           </button>
           <OverflowMenu
             items={[
@@ -828,7 +843,11 @@ function InterpretationPage() {
                 <span>
                   <strong>{sample.id}</strong>
                   <small>{fmtDate(sample.fecha_toma)}</small>
-                  {sample.has_interpretation ? <small className="savedContent">Contenido guardado</small> : null}
+                  {sample.is_revisado ? (
+                    <small className={sample.has_interpretation ? 'savedContent' : 'missingContent'}>
+                      {sample.has_interpretation ? 'Interpretación guardada' : 'Falta guardar interpretación'}
+                    </small>
+                  ) : null}
                 </span>
                 <em className={`pill ${statusClass(sample.estado_revision)}`}>{sample.estado_revision || 'Pendiente'}</em>
               </button>
@@ -837,6 +856,7 @@ function InterpretationPage() {
         </aside>
 
         <main className="contentPane">
+          {sampleData?.interpretacion?.estado === 'requiere_revision' ? <div className="interpretationInvalidationNotice"><AlertTriangle size={18} /><div><strong>Interpretación bloqueada por un resultado invalidado</strong><span>Paso 1 de 3: corrija y confirme {sampleData.interpretacion?.prueba_invalidada ? `el ensayo ${sampleData.interpretacion.prueba_invalidada}` : 'el ensayo afectado'} en Ingreso de resultados. La aplicación lo llevará después a Revisión; al validar, podrá guardar nuevamente esta interpretación.</span></div><button type="button" onClick={() => router.push(`/muestras/resultados?lote=${batchId}&muestra=${selectedSampleId}${invalidatedTest ? `&prueba_muestra=${invalidatedTest.id}` : ''}`)}>Corregir resultado invalidado</button></div> : null}
           <section className="resultsLimits">
             <div className="blockTitle">1. Resultados y límites</div>
             <div className="testEvaluations">
@@ -930,7 +950,11 @@ function InterpretationPage() {
               <button type="button" onClick={clearSuggestedComments}>Limpiar selección</button>
             </div>
             <div className="commentsTable">
-              <div className="commentsHead">Comentarios predefinidos</div>
+              <div className="commentsHead">
+                <span>Comentarios sugeridos por configuración técnica</span>
+                <button type="button" onClick={() => router.push('/configuracion-tecnica/comentarios')}>Configurar comentarios</button>
+              </div>
+              <p className="commentsSourceNote">Cada sugerencia se obtiene del texto configurado para el campo evaluado y su estado actual. No se generan textos por reglas ocultas.</p>
               {predefinedComments.length ? predefinedComments.map((comment, index) => (
                 <div className="commentRow" key={`${comment}-${index}`}>
                   <span>{index + 1}.</span>
@@ -941,7 +965,7 @@ function InterpretationPage() {
                   <button type="button" onClick={() => deselectComment(index)} title="No incluir"><X size={13} /></button>
                 </div>
               )) : (
-                <div className="commentRow"><span>1.</span><label><p>Sin comentarios predefinidos para esta muestra.</p></label></div>
+                <div className="commentRow"><span>1.</span><label><p>No hay textos configurados para los campos y estados de esta muestra. Puede agregarlos desde Configuración técnica.</p></label></div>
               )}
             </div>
 
@@ -963,10 +987,18 @@ function InterpretationPage() {
               <em>{conclusion.length}/1500</em>
             </label>
             <div className="sampleWorkActions">
-              <span>El contenido se guarda por muestra y alimenta su reporte individual.</span>
-              <button type="button" className="btn red" onClick={saveAndNext} disabled={saving || !selectedSampleId}>
-                <Save size={16} /> {nextSample ? 'Guardar y seguir con la siguiente' : 'Guardar interpretación'}
-              </button>
+              <div>
+                <strong>{interpretationHasUnsavedChanges ? 'Cambios sin guardar' : selectedSample?.has_interpretation ? 'Interpretación guardada' : 'Interpretación sin guardar'}</strong>
+                <span>Guardar permanece en esta muestra y no abre Reportes.</span>
+              </div>
+              <div className="interpretationActions">
+                <button type="button" className="btn secondary" onClick={previewReport} disabled={saving || !selectedSampleId}>
+                  <Eye size={16} /> Vista previa
+                </button>
+                <button type="button" className="btn red" onClick={saveInterpretation} disabled={saving || !selectedSampleId}>
+                  <Save size={16} /> Guardar interpretación
+                </button>
+              </div>
             </div>
           </section>
 
@@ -974,8 +1006,12 @@ function InterpretationPage() {
             <div className="trendTop">
               <div className="blockTitle">3. Tendencias históricas <small>Alcance: {trendScope}</small></div>
               <label className="switchLine">
-                <input type="checkbox" checked={graphsEnabled} onChange={(e) => setGraphsEnabled(e.target.checked)} />
-                Incluir tendencias en el informe
+                <input type="checkbox" checked={trendsVisible} onChange={(e) => setTrendsVisible(e.target.checked)} />
+                Ver tendencias aquí
+              </label>
+              <label className="switchLine">
+                <input type="checkbox" checked={includeTrendsInReport} onChange={(e) => setIncludeTrendsInReport(e.target.checked)} />
+                Incluir tendencias en el informe PDF
               </label>
               <div className="chips">
                 {graphOptions.map((option) => (
@@ -983,7 +1019,7 @@ function InterpretationPage() {
                 ))}
               </div>
             </div>
-            {graphsEnabled ? (
+            {trendsVisible ? (
               trendGroups.length ? (
                 <div className="trendGroups">
                   {trendGroups.map((test) => (
@@ -1016,7 +1052,7 @@ function InterpretationPage() {
                   )}
                 </div>
               )
-            ) : <div className="emptyChart">Gráficas desactivadas.</div>}
+            ) : <div className="emptyChart">Las tendencias están ocultas solo en esta pantalla. La selección para el informe no cambia.</div>}
           </section>
         </main>
       </section>
@@ -1029,7 +1065,7 @@ function InterpretationPage() {
               <button type="button" onClick={() => setSignatureModal(false)}>×</button>
             </div>
             <p className="modalIntro">
-              Cada muestra siempre produce su propio reporte y su propia versión. Elija si desea crear solo el reporte actual o uno para cada muestra del lote.
+              Cada muestra genera su propio reporte y su propia versión. Esta acción no lo sacará de Interpretación.
             </p>
 
             <div className="reportScope">
@@ -1037,12 +1073,12 @@ function InterpretationPage() {
                 <input type="radio" name="report-scope" value="sample" checked={reportScope === 'sample'} onChange={() => setReportScope('sample')} />
                 <span><strong>Esta muestra</strong><small>{selectedSampleId}</small></span>
               </label>
-              <label className={reportScope === 'batch' ? 'active' : ''}>
-                <input type="radio" name="report-scope" value="batch" checked={reportScope === 'batch'} onChange={() => setReportScope('batch')} />
-                <span><strong>Todas las muestras del lote</strong><small>Genera {batch?.muestras?.length || 0} reportes individuales</small></span>
+              <label className={`${reportScope === 'batch' ? 'active' : ''} ${batchCanGenerateReports ? '' : 'disabled'}`}>
+                <input type="radio" name="report-scope" value="batch" checked={reportScope === 'batch'} disabled={!batchCanGenerateReports} onChange={() => setReportScope('batch')} />
+                <span><strong>Todas las muestras del lote</strong><small>{batchCanGenerateReports ? `Genera ${batch?.muestras?.length || 0} reportes individuales` : `Pendientes: ${batchReportBlockers.map((sample) => sample.id).join(', ')}`}</small></span>
               </label>
             </div>
-            {reportScope === 'batch' ? <p className="scopeHint">Todas deben estar revisadas y tener su contenido guardado. Después podrá consolidarlas en PDF o ZIP desde Reportes.</p> : null}
+            {reportScope === 'batch' ? <p className="scopeHint">Todas ya están revisadas y con la interpretación guardada. Después podrá consolidarlas en PDF o ZIP desde Reportes.</p> : null}
 
             <label className="signatureField">
               <span>Responsable</span>
@@ -1122,22 +1158,25 @@ function InterpretationPage() {
         .titleBox{display:flex;gap:10px;align-items:center}.titleBox h1{font-size:24px;margin:0}.titleBox p{color:#aeb4bd;margin:3px 0 0;font-size:12.5px}
         .miniIcon{width:42px;height:42px;border:1px solid #444;background:#111;border-radius:9px;display:grid;place-items:center}
         .topActions{display:flex;gap:8px}.btn{min-height:36px;border-radius:7px;border:1px solid #3a3f46;background:#1b1d20;color:#fff;display:inline-flex;align-items:center;gap:7px;padding:0 11px;font-size:12.5px;font-weight:650;cursor:pointer}.btn.red{background:#ef232a;border-color:#ef232a}
+        .btn.secondary{background:#17191c;border-color:#555}
         .exportMenu{position:relative}.exportMenuPanel{position:absolute;right:0;top:calc(100% + 6px);z-index:60;width:240px;border:1px solid #3b3d43;background:#17181b;padding:6px;box-shadow:0 14px 32px rgba(0,0,0,.45)}.exportMenuPanel strong{display:block;padding:8px 10px 5px;color:#fca5a5;font-size:12px}.exportMenuPanel button{width:100%;border:0;background:transparent;color:#f3f3f3;padding:9px 10px;text-align:left;cursor:pointer}.exportMenuPanel button:hover{background:#292b30}
         .summaryLine{display:grid;grid-template-columns:1.2fr 1.2fr repeat(3,1fr);gap:0;border:1px solid #383838;background:#17191c;border-radius:10px;overflow:hidden;margin-bottom:10px}.summaryLine>label,.summaryLine>.info{padding:12px 14px;border-left:1px solid #303030}.summaryLine>:first-child{border-left:0}.summaryLine span,.info label{display:block;color:#aeb6c1;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}.summaryLine select{height:36px;width:100%;border:1px solid #444;background:#111;color:#fff;border-radius:7px;padding:0 9px}.lockedLot{min-height:36px;border-radius:7px;border:1px solid #444;background:#111;color:#fff;padding:0 9px;display:inline-flex;align-items:center;font-weight:900}.lockedLot.action{cursor:pointer;color:#fecaca;border-color:rgba(239,35,42,.45)}.info .value{font-weight:900}
         .mainGrid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:10px}.samplePane,.contentPane section{border:1px solid #383838;background:#191b1e;border-radius:10px}.samplePane{padding:12px}.samplePane h2{font-size:16px;margin:0 0 10px}.searchBox{height:36px;border:1px solid #404040;background:#080808;border-radius:7px;display:grid;grid-template-columns:18px 1fr 18px;align-items:center;gap:8px;padding:0 9px;margin-bottom:10px}.searchBox input{border:0;background:transparent;color:#fff;outline:0}.sampleList{max-height:670px;overflow:auto}.sampleItem{width:100%;min-height:52px;border:0;border-bottom:1px solid #2d2d2d;background:transparent;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;padding:8px;cursor:pointer}.sampleItem.active{background:#2a2d31;border-left:3px solid #ef232a}.sampleItem strong,.sampleItem small{display:block}.sampleItem small{color:#aaa}
+        .sampleItem .savedContent{color:#86efac;margin-top:2px}.sampleItem .missingContent{color:#fcd34d;margin-top:2px}
         .pill{display:inline-flex;align-items:center;border-radius:999px;border:1px solid #444;background:#222;color:#e5e7eb;padding:4px 9px;font-size:12px;font-weight:800}.pill.ok{color:#86efac;border-color:rgba(34,197,94,.45);background:rgba(22,101,52,.35)}.pill.critical{color:#fecaca;border-color:rgba(239,35,42,.6);background:rgba(127,29,29,.32)}.pill.alert{color:#fde047;border-color:rgba(234,179,8,.5);background:rgba(113,63,18,.28)}.pill.warning{color:#facc15;border-color:rgba(250,204,21,.5);background:rgba(113,63,18,.25)}.pill.pending,.pill.neutral{color:#d1d5db}
         .contentPane{display:grid;grid-template-columns:minmax(720px,2fr) 300px;gap:10px;min-width:0}.contentPane section{padding:12px}.resultsLimits{grid-column:1;overflow:hidden}.diagnostic{grid-column:2;grid-row:1}.commentsBox,.trendBox{grid-column:1/3}.blockTitle{font-size:18px;font-weight:900;margin-bottom:10px}
         .testEvaluations{border:1px solid #333;border-radius:8px;overflow:hidden}.testEvaluation{border-top:1px solid #343434;background:#111}.testEvaluation:first-child{border-top:0}.testEvaluationHead{display:grid;grid-template-columns:minmax(130px,.75fr) minmax(210px,1.15fr) minmax(180px,1.2fr) auto;gap:12px;align-items:center;padding:12px 14px;background:#202124}.detailsToggle{min-height:32px;border:1px solid #454545;background:#111;color:#fff;border-radius:7px;padding:0 9px;font-weight:800;cursor:pointer;white-space:nowrap}.testEvaluationHead>div:first-child strong{font-size:16px}.testEvaluationHead>div:first-child span{display:block;color:#aeb6c1;font-size:12px;margin-top:2px}.criterionSummary{border-left:1px solid #383838;padding-left:12px}.criterionSummary small{display:block;color:#8f98a5;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}.criterionSummary strong{font-size:12px;line-height:1.35}.criterionBands{display:grid;gap:4px}.testDecision{display:flex;align-items:flex-start;gap:8px}.testDecision small{color:#b8c0cc;font-size:11px;line-height:1.3}
-        .evaluationGroup{padding:9px 14px!important;border:0!important;border-radius:0!important;background:transparent!important}.evaluationGroupHead{display:flex;align-items:center;gap:8px;margin-bottom:6px}.evaluationGroupHead h4{margin:0!important}.evaluationGroupHead small{color:#8f98a5;font-size:9px}.evaluationGroup h4{margin:0 0 6px;color:#e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:.06em}.evaluationField{display:grid;grid-template-columns:minmax(80px,.65fr) minmax(75px,.55fr) minmax(220px,1.9fr) minmax(160px,1.25fr);gap:10px;align-items:center;padding:7px 0;border-top:1px solid #2c2f34}.evaluationField.fieldLabels{padding:0 0 5px;border-top:0;color:#7f8996;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}.evaluationField.fieldLabels+.evaluationField{border-top:0}.fieldName{font-size:11px;text-transform:uppercase;color:#d9dee7}.fieldValue{font-size:15px}.limitBands{display:flex;flex-wrap:wrap;gap:5px 10px}.limitBand{display:inline-flex;align-items:center;gap:4px;color:#9ca3af;font-size:10px;line-height:1.25}.limitBand i{width:7px;height:7px;border-radius:2px;background:#22c55e;flex:0 0 auto}.limitBand b{color:#e5e7eb}.limitBand.warning i{background:#eab308}.limitBand.critical i{background:#ef232a}.fieldOutcome{display:flex;align-items:flex-start;gap:7px}.fieldOutcome small{color:#aeb6c1;font-size:10px;line-height:1.25}.fieldPill{display:inline-flex;border:1px solid #444;border-radius:999px;padding:3px 7px;font-size:9px;font-weight:900;white-space:nowrap}.fieldPill.ok{color:#86efac;border-color:rgba(34,197,94,.45);background:rgba(22,101,52,.25)}.fieldPill.alert{color:#fde047;border-color:rgba(234,179,8,.5);background:rgba(113,63,18,.25)}.fieldPill.critical{color:#fecaca;border-color:rgba(239,35,42,.55);background:rgba(127,29,29,.25)}.fieldPill.neutral,.fieldPill.pending{color:#d1d5db}.evaluationFallback{display:grid;grid-template-columns:1fr 2fr;gap:12px;padding:12px 14px}.evaluationFallback span small{display:block;color:#8f98a5;font-size:9px;text-transform:uppercase;margin-bottom:3px}.emptyEvaluation{padding:30px;text-align:center;color:#9ca3af}
+        .evaluationGroup{padding:9px 14px!important;border:0!important;border-radius:0!important;background:transparent!important}.evaluationGroupHead{display:flex;align-items:center;gap:8px;margin-bottom:6px}.evaluationGroupHead h4{margin:0!important}.evaluationGroupHead small{color:#8f98a5;font-size:9px}.evaluationGroup h4{margin:0 0 6px;color:#e5e7eb;font-size:11px;text-transform:uppercase;letter-spacing:.06em}.evaluationField{display:grid;grid-template-columns:minmax(160px,1.1fr) minmax(80px,.45fr) minmax(250px,2fr) minmax(180px,1.35fr);gap:10px;align-items:center;padding:7px 0;border-top:1px solid #2c2f34}.evaluationField>*{min-width:0}.evaluationField.fieldLabels{padding:0 0 5px;border-top:0;color:#7f8996;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}.evaluationField.fieldLabels+.evaluationField{border-top:0}.fieldName{font-size:11px;text-transform:uppercase;color:#d9dee7;line-height:1.3;overflow-wrap:anywhere}.fieldValue{font-size:15px;white-space:nowrap}.limitBands{display:flex;flex-wrap:wrap;gap:5px 10px}.limitBand{display:inline-flex;align-items:center;gap:4px;color:#9ca3af;font-size:10px;line-height:1.25}.limitBand i{width:7px;height:7px;border-radius:2px;background:#22c55e;flex:0 0 auto}.limitBand b{color:#e5e7eb}.limitBand.warning i{background:#eab308}.limitBand.critical i{background:#ef232a}.fieldOutcome{display:flex;align-items:flex-start;gap:7px}.fieldOutcome small{color:#aeb6c1;font-size:10px;line-height:1.25}.fieldPill{display:inline-flex;border:1px solid #444;border-radius:999px;padding:3px 7px;font-size:9px;font-weight:900;white-space:nowrap}.fieldPill.ok{color:#86efac;border-color:rgba(34,197,94,.45);background:rgba(22,101,52,.25)}.fieldPill.alert{color:#fde047;border-color:rgba(234,179,8,.5);background:rgba(113,63,18,.25)}.fieldPill.critical{color:#fecaca;border-color:rgba(239,35,42,.55);background:rgba(127,29,29,.25)}.fieldPill.neutral,.fieldPill.pending{color:#d1d5db}.evaluationFallback{display:grid;grid-template-columns:1fr 2fr;gap:12px;padding:12px 14px}.evaluationFallback span small{display:block;color:#8f98a5;font-size:9px;text-transform:uppercase;margin-bottom:3px}.emptyEvaluation{padding:30px;text-align:center;color:#9ca3af}
         .diagRow{min-height:52px;border:1px solid #333;border-left:3px solid #6b7280;border-radius:7px;margin-bottom:8px;padding:9px 10px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 10px}.diagRow span{font-weight:900}.diagRow strong{font-size:20px}.diagRow small{grid-column:1/3;color:#9ca3af}.diagRow.ok{border-left-color:#22c55e}.diagRow.warning{border-left-color:#eab308}.diagRow.critical{border-left-color:#ef232a}.diagRow.neutral{border-left-color:#9ca3af}
-        .commentsTable{border:1px solid #333;border-radius:8px;overflow:hidden}.commentsHead{height:28px;background:#e6edf8;color:#111;padding:5px 9px;font-weight:800}.commentRow{display:grid;grid-template-columns:42px 1fr 28px;align-items:center;min-height:28px;background:#dbe7f5;color:#111;border-top:1px solid #bed0e5}.commentRow span{text-align:center;font-weight:900}.commentRow p{margin:0}.commentRow button{background:transparent;border:0;cursor:pointer}.providerComment{display:grid;gap:6px;margin-top:10px}.providerComment span{font-weight:800}.providerComment textarea{min-height:82px;border:1px solid #404040;background:#080808;color:#fff;border-radius:8px;padding:10px;resize:vertical}.providerComment em{text-align:right;color:#aaa;font-style:normal}.sampleWorkActions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid #333}.sampleWorkActions span{color:#9ca3af;font-size:12px}
+        .commentsTable{border:1px solid #333;border-radius:8px;overflow:hidden}.commentsHead{min-height:34px;background:#e6edf8;color:#111;padding:5px 9px;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:10px}.commentsHead button{border:1px solid #53677f;background:#fff;color:#172033;border-radius:5px;padding:3px 7px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}.commentsSourceNote{margin:0;padding:6px 9px;background:#f3f7fc;color:#43536b;font-size:11px;line-height:1.35;border-top:1px solid #bed0e5}.commentRow{display:grid;grid-template-columns:42px 1fr 28px;align-items:center;min-height:28px;background:#dbe7f5;color:#111;border-top:1px solid #bed0e5}.commentRow span{text-align:center;font-weight:900}.commentRow p{margin:0}.commentRow button{background:transparent;border:0;cursor:pointer}.providerComment{display:grid;gap:6px;margin-top:10px}.providerComment span{font-weight:800}.providerComment textarea{min-height:82px;border:1px solid #404040;background:#080808;color:#fff;border-radius:8px;padding:10px;resize:vertical}.providerComment em{text-align:right;color:#aaa;font-style:normal}.sampleWorkActions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid #333}.sampleWorkActions span{color:#9ca3af;font-size:12px}
+        .sampleWorkActions>div:first-child{display:grid;gap:3px}.sampleWorkActions strong{font-size:13px}.interpretationActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
         .trendTop{display:grid;grid-template-columns:220px 160px 1fr;align-items:center;gap:12px}.trendTop .blockTitle small{display:block;color:#aeb6c1;font-size:10px;font-weight:500;margin-top:3px}.switchLine{display:flex;align-items:center;gap:8px}.chips{display:flex;gap:7px;flex-wrap:wrap}.chip{height:28px;border:1px solid #444;background:#252525;color:#ddd;border-radius:7px;padding:0 10px;cursor:pointer}.chip.active{background:#3b3b3b;border-color:#666;color:#fff}.chartsGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}.chartCard,.emptyChart{min-height:280px;border:1px solid #333;background:#111;border-radius:8px;padding:12px}.chartCard h3{margin:0 0 8px}.interactiveChart{height:220px;border:1px solid #30333b;border-radius:7px;background:#151719;padding:4px;cursor:crosshair}.emptyChart{display:grid;place-items:center;color:#aaa;text-align:center}.chartFoot{color:#aaa;font-size:12px;margin-top:7px}
         .resultUnit{display:inline-flex!important;margin:0 0 0 8px!important;padding:2px 6px;border:1px solid #46505d;border-radius:999px;color:#cbd5e1!important;font-size:9px!important;font-weight:800;letter-spacing:0;text-transform:none;vertical-align:middle}
         .requestOverlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.78);backdrop-filter:blur(3px);display:grid;place-items:center;padding:20px;cursor:wait}.requestCard{width:min(430px,92vw);min-height:210px;border:1px solid #494949;background:#191b1e;border-radius:14px;box-shadow:0 30px 90px rgba(0,0,0,.7);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;text-align:center;padding:26px}.requestCard strong{font-size:18px;line-height:1.35}.requestCard span{color:#b8b8b8;font-size:13px}.requestSpinner{width:54px;height:54px;border:6px solid #454545;border-top-color:#ef232a;border-right-color:#ef232a;border-radius:50%;animation:requestSpin .8s linear infinite}@keyframes requestSpin{to{transform:rotate(360deg)}}
 
         .trendGroups{display:grid;gap:12px;margin-top:10px}.trendTest{padding:0!important;overflow:hidden;background:#111!important}.trendTest>header{display:flex;align-items:baseline;gap:10px;padding:10px 12px;background:#232323;border-bottom:1px solid #383838}.trendTest>header strong{font-size:16px}.trendTest>header span{color:#aeb6c1;font-size:12px}.trendResult{padding:10px 12px;border-top:1px solid #303030}.trendResult:first-of-type{border-top:0}.trendResult>h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;color:#d7dce4}.categoricalGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}.historyCard{border:1px solid #333;background:#111;border-radius:8px;padding:10px;min-width:0}.historyCard h3{font-size:14px;margin:0 0 8px}.historyTable{width:100%;border-collapse:collapse;font-size:12px}.historyTable th,.historyTable td{padding:7px 8px;border-top:1px solid #303030;text-align:left}.historyTable th{color:#9ca3af;text-transform:uppercase;font-size:9px}.historyTable tr.current td{color:#fff;font-weight:800;background:#242424}.savedContent{color:#86efac!important;font-size:10px!important;margin-top:2px}
         .sampleStepBar{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #383838;background:#151515;border-radius:10px;padding:9px 12px;margin-bottom:10px}.sampleStepBar button{height:34px;border:1px solid #444;background:#111;color:#fff;border-radius:7px;padding:0 10px;cursor:pointer}.sampleStepBar span{font-weight:900;color:#ddd}
-        .commentRow label{display:flex!important;align-items:center;gap:9px;min-width:0}.commentRow input{accent-color:#ef232a}.commentsToolbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px}.commentsToolbar button{height:30px;border:1px solid #404040;background:#141414;color:#fff;border-radius:7px;padding:0 10px;font-weight:800;cursor:pointer}.manualCommentBox{display:grid;grid-template-columns:1fr 100px;gap:8px;margin-top:10px}.manualCommentBox input,.manualCommentBox button{min-height:38px;border:1px solid #404040;background:#080808;color:#fff;border-radius:8px;padding:0 10px}.manualCommentBox button{background:#222;font-weight:800;cursor:pointer}.manualList{display:grid;gap:5px;margin-top:8px}.manualList>div{display:grid;grid-template-columns:28px 1fr 28px;align-items:center;border:1px solid #333;background:#111;border-radius:8px;padding:7px 8px}.manualList p{margin:0}.manualList button{background:transparent;border:0;color:#fff;cursor:pointer}.conclusionBox{display:grid;gap:6px;margin-top:12px}.conclusionBox span{font-weight:900;color:#e5e7eb}.conclusionBox textarea{min-height:110px;border:1px solid #404040;background:#080808;color:#fff;border-radius:8px;padding:10px;resize:vertical}.conclusionBox em{text-align:right;color:#aaa;font-style:normal}
+        .interpretationInvalidationNotice{display:flex;gap:10px;align-items:flex-start;border:1px solid #9f3b3b;background:#351b1d;color:#ffd7d7;border-radius:9px;padding:12px;margin-bottom:14px}.interpretationInvalidationNotice svg{flex:0 0 auto;color:#ff7b7b}.interpretationInvalidationNotice strong,.interpretationInvalidationNotice span{display:block}.interpretationInvalidationNotice span{margin-top:3px;color:#f2b4b4;font-size:12px;line-height:1.45}.interpretationInvalidationNotice button{margin-left:auto;align-self:center;border:1px solid #e36b6b;background:#501d21;color:#fff;border-radius:7px;padding:8px 10px;font-weight:800;cursor:pointer;white-space:nowrap}.commentRow label{display:flex!important;align-items:center;gap:9px;min-width:0}.commentRow input{accent-color:#ef232a}.commentsToolbar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px}.commentsToolbar button{height:30px;border:1px solid #404040;background:#141414;color:#fff;border-radius:7px;padding:0 10px;font-weight:800;cursor:pointer}.manualCommentBox{display:grid;grid-template-columns:1fr 100px;gap:8px;margin-top:10px}.manualCommentBox input,.manualCommentBox button{min-height:38px;border:1px solid #404040;background:#080808;color:#fff;border-radius:8px;padding:0 10px}.manualCommentBox button{background:#222;font-weight:800}.manualList{display:grid;gap:5px;margin-top:8px}.manualList>div{display:grid;grid-template-columns:28px 1fr 28px;align-items:center;border:1px solid #333;background:#111;border-radius:8px;padding:7px 8px}.manualList p{margin:0}.manualList button{background:transparent;border:0;color:#fff;cursor:pointer}.conclusionBox{display:grid;gap:6px;margin-top:12px}.conclusionBox span{font-weight:900;color:#e5e7eb}.conclusionBox textarea{min-height:110px;border:1px solid #404040;background:#080808;color:#fff;border-radius:8px;padding:10px;resize:vertical}.conclusionBox em{text-align:right;color:#aaa;font-style:normal}
         .pill.neutral{color:#d1d5db;background:#333}.chartsGrid .chartCard:only-child{grid-column:auto}
         .topActions{flex-wrap:wrap;justify-content:flex-end}.topActions .btn{max-width:220px;justify-content:center;text-align:center;line-height:1.15}.summaryLine>*{min-width:0}.info .value{overflow-wrap:anywhere}.mainGrid{grid-template-columns:280px minmax(0,1fr);min-width:0}.contentPane{grid-template-columns:minmax(0,1fr) 260px}.contentPane section{min-width:0}.commentsBox,.trendBox{overflow:hidden}.pill{max-width:100%;white-space:normal;line-height:1.15}.diagRow{overflow-wrap:anywhere}.commentRow{grid-template-columns:42px minmax(0,1fr) 28px}.commentRow p{overflow-wrap:anywhere}.trendTop{grid-template-columns:auto auto minmax(0,1fr)}.chips{min-width:0}.chip{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chartCard,.emptyChart{min-width:0}.chartCard h3{overflow-wrap:anywhere}
 
@@ -1147,6 +1186,7 @@ function InterpretationPage() {
         .modalHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.modalHead h3{margin:0;font-size:22px}.modalHead button{background:transparent;border:0;color:#fff;font-size:24px;cursor:pointer}
         .modalIntro{color:#c8c8c8;line-height:1.45;margin:0 0 14px}.signatureField{display:grid;gap:6px;margin-bottom:12px}.signatureField span{font-weight:900;color:#e5e7eb}.signatureField input{min-height:40px;border:1px solid #404040;background:#080808;color:#fff;border-radius:8px;padding:0 10px}
         .reportScope{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px}.reportScope label{display:flex;align-items:flex-start;gap:9px;border:1px solid #444;background:#101010;border-radius:9px;padding:11px;cursor:pointer}.reportScope label.active{border-color:#ef232a;background:rgba(127,29,29,.22)}.reportScope input{margin-top:3px;accent-color:#ef232a}.reportScope strong,.reportScope small{display:block}.reportScope small{color:#aeb6c1;margin-top:3px}.scopeHint{border-left:3px solid #eab308;background:rgba(113,63,18,.2);color:#fde68a;padding:9px 10px;margin:0 0 12px;font-size:12px;line-height:1.4}
+        .reportScope label.disabled{opacity:.5;cursor:not-allowed}
         .signaturePreview{min-height:110px;border:1px dashed #555;border-radius:8px;background:#080808;display:grid;place-items:center;margin:10px 0;color:#aaa}.signaturePreview img{max-width:220px;max-height:105px;object-fit:contain;background:#fff;padding:4px}
         .modalActions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
 
@@ -1154,7 +1194,7 @@ function InterpretationPage() {
         .drawSignatureBox{display:grid;gap:8px}.drawSignatureBox canvas{width:100%;height:150px;border:1px dashed #666;border-radius:8px;background:#fff;touch-action:none;cursor:crosshair}.clearSignature{height:34px;border:1px solid #444;background:#151515;color:#fff;border-radius:8px;cursor:pointer;font-weight:800}
 
 
-        @media(max-width:1200px){.summaryLine{grid-template-columns:repeat(2,1fr)}.mainGrid{grid-template-columns:1fr}.chartsGrid,.categoricalGrid{grid-template-columns:1fr}.trendTop{grid-template-columns:1fr}.evaluationField{grid-template-columns:minmax(75px,.6fr) minmax(70px,.5fr) minmax(200px,1.7fr) minmax(145px,1.2fr)}}@media(max-width:800px){.interpTop{flex-direction:column;align-items:flex-start}.summaryLine{grid-template-columns:1fr}.topActions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.topActions .btn{width:100%;max-width:none}.testEvaluationHead{grid-template-columns:1fr}.criterionSummary{border-left:0;border-top:1px solid #383838;padding:9px 0 0}.testDecision{border-top:1px solid #383838;padding-top:9px}.evaluationGroup{overflow-x:auto}.evaluationField{min-width:650px}.sampleStepBar{align-items:stretch;flex-direction:column}.sampleStepBar span{text-align:center}}
+        @media(max-width:1200px){.summaryLine{grid-template-columns:repeat(2,1fr)}.mainGrid{grid-template-columns:1fr}.chartsGrid,.categoricalGrid{grid-template-columns:1fr}.trendTop{grid-template-columns:1fr}.evaluationField{grid-template-columns:minmax(145px,1fr) minmax(75px,.4fr) minmax(215px,1.65fr) minmax(150px,1.05fr)}}@media(max-width:800px){.interpTop{flex-direction:column;align-items:flex-start}.summaryLine{grid-template-columns:1fr}.topActions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.topActions .btn{width:100%;max-width:none}.testEvaluationHead{grid-template-columns:1fr}.criterionSummary{border-left:0;border-top:1px solid #383838;padding:9px 0 0}.testDecision{border-top:1px solid #383838;padding-top:9px}.evaluationGroup{overflow-x:auto}.evaluationField{min-width:650px}.sampleStepBar{align-items:stretch;flex-direction:column}.sampleStepBar span{text-align:center}}
       `}</style>
     </div>
   );

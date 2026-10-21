@@ -2,7 +2,7 @@
 import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowDownToLine, ArrowLeft, ChevronRight, Pencil as Edit3, FileUp, MoreHorizontal, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowLeft, ChevronRight, Pencil as Edit3, FileUp, MoreHorizontal, Plus, Power, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { technicalConfigService } from '../../infrastructure/technicalConfigService';
 import { apiErrorToText, slugify } from '../components/technicalConfigUtils';
@@ -305,13 +305,57 @@ export default function TechnicalCatalogsPage() {
     setSaving(true);
     try {
       const version = await technicalConfigService.createCatalogVersion({ ...versionForm, catalogo: selectedCatalogId });
-      toast.success(`Versión ${version.numero} creada y marcada como actual.`);
+      toast.success(`Versión ${version.numero} creada. Selecciónela como actual cuando esté lista.`);
       setDrawer(null);
       await loadVersions();
       setSelectedVersionId(String(version.id));
     } catch (error) {
       toast.error(apiErrorToText(error) || 'No se pudo crear la versión.');
     } finally { setSaving(false); }
+  };
+
+  const makeVersionCurrent = async (version) => {
+    if (!version?.id) return;
+    if (!await appDialog.confirm(`Usar v${version.numero} como la versión actual del catálogo? Las nuevas muestras y configuraciones usarán esta edición.`)) return;
+    setSaving(true);
+    try {
+      await technicalConfigService.makeCatalogVersionCurrent(version.id);
+      toast.success(`v${version.numero} ahora es la versión actual.`);
+      await Promise.all([loadCatalogs(), loadVersions()]);
+    } catch (error) {
+      toast.error(apiErrorToText(error) || 'No se pudo seleccionar la versión actual.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deactivateVersion = async (version) => {
+    if (!version?.id) return;
+    if (!await appDialog.confirm(`Desactivar v${version.numero}? El catálogo y las otras versiones no cambiarán.`)) return;
+    setSaving(true);
+    try {
+      await technicalConfigService.deactivateCatalogVersion(version.id);
+      toast.success(`v${version.numero} fue desactivada.`);
+      await loadVersions();
+    } catch (error) {
+      toast.error(apiErrorToText(error) || 'No se pudo desactivar la versión.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const restoreVersion = async (version) => {
+    if (!version?.id) return;
+    setSaving(true);
+    try {
+      await technicalConfigService.restoreCatalogVersion(version.id);
+      toast.success(`v${version.numero} fue reactivada.`);
+      await loadVersions();
+    } catch (error) {
+      toast.error(apiErrorToText(error) || 'No se pudo reactivar la versión.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const uploadItems = async (event) => {
@@ -346,13 +390,33 @@ export default function TechnicalCatalogsPage() {
   const deleteCatalog = async (catalog) => {
     if (!catalog?.id) return;
     if (!await appDialog.confirm(`Desactivar el catálogo "${catalog.nombre}"?`)) return;
+    setSaving(true);
     try {
       await technicalConfigService.deleteCatalog(catalog.id);
-      toast.success('Catálogo desactivado.');
-      setSelectedCatalogId('');
+      toast.success('Catálogo desactivado. Ya no se ofrecerá en el ingreso de muestras.');
+      if (String(selectedCatalogId) === String(catalog.id)) {
+        setSelectedCatalogId('');
+        setSelectedVersionId('');
+      }
       await load();
     } catch (error) {
       toast.error(apiErrorToText(error) || 'No se pudo desactivar el catálogo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const restoreCatalog = async (catalog) => {
+    if (!catalog?.id) return;
+    setSaving(true);
+    try {
+      await technicalConfigService.restoreCatalog(catalog.id);
+      toast.success(`Catálogo "${catalog.nombre}" activado. Volverá a estar disponible para su configuración y uso.`);
+      await loadCatalogs();
+    } catch (error) {
+      toast.error(apiErrorToText(error) || 'No se pudo activar el catálogo.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -410,12 +474,18 @@ export default function TechnicalCatalogsPage() {
                 <p className={ps.subtitle}>
                   {selectedVersion.norma_referencia || 'Sin norma de referencia'} · {itemMeta.count} ítems · {selectedVersion.fecha_vigencia || 'Sin fecha de vigencia'}
                 </p>
+                <div className={ps.catalogStateLine}>
+                  <span className={`${ps.statusPill} ${selectedCatalog.activo === false ? ps.inactivePill : ps.activePill}`}>
+                    {selectedCatalog.activo === false ? 'Catálogo inactivo' : 'Catálogo activo'}
+                  </span>
+                  <span className={ps.stateDescription}>{selectedCatalog.activo === false ? 'No puede utilizarse en muestras hasta reactivarlo.' : 'Disponible para formularios y configuración técnica.'}</span>
+                </div>
               </div>
               <div className={ps.actionsRight}>
-                <button type="button" className={ps.buttonPrimary} onClick={openNewItem}>
+                <button type="button" className={ps.buttonPrimary} onClick={openNewItem} disabled={selectedCatalog.activo === false}>
                   <Plus size={21} /> Nuevo item
                 </button>
-                <button type="button" className={ps.buttonSecondary} onClick={() => fileInputRef.current?.click()} disabled={saving}>
+                <button type="button" className={ps.buttonSecondary} onClick={() => fileInputRef.current?.click()} disabled={saving || selectedCatalog.activo === false}>
                   <FileUp size={18} /> Subir Excel
                 </button>
                 <button type="button" className={ps.buttonSecondary} onClick={downloadTemplate}>
@@ -425,9 +495,15 @@ export default function TechnicalCatalogsPage() {
                 <button type="button" className={ps.buttonSecondary} onClick={() => openEditCatalog(selectedCatalog)}>
                   <Edit3 size={18} /> Editar catálogo
                 </button>
-                <button type="button" className={ps.buttonSecondary} onClick={() => deleteCatalog(selectedCatalog)}>
-                  <Trash2 size={18} /> Desactivar
-                </button>
+                {selectedCatalog.activo === false ? (
+                  <button type="button" className={`${ps.buttonSecondary} ${ps.buttonSuccess}`} onClick={() => restoreCatalog(selectedCatalog)} disabled={saving}>
+                    <RotateCcw size={18} /> Activar catálogo
+                  </button>
+                ) : (
+                  <button type="button" className={`${ps.buttonSecondary} ${ps.buttonDanger}`} onClick={() => deleteCatalog(selectedCatalog)} disabled={saving}>
+                    <Power size={18} /> Desactivar catálogo
+                  </button>
+                )}
               </div>
             </header>
 
@@ -448,14 +524,14 @@ export default function TechnicalCatalogsPage() {
                     <td>{item.nombre}</td>
                     <td>{item.codigo}</td>
                     <td><span className={ps.statusPill}><span className={`${ps.statusDot} ${item.activo === false ? '' : ps.greenDot}`} />{item.activo === false ? 'Inactivo' : 'Activo'}</span></td>
-                    <td>
+                    <td><div className={ps.inlineActions}>
                       <button className={ps.tableAction} type="button" onClick={() => openEditItem(item)}>
                         <Edit3 size={18} /> Editar
                       </button>
                       <button className={ps.tableAction} type="button" onClick={() => deleteItem(item)}>
                         <Trash2 size={18} /> Desactivar
                       </button>
-                    </td>
+                    </div></td>
                   </tr>
                 ))}
                 {!selectedItems.length ? (
@@ -475,8 +551,11 @@ export default function TechnicalCatalogsPage() {
             setCatalogForm={setCatalogForm}
             itemForm={itemForm}
             setItemForm={setItemForm}
+            versionForm={versionForm}
+            setVersionForm={setVersionForm}
             saveCatalog={saveCatalog}
             saveItem={saveItem}
+            saveVersion={saveVersion}
             close={() => setDrawer(null)}
             saving={saving}
           />
@@ -488,10 +567,14 @@ export default function TechnicalCatalogsPage() {
   if (selectedCatalog) {
     return (
       <main className={ps.page}><div className={ps.pageScroll}><section className={ps.wideShell}>
-        <button type="button" className={ps.backButton} onClick={() => setSelectedCatalogId('')}><ArrowLeft size={21} />Catálogos técnicos</button>
-        <header className={ps.header}><div className={ps.headerMain}><h1 className={ps.sectionTitle}>{selectedCatalog.nombre}</h1><p className={ps.subtitle}>Versiones publicadas para mantener trazabilidad ante cambios normativos.</p></div><div className={ps.actionsRight}><button type="button" className={ps.buttonPrimary} onClick={openNewVersion}><Plus size={21} />Nueva versión</button></div></header>
+        <button type="button" className={ps.backButton} onClick={() => { setDrawer(null); setSelectedCatalogId(''); }}><ArrowLeft size={21} />Catálogos técnicos</button>
+        <header className={ps.header}><div className={ps.headerMain}><h1 className={ps.sectionTitle}>{selectedCatalog.nombre}</h1><p className={ps.subtitle}>Cree ediciones sin alterar la vigente y seleccione explícitamente cuál se usa.</p><div className={ps.catalogStateLine}><span className={`${ps.statusPill} ${selectedCatalog.activo === false ? ps.inactivePill : ps.activePill}`}>{selectedCatalog.activo === false ? 'Catálogo inactivo' : 'Catálogo activo'}</span><span className={ps.stateDescription}>{selectedCatalog.activo === false ? 'Sus versiones se conservan, pero no se usan en muestras hasta activarlo.' : 'La versión actual es la única usada para nuevos registros.'}</span></div></div><div className={ps.actionsRight}><button type="button" className={ps.buttonPrimary} onClick={openNewVersion} disabled={saving || selectedCatalog.activo === false}><Plus size={21} />Nueva versión</button>{selectedCatalog.activo === false ? <button type="button" className={`${ps.buttonSecondary} ${ps.buttonSuccess}`} onClick={() => restoreCatalog(selectedCatalog)} disabled={saving}><RotateCcw size={18} /> Activar catálogo</button> : <button type="button" className={`${ps.buttonSecondary} ${ps.buttonDanger}`} onClick={() => deleteCatalog(selectedCatalog)} disabled={saving}><Power size={18} /> Desactivar catálogo</button>}</div></header>
         <table className={ps.linearTable}><thead><tr><th>Versión</th><th>Norma de referencia</th><th>Vigencia</th><th>Ítems</th><th>Estado</th><th>Acción</th></tr></thead><tbody>
-          {versions.map((version) => <tr key={version.id} className={String(selectedCatalog.version_actual) === String(version.id) ? ps.selected : ''}><td>v{version.numero}{version.nombre ? ` · ${version.nombre}` : ''}</td><td>{version.norma_referencia || '—'}</td><td>{version.fecha_vigencia || '—'}</td><td>{version.items_count || 0}</td><td><span className={ps.statusPill}>{String(selectedCatalog.version_actual) === String(version.id) ? 'Actual' : (version.activo === false ? 'Inactiva' : 'Histórica')}</span></td><td><button type="button" className={ps.tableAction} onClick={() => { setItemPage(1); setSelectedVersionId(String(version.id)); }}><MoreHorizontal size={19} /> Más <ChevronRight size={20} /></button>{String(selectedCatalog.version_actual) !== String(version.id) ? <button type="button" className={ps.tableAction} disabled={comparisonLoading} onClick={() => compareVersion(version)}>Comparar</button> : null}</td></tr>)}
+          {versions.map((version) => {
+            const isCurrent = String(selectedCatalog.version_actual) === String(version.id);
+            const isActive = version.activo !== false;
+            return <tr key={version.id} className={isCurrent ? ps.selected : ''}><td>v{version.numero}{version.nombre ? ` · ${version.nombre}` : ''}</td><td>{version.norma_referencia || '—'}</td><td>{version.fecha_vigencia || '—'}</td><td>{version.items_count || 0}</td><td><span className={ps.statusPill}>{isCurrent ? 'Actual' : (isActive ? 'Histórica' : 'Inactiva')}</span></td><td><div className={ps.inlineActions}><button type="button" className={ps.tableAction} onClick={() => { setItemPage(1); setSelectedVersionId(String(version.id)); }}><MoreHorizontal size={19} /> Abrir <ChevronRight size={20} /></button>{!isCurrent && isActive ? <button type="button" className={ps.tableAction} disabled={saving || selectedCatalog.activo === false} onClick={() => makeVersionCurrent(version)}>Usar como actual</button> : null}{!isCurrent && isActive ? <button type="button" className={`${ps.tableAction} ${ps.dangerAction}`} disabled={saving} onClick={() => deactivateVersion(version)}>Desactivar versión</button> : null}{!isCurrent && !isActive ? <button type="button" className={`${ps.tableAction} ${ps.successAction}`} disabled={saving || selectedCatalog.activo === false} onClick={() => restoreVersion(version)}>Reactivar versión</button> : null}{!isCurrent ? <button type="button" className={ps.tableAction} disabled={comparisonLoading} onClick={() => compareVersion(version)}>Comparar</button> : null}</div></td></tr>;
+          })}
           {!versions.length ? <tr><td colSpan="6" style={{ color: '#999' }}>Este catálogo aún no tiene versiones.</td></tr> : null}
         </tbody></table>
         {comparison ? <CatalogVersionComparison comparison={comparison} onClose={() => setComparison(null)} /> : null}
@@ -544,11 +627,20 @@ export default function TechnicalCatalogsPage() {
                   <td>{appliesLabel(catalog.tipo_muestra)}</td>
                   <td>{itemCounts.get(String(catalog.id)) || 0}</td>
                   <td><span className={ps.statusPill}>{catalog.activo === false ? 'Inactivo' : 'Activo'}</span></td>
-                  <td>
+                  <td><div className={ps.inlineActions}>
                     <button type="button" className={ps.tableAction} onClick={() => { setItemPage(1); setSelectedCatalogId(String(catalog.id)); }}>
-                      Más <ChevronRight size={22} />
+                      Abrir <ChevronRight size={22} />
                     </button>
-                  </td>
+                    {catalog.activo === false ? (
+                      <button type="button" className={`${ps.tableAction} ${ps.successAction}`} onClick={() => restoreCatalog(catalog)} disabled={saving}>
+                        <RotateCcw size={16} /> Activar catálogo
+                      </button>
+                    ) : (
+                      <button type="button" className={`${ps.tableAction} ${ps.dangerAction}`} onClick={() => deleteCatalog(catalog)} disabled={saving}>
+                        <Power size={16} /> Desactivar catálogo
+                      </button>
+                    )}
+                  </div></td>
                 </tr>
               ))}
               {!filteredCatalogs.length ? (
@@ -574,8 +666,11 @@ export default function TechnicalCatalogsPage() {
           setCatalogForm={setCatalogForm}
           itemForm={itemForm}
           setItemForm={setItemForm}
+          versionForm={versionForm}
+          setVersionForm={setVersionForm}
           saveCatalog={saveCatalog}
           saveItem={saveItem}
+          saveVersion={saveVersion}
           close={() => setDrawer(null)}
           saving={saving}
         />
@@ -602,8 +697,8 @@ function CatalogDrawer({
   setCatalogForm,
   itemForm,
   setItemForm,
-  versionForm,
-  setVersionForm,
+  versionForm = EMPTY_VERSION,
+  setVersionForm = () => {},
   saveCatalog,
   saveItem,
   saveVersion,

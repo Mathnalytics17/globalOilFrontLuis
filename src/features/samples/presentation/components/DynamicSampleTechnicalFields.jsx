@@ -26,8 +26,16 @@ const definitionFromCatalog = (catalog) => ({
   dynamic: true,
 });
 
-const getActiveItems = (catalog) =>
-  (catalog?.items || []).filter((item) => item.activo !== false && !item.deleted_at);
+const getActiveItems = (catalog) => {
+  const seen = new Set();
+  return (catalog?.items || []).filter((item) => {
+    if (item.activo === false || item.deleted_at) return false;
+    const key = normalizeText(item?.codigo || item?.nombre || item?.valor || item?.label);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 
 const catalogAllowsUnknown = (catalog) => catalog?.permite_desconocido !== false;
 

@@ -518,6 +518,7 @@ function AsignacionPruebasPage() {
   const [bundles, setBundles] = useState([]);
   const [conditions, setConditions] = useState([]);
   const [units, setUnits] = useState([]);
+  const [unitCategories, setUnitCategories] = useState([]);
   const [limitSources, setLimitSources] = useState([]);
   const [limitFields, setLimitFields] = useState([]);
   const [limitItems, setLimitItems] = useState([]);
@@ -543,9 +544,10 @@ function AsignacionPruebasPage() {
   const [criterionModalSnapshot, setCriterionModalSnapshot] = useState(null);
   const [resultConfigRowKey, setResultConfigRowKey] = useState(null);
   const [infoRowKey, setInfoRowKey] = useState(null);
+  const [criterionHintRowKey, setCriterionHintRowKey] = useState(null);
   const [assignmentSampleId, setAssignmentSampleId] = useState(null);
   const [creatingUnit, setCreatingUnit] = useState(false);
-  const [unitForm, setUnitForm] = useState({ nombre: '', simbolo: '', magnitud: '' });
+  const [unitForm, setUnitForm] = useState({ nombre: '', simbolo: '', categoria: '' });
   const [templateForm, setTemplateForm] = useState({
     nombre: '',
     descripcion: '',
@@ -580,6 +582,7 @@ function AsignacionPruebasPage() {
         bundlesList,
         conditionList,
         unitList,
+        unitCategoryList,
         limitSourceList,
         limitFieldList,
         catalogItemList,
@@ -593,6 +596,7 @@ function AsignacionPruebasPage() {
         predefinedTestBatchesService.list({}),
         technicalConfigService.listConditions({ activo: true, page_size: 1000 }),
         technicalConfigService.listUnits({ activo: true, page_size: 1000 }),
+        technicalConfigService.listUnitCategories({ activo: true, page_size: 1000 }),
         technicalConfigService.listLimitSources({ historial: true, page_size: 5000 }),
         technicalConfigService.listLimitFields({ historial: true, page_size: 5000 }),
         technicalConfigService.listCatalogItems({ activo: true, page_size: 1000 }),
@@ -614,6 +618,7 @@ function AsignacionPruebasPage() {
       setBundles(bundlesList);
       setConditions(conditionList);
       setUnits(unitList);
+      setUnitCategories(unitCategoryList);
       setLimitSources(limitSourceList);
       setLimitFields(limitFieldList);
       setLimitItems(catalogItemList);
@@ -1483,8 +1488,8 @@ function AsignacionPruebasPage() {
   };
 
   const createUnitInline = async () => {
-    if (!unitForm.nombre.trim() || !unitForm.simbolo.trim()) {
-      toast.warning('Escribe el nombre y el símbolo de la unidad.');
+    if (!unitForm.nombre.trim() || !unitForm.simbolo.trim() || !unitForm.categoria) {
+      toast.warning('Escribe el nombre, el símbolo y la magnitud de la unidad.');
       return;
     }
     setCreatingUnit(true);
@@ -1496,7 +1501,7 @@ function AsignacionPruebasPage() {
       setUnits((previous) => [...previous, created].sort((left, right) => (
         String(left.nombre || '').localeCompare(String(right.nombre || ''), 'es')
       )));
-      setUnitForm({ nombre: '', simbolo: '', magnitud: '' });
+      setUnitForm({ nombre: '', simbolo: '', categoria: '' });
       toast.success('Unidad creada y disponible.');
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'No se pudo crear la unidad.');
@@ -1807,11 +1812,25 @@ function AsignacionPruebasPage() {
                                     <small>{assignmentFields.length} campo(s) ajustables</small>
                                   </button>
                                 ) : null}
-                                {catalogSources.length ? (
-                                  <small className={detected?.missing || detected?.mixed ? 'criterionHint warn' : 'criterionHint'}>
-                                    {detected?.label || `Seleccione ${catalogName}`}
-                                  </small>
-                                ) : null}
+                                {catalogSources.length ? (() => {
+                                  const hint = detected?.label || `Seleccione ${catalogName}`;
+                                  const isHintOpen = criterionHintRowKey === row.key;
+                                  return (
+                                    <span className={`criterionHintWrapper ${isHintOpen ? 'open' : ''}`}>
+                                      <button
+                                        type="button"
+                                        className={detected?.missing || detected?.mixed ? 'criterionHint warn' : 'criterionHint'}
+                                        aria-expanded={isHintOpen}
+                                        aria-label={`Ver detalle: ${hint}`}
+                                        onClick={() => setCriterionHintRowKey(isHintOpen ? null : row.key)}
+                                        onBlur={() => setCriterionHintRowKey(null)}
+                                      >
+                                        {hint}
+                                      </button>
+                                      <span className="criterionHintPopover" role="tooltip">{hint}</span>
+                                    </span>
+                                  );
+                                })() : null}
                               </div>
                             );
                           }
@@ -1917,9 +1936,25 @@ function AsignacionPruebasPage() {
                                   <option key={item.id} value={item.id}>{item.nombre}</option>
                                 ))}
                               </select>
-                              <small className={detected?.missing || detected?.mixed ? 'criterionHint warn' : 'criterionHint'}>
-                                {detected?.label || `Seleccione ${catalogName}`}
-                              </small>
+                              {(() => {
+                                const hint = detected?.label || `Seleccione ${catalogName}`;
+                                const isHintOpen = criterionHintRowKey === row.key;
+                                return (
+                                  <span className={`criterionHintWrapper ${isHintOpen ? 'open' : ''}`}>
+                                    <button
+                                      type="button"
+                                      className={detected?.missing || detected?.mixed ? 'criterionHint warn' : 'criterionHint'}
+                                      aria-expanded={isHintOpen}
+                                      aria-label={`Ver detalle: ${hint}`}
+                                      onClick={() => setCriterionHintRowKey(isHintOpen ? null : row.key)}
+                                      onBlur={() => setCriterionHintRowKey(null)}
+                                    >
+                                      {hint}
+                                    </button>
+                                    <span className="criterionHintPopover" role="tooltip">{hint}</span>
+                                  </span>
+                                );
+                              })()}
                             </div>
                           );
                         })()}
@@ -2189,11 +2224,14 @@ function AsignacionPruebasPage() {
                       placeholder="Símbolo"
                       onChange={(event) => setUnitForm((current) => ({ ...current, simbolo: event.target.value }))}
                     />
-                    <input
-                      value={unitForm.magnitud}
-                      placeholder="Magnitud (opcional)"
-                      onChange={(event) => setUnitForm((current) => ({ ...current, magnitud: event.target.value }))}
-                    />
+                    <select
+                      value={unitForm.categoria}
+                      aria-label="Magnitud de la unidad"
+                      onChange={(event) => setUnitForm((current) => ({ ...current, categoria: event.target.value }))}
+                    >
+                      <option value="">Magnitud *</option>
+                      {unitCategories.map((category) => <option key={category.id} value={category.id}>{category.nombre}</option>)}
+                    </select>
                     <button type="button" className="btn secondary" disabled={creatingUnit} onClick={createUnitInline}>
                       <Plus size={15} />
                       Crear
@@ -2957,12 +2995,24 @@ function AsignacionPruebasPage() {
           font-size: 12px;
         }
 
+        .criterionHintWrapper {
+          position: relative;
+          display: block;
+          min-width: 0;
+        }
+
         .criterionHint {
+          display: block;
+          width: 100%;
+          padding: 0 2px;
+          border: 0;
+          background: transparent;
+          text-align: left;
+          cursor: help;
           color: #9ed7b0;
           font-size: 11px;
           font-weight: 800;
           line-height: 1.25;
-          padding: 0 2px;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
@@ -2970,6 +3020,42 @@ function AsignacionPruebasPage() {
 
         .criterionHint.warn {
           color: #facc15;
+        }
+
+        .criterionHint:focus-visible {
+          outline: 2px solid #facc15;
+          outline-offset: 2px;
+          border-radius: 3px;
+        }
+
+        .criterionHintPopover {
+          position: absolute;
+          z-index: 30;
+          left: 0;
+          bottom: calc(100% + 8px);
+          width: max-content;
+          max-width: min(360px, 70vw);
+          padding: 9px 11px;
+          border: 1px solid #65520f;
+          border-radius: 7px;
+          background: #29220d;
+          box-shadow: 0 8px 20px rgba(0, 0, 0, .45);
+          color: #fde68a;
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1.35;
+          white-space: normal;
+          pointer-events: none;
+          opacity: 0;
+          transform: translateY(4px);
+          transition: opacity .15s ease, transform .15s ease;
+        }
+
+        .criterionHintWrapper:hover .criterionHintPopover,
+        .criterionHintWrapper:focus-within .criterionHintPopover,
+        .criterionHintWrapper.open .criterionHintPopover {
+          opacity: 1;
+          transform: translateY(0);
         }
 
         .criterionModalButton {
