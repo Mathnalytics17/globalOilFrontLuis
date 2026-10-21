@@ -640,8 +640,11 @@ function AsignacionPruebasPage() {
   );
 
   const getDefaultSourceForTest = (testId) => (
-    getSourcesForTest(testId).find((source) => source.activo !== false && !source.deleted_at)
-    || getSourcesForTest(testId)[0]
+    getSourcesForTest(testId).find((source) => (
+      source.activo !== false
+      && source.publicada !== false
+      && !source.deleted_at
+    ))
     || null
   );
 
