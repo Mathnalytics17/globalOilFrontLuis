@@ -964,6 +964,10 @@ const NuevoLoteMuestrasPage = () => {
         ? String(source.maquina)
         : "",
 
+      punto_muestreo: source.punto_muestreo
+        ? String(source.punto_muestreo)
+        : "",
+
       equipo_placa:
         source.equipo_placa ||
         source.placa ||
@@ -974,6 +978,10 @@ const NuevoLoteMuestrasPage = () => {
         source.punto_muestreo_manual ||
         source.punto_manual ||
         "",
+
+      lubricante_catalogo: source.lubricante_catalogo
+        ? String(source.lubricante_catalogo)
+        : "",
 
       periodo_servicio_aceite:
         source.periodo_servicio_aceite ??

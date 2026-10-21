@@ -33,7 +33,7 @@ export default function SecurityInvitationsPage() {
     try {
       const [invites, companyList] = await Promise.all([
         securityService.invitations.list(filters),
-        global ? companiesService.list() : Promise.resolve([]),
+        global ? companiesService.list({ include_internal: true }) : Promise.resolve([]),
       ]);
       setItems(getList(invites));
       setCompanies(getList(companyList));

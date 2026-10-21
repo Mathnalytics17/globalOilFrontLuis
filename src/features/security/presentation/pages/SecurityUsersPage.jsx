@@ -79,7 +79,7 @@ export default function SecurityUsersPage() {
       const [usersData, rolesData, companiesData] = await Promise.all([
         securityService.users.list(filters),
         securityService.roles.assignable({ scope: global ? '' : 'COMPANY' }),
-        global ? companiesService.list() : Promise.resolve([]),
+        global ? companiesService.list({ include_internal: true }) : Promise.resolve([]),
       ]);
       setUsers(getList(usersData).map(normalizeUser));
       setRoles(getList(rolesData));
@@ -99,6 +99,16 @@ export default function SecurityUsersPage() {
     if (global) return roles;
     return roles.filter((role) => String(role.scope || role.tipo || '').toUpperCase() !== 'GLOBAL');
   }, [roles, global]);
+  const selectedInviteCompany = useMemo(
+    () => companies.find((company) => String(company.id) === String(inviteForm.empresa)),
+    [companies, inviteForm.empresa]
+  );
+  const inviteRoles = useMemo(() => {
+    if (!global) return visibleRoles.filter((role) => String(role.scope || role.tipo || '').toUpperCase() === 'COMPANY');
+    if (!selectedInviteCompany) return [];
+    const requiredScope = selectedInviteCompany.is_internal ? 'INTERNAL' : 'COMPANY';
+    return visibleRoles.filter((role) => String(role.scope || role.tipo || '').toUpperCase() === requiredScope);
+  }, [global, visibleRoles, selectedInviteCompany]);
 
   const filteredUsers = useMemo(() => {
     const q = filters.search.trim().toLowerCase();
@@ -363,10 +373,11 @@ export default function SecurityUsersPage() {
               <>
                 <div className={s.field}>
                   <label>Empresa <b>*</b></label>
-                  <select className={s.select} value={inviteForm.empresa} onChange={(e) => setInviteForm((p) => ({ ...p, empresa: e.target.value }))} required>
+                  <select className={s.select} value={inviteForm.empresa} onChange={(e) => setInviteForm((p) => ({ ...p, empresa: e.target.value, role: '' }))} required>
                     <option value="">Seleccione empresa</option>
-                    {companies.map((company) => <option key={company.id} value={company.id}>{getName(company)}</option>)}
+                    {companies.map((company) => <option key={company.id} value={company.id}>{getName(company)}{company.is_internal ? ' · interna' : ''}</option>)}
                   </select>
+                  <span className={s.help}>{selectedInviteCompany?.is_internal ? 'Global Oil: aquí se asignan roles internos, como Laboratorista o Revisor.' : 'Empresa cliente: aquí se asignan únicamente roles de empresa.'}</span>
                 </div>
                 <label className={s.field}>
                   <span><input type="checkbox" checked={inviteForm.transfer_existing} onChange={(e) => setInviteForm((p) => ({ ...p, transfer_existing: e.target.checked }))} /> Reinvitar y transferir si ya existe</span>
@@ -376,9 +387,9 @@ export default function SecurityUsersPage() {
             ) : null}
             <div className={s.field}>
               <label>Rol <b>*</b></label>
-              <select className={s.select} value={inviteForm.role} onChange={(e) => setInviteForm((p) => ({ ...p, role: e.target.value }))} required>
-                <option value="">Seleccione rol</option>
-                {visibleRoles.map((role) => <option key={role.id} value={role.id}>{role.nombre || role.name || role.code}</option>)}
+              <select className={s.select} value={inviteForm.role} onChange={(e) => setInviteForm((p) => ({ ...p, role: e.target.value }))} required disabled={global && !selectedInviteCompany}>
+                <option value="">{global && !selectedInviteCompany ? 'Seleccione primero la empresa' : 'Seleccione rol'}</option>
+                {inviteRoles.map((role) => <option key={role.id} value={role.id}>{role.nombre || role.name || role.code}</option>)}
               </select>
             </div>
             <div className={s.field}>

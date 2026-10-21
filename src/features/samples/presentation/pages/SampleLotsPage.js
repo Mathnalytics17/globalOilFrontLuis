@@ -31,6 +31,7 @@ import DataTable from '@shared/ui/DataTable';
 import AppErrorState from '@shared/ui/AppErrorState';
 import { notifyApiError } from '@shared/ui/notifications';
 import { useAuth } from '@features/auth/presentation/context/AuthContext';
+import { isGlobalUser } from '@features/auth/application/sessionAccess';
 import { companiesService } from '@features/companies/infrastructure/companiesService';
 import { machinesService } from '@features/machines/infrastructure/machinesService';
 import { assetTreeService } from '@features/asset-tree/infrastructure/assetTreeService';
@@ -159,7 +160,8 @@ const normalizeArrayResponse = (data) => {
 
 const LotesMuestrasPage = () => {
   const router = useRouter();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
+  const canViewOperationalDeadlines = isGlobalUser(user);
   const [lotes, setLotes] = useState([]);
   const [resumen, setResumen] = useState(null);
   const [companies, setCompanies] = useState([]);
@@ -477,6 +479,7 @@ const LotesMuestrasPage = () => {
                   <LotSamplesPanel
                     lote={row}
                     data={lotSamples[row.id]}
+                    showDeadline={canViewOperationalDeadlines}
                     onPageChange={(nextPage) => fetchLotSamples(row.id, nextPage)}
                     onOpenSample={(sample) => router.push(`/muestras/lotes/${row.id}/muestras/${sample.id}`)}
                   />
@@ -556,7 +559,7 @@ const deadlineClass = (status) => ({
   pendiente_recepcion: 'bg-slate-800/70 text-slate-200 border-slate-600',
 }[status] || 'bg-slate-900 text-slate-200 border-slate-700');
 
-const LotSamplesPanel = ({ lote, data, onPageChange, onOpenSample }) => {
+const LotSamplesPanel = ({ lote, data, showDeadline = false, onPageChange, onOpenSample }) => {
   if (!data?.results && data?.loading) {
     return <div className="p-5 text-sm text-gray-400">Cargando muestras de {lote.id}…</div>;
   }
@@ -575,12 +578,12 @@ const LotSamplesPanel = ({ lote, data, onPageChange, onOpenSample }) => {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="m-0 text-sm font-semibold text-white">Muestras del lote {lote.id}</p>
-          <p className="m-0 mt-1 text-xs text-gray-400">Cada fila conserva su propio equipo, punto de medida y fecha de compromiso.</p>
+          <p className="m-0 mt-1 text-xs text-gray-400">Cada fila conserva su propio equipo, punto de medida y estado del flujo.</p>
         </div>
         <span className="go-pill compact-count">{data.count} muestra(s)</span>
       </div>
       <div className="go-table-scroll">
-        <table className="w-full min-w-[850px] text-left text-sm">
+        <table className={`w-full ${showDeadline ? 'min-w-[850px]' : 'min-w-[640px]'} text-left text-sm`}>
           <thead className="text-xs uppercase tracking-wide text-gray-400">
             <tr className="border-b border-white/10">
               <th className="px-3 py-2">Muestra</th>
@@ -588,7 +591,7 @@ const LotSamplesPanel = ({ lote, data, onPageChange, onOpenSample }) => {
               <th className="px-3 py-2">Punto de medida</th>
               <th className="px-3 py-2">Toma</th>
               <th className="px-3 py-2">Flujo</th>
-              <th className="px-3 py-2">Entrega de informe</th>
+              {showDeadline ? <th className="px-3 py-2">Entrega de informe</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -608,7 +611,7 @@ const LotSamplesPanel = ({ lote, data, onPageChange, onOpenSample }) => {
                   <td className="px-3 py-3 align-top">{sample.punto_muestreo?.nombre || 'Sin punto de medida'}</td>
                   <td className="px-3 py-3 align-top">{formatDate(sample.fecha_toma, true)}</td>
                   <td className="px-3 py-3 align-top"><span className={`go-badge ${sampleStateClass(sample.estado_flujo?.code)}`}>{sample.estado_flujo?.label || '—'}</span></td>
-                  <td className="px-3 py-3 align-top min-w-[220px]">
+                  {showDeadline ? <td className="px-3 py-3 align-top min-w-[220px]">
                     {deadline.configured ? deadline.waiting_reception ? <>
                       <span className={`rounded border px-2 py-1 text-xs font-semibold ${deadlineClass(deadline.status)}`}>{deadline.label}</span>
                       <small className="mt-2 flex items-center gap-1 text-gray-500"><CalendarClock size={12} /> El conteo se activa al registrar el ingreso al laboratorio.</small>
@@ -622,7 +625,7 @@ const LotSamplesPanel = ({ lote, data, onPageChange, onOpenSample }) => {
                       </div>
                       <small className="mt-1 flex items-center gap-1 text-gray-500"><CalendarClock size={12} /> {deadline.basis === 'habiles' ? 'Días hábiles' : 'Días calendario'} · {deadline.total_days} configurado(s)</small>
                     </> : <span className="text-xs text-gray-500">Sin plazo en el tipo de gestión</span>}
-                  </td>
+                  </td> : null}
                 </tr>
               );
             })}

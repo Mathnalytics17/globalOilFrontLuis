@@ -12,7 +12,7 @@ export default function withRequiredPermissions(Page, permissions = [], fallback
     const allowed = permissions.every((permission) => hasPermission(permission));
 
     useEffect(() => {
-      if (!isLoading && !allowed) router.replace(fallback);
+      if (!isLoading && !allowed) void router.replace(fallback).catch(() => {});
     }, [allowed, fallback, isLoading, router]);
 
     if (isLoading || !allowed) return <div className="go-empty-state">Verificando permisos de acceso...</div>;

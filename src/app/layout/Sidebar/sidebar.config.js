@@ -2,6 +2,7 @@ import {
   Building2,
   FilePlus2,
   FileText,
+  FlaskConical,
   FolderKanban,
   Gauge,
   History,
@@ -59,6 +60,16 @@ export const SIDEBAR_NAVIGATION = [
         icon: FilePlus2,
         roles: [ROLE.GLOBAL, ROLE.ADMIN, ROLE.EMPRESA, ROLE.OPERARIO],
         permissionsAny: ['lotes.crear', 'muestras.crear'],
+      },
+      {
+        id: 'sample-laboratory',
+        label: 'Ingreso al laboratorio',
+        href: '/muestras/laboratorio',
+        icon: FlaskConical,
+        roles: EVERYONE,
+        // The page requires both permissions. Keeping the navigation rule
+        // equally strict avoids showing a link that immediately redirects.
+        permissionsAll: ['laboratorio.ver', 'laboratorio.ver_lotes_disponibles'],
       },
     ],
   },

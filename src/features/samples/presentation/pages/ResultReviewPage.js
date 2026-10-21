@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import {
   Check,
   CheckCircle2,
+  ClipboardCheck,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -12,7 +13,6 @@ import {
   Filter,
   History,
   ListChecks,
-  Pencil,
   RefreshCw,
   Search,
   X,
@@ -89,16 +89,6 @@ const groupTechnicalStatus = (details = []) => details.reduce((worst, detail) =>
   const status = String(detail.estado || (detail.passed === false ? 'NO_DESEADO' : 'NORMAL')).toUpperCase();
   return (STATUS_RANK[status] ?? 0) > (STATUS_RANK[worst] ?? 0) ? status : worst;
 }, 'NORMAL');
-
-const fieldType = (field = {}) => String(field.tipo_dato || field.tipo_comparacion || 'texto').toLowerCase();
-
-const fieldOptions = (field = {}) => (field.opciones || []).map((option) => (
-  typeof option === 'object'
-    ? { value: String(option.value ?? option.label ?? ''), label: String(option.label ?? option.value ?? '') }
-    : { value: String(option), label: String(option) }
-));
-
-const isSelectField = (field) => ['booleano', 'escala', 'escala_ordinal', 'opcion'].includes(fieldType(field)) || fieldOptions(field).length > 0;
 
 const resultSummary = (group) => group.details.map((detail) => ({
   label: fieldLabel(detail),
@@ -201,7 +191,6 @@ function ReviewResultsPage() {
   const [loading, setLoading] = useState(true);
   const [loadingBatch, setLoadingBatch] = useState(false);
   const [historyModal, setHistoryModal] = useState(null);
-  const [editModal, setEditModal] = useState(null);
   const [limitsModal, setLimitsModal] = useState(null);
   const [sampleRulesOpen, setSampleRulesOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -326,50 +315,6 @@ function ReviewResultsPage() {
     }
   };
 
-  const openEdit = (row) => {
-    const payload = row?.resultado?.payload || {};
-    const fields = payload.fields?.length
-      ? payload.fields
-      : [{ key: 'value', label: row.prueba?.nombre_variable || row.prueba?.acronimo || 'Resultado', unidad: row.unidad || '', tipo_dato: 'texto' }];
-    const existing = new Map((payload.values || []).map((item) => [item.key, item]));
-    const values = fields.map((field, index) => ({
-      key: field.key,
-      value: existing.get(field.key)?.value ?? (!payload.values?.length && index === 0 ? row.resultado_resumen || '' : ''),
-      observacion: existing.get(field.key)?.observacion || '',
-    }));
-    setEditModal({ row, fields, values, justificacion: '' });
-  };
-
-  const updateEditValue = (key, value) => {
-    setEditModal((prev) => ({
-      ...prev,
-      values: prev.values.map((item) => item.key === key ? { ...item, value } : item),
-    }));
-  };
-
-  const saveCorrection = async () => {
-    if (!editModal?.row?.resultado?.id) return;
-    if (!editModal.justificacion.trim()) {
-      toast.warning('La justificación es obligatoria.');
-      return;
-    }
-    setSaving(true);
-    try {
-      await reviewInterpretationService.correctResult(editModal.row.resultado.id, {
-        values: editModal.values,
-        justificacion: editModal.justificacion,
-      });
-      toast.success('Resultado corregido con trazabilidad.');
-      setEditModal(null);
-      await loadBatch(selectedBatchId);
-    } catch (error) {
-      console.error(error);
-      toast.error(error?.response?.data?.detail || 'No se pudo corregir el resultado.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const markReviewed = async (row) => {
     setSaving(true);
     try {
@@ -378,7 +323,7 @@ function ReviewResultsPage() {
       await loadBatch(selectedBatchId);
     } catch (error) {
       console.error(error);
-      toast.error('No se pudo marcar como revisado.');
+      toast.error(error?.response?.data?.detail || 'No se pudo marcar como revisado. Corrija primero cualquier resultado invalidado.');
     } finally {
       setSaving(false);
     }
@@ -620,19 +565,20 @@ function ReviewResultsPage() {
                   width: '25%',
                   sortable: false,
                   render: (row) => {
+                    const isInvalidated = row.resultado_invalidado || row?.resultado?.estatus === 'rechazado';
                     const technicalStatus = normalizeStatusLabel(row);
                     return (
                       <div className="reviewAndActions tableReviewActions">
                         <div className="statusStack">
                           <span className={`pill ${statusClass(technicalStatus)}`}>{technicalStatus}</span>
-                          <span className={`pill ${statusClass(row.is_revisada ? 'revisada' : 'pendiente')}`}>{row.is_revisada ? 'Revisado' : 'Pendiente'}</span>
+                          <span className={`pill ${statusClass(isInvalidated ? 'rechazado' : row.is_revisada ? 'revisada' : 'pendiente')}`}>{isInvalidated ? 'Invalidado' : row.is_revisada ? 'Revisado' : 'Pendiente'}</span>
                         </div>
                         <div className="rowActions tableActions">
                           <button className="rulesButton" title="Ver reglas, límites y decisión" type="button" onClick={() => setLimitsModal(row)}><Eye size={15} /><span>Reglas</span></button>
-                          <button title="Editar resultado" type="button" onClick={() => openEdit(row)}><Pencil size={15} /></button>
+                          {isInvalidated ? <button title="Corregir desde ingreso de resultados" type="button" onClick={() => router.push(`/muestras/resultados?lote=${selectedBatchId}&muestra=${selectedSampleId}&prueba_muestra=${row.id}`)}><ClipboardCheck size={15} /><span>Corregir</span></button> : null}
                           <button title="Ver historial" type="button" onClick={() => openHistory(row)}><History size={15} /></button>
                           <button title="Invalidar resultado" type="button" onClick={() => invalidateResult(row)} disabled={!row?.resultado?.id || row?.resultado?.estatus === 'rechazado'}><ShieldOff size={15} /></button>
-                          {row.is_revisada ? (
+                          {row.is_revisada && !isInvalidated ? (
                             <span className="reviewedMini" title="Revisado"><Check size={14} /></span>
                           ) : (
                             <button title="Marcar revisado" type="button" onClick={() => markReviewed(row)}><Check size={15} /></button>
@@ -673,56 +619,6 @@ function ReviewResultsPage() {
               ))}
             </div>
             <div className="modalActions"><button className="btn secondary" onClick={() => setHistoryModal(null)}>Cerrar</button></div>
-          </div>
-        </div>
-      ) : null}
-
-      {editModal ? (
-        <div className="modalOverlay">
-          <div className="editModal">
-            <div className="modalHead">
-              <h3>Editar resultado — {editModal.row?.prueba?.acronimo}</h3>
-              <button onClick={() => setEditModal(null)}><X size={18} /></button>
-            </div>
-            <div className="editFields">
-              {editModal.fields.map((field) => {
-                const item = editModal.values.find((v) => v.key === field.key) || { key: field.key, value: '' };
-                const options = fieldOptions(field);
-                const type = fieldType(field);
-                return (
-                  <label key={field.key}>
-                    <span>{field.label || field.componente_nombre || field.key}</span>
-                    <div className="unitInput">
-                      {isSelectField(field) ? (
-                        <select value={String(item.value ?? '')} onChange={(e) => updateEditValue(field.key, e.target.value)}>
-                          <option value="">Seleccione</option>
-                          {options.map((option) => <option key={`${field.key}-${option.value}`} value={option.value}>{option.label}</option>)}
-                        </select>
-                      ) : type === 'comentario' || type === 'texto_largo' ? (
-                        <textarea value={item.value ?? ''} onChange={(e) => updateEditValue(field.key, e.target.value)} />
-                      ) : (
-                        <input
-                          type={['numerico', 'numero', 'decimal', 'entero'].includes(type) ? 'number' : 'text'}
-                          step={type === 'entero' ? '1' : 'any'}
-                          value={item.value ?? ''}
-                          onChange={(e) => updateEditValue(field.key, e.target.value)}
-                          onWheel={(event) => event.currentTarget.blur()}
-                        />
-                      )}
-                      <em>{field.unidad || editModal.row?.unidad || ''}</em>
-                    </div>
-                  </label>
-                );
-              })}
-              <label className="full">
-                <span>Justificación del cambio *</span>
-                <textarea value={editModal.justificacion} onChange={(e) => setEditModal((prev) => ({ ...prev, justificacion: e.target.value }))} placeholder="Explique el motivo del cambio." />
-              </label>
-            </div>
-            <div className="modalActions">
-              <button className="btn secondary" onClick={() => setEditModal(null)}>Cancelar</button>
-              <button className="btn red" onClick={saveCorrection} disabled={saving}>Guardar cambio</button>
-            </div>
           </div>
         </div>
       ) : null}
@@ -815,10 +711,10 @@ function ReviewResultsPage() {
         }
         .sampleHeader .pill{flex:0 0 auto}.samplePickerMenu{position:absolute;z-index:80;left:0;top:calc(100% + 6px);width:min(420px,calc(100vw - 28px));max-height:min(320px,52vh);overflow:auto;overscroll-behavior:contain;border:1px solid #3b4047;border-radius:10px;background:#17191c;box-shadow:0 20px 50px rgba(0,0,0,.5);padding:6px}.samplePickerMenu button{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px;border:0;border-radius:7px;background:transparent;color:#fff;padding:9px 10px;text-align:left;cursor:pointer}.samplePickerMenu button:hover,.samplePickerMenu button.active{background:#22262b}.samplePickerMenu button>span:first-child{display:grid;gap:2px;min-width:0}.samplePickerMenu small{color:#939ba6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.samplePickerEmpty{padding:12px;color:#9ca3af;font-size:12px}
         .resultsRow{grid-template-columns:minmax(130px,.8fr) minmax(190px,1.15fr) minmax(310px,2fr) minmax(145px,.9fr);min-width:820px}.resultsRow>div{padding:11px 10px}.fieldsCell,.valuesCell{border-left:1px solid #17191c}.fieldsCell,.valuesCell{display:grid;align-content:center;gap:8px}.compactGroup{display:grid;gap:3px;padding:7px 0;border-top:1px solid #17191c}.compactGroup:first-child{border-top:0}.compactGroup>strong{font-size:11px;text-transform:uppercase;color:#b7c0cc;letter-spacing:.04em}.compactGroup>span{font-size:12px;color:#e5e7eb}.resultUnit{display:inline-flex;margin-left:7px;padding:2px 6px;border:1px solid #46505d;border-radius:999px;color:#cbd5e1;font-size:9px;font-weight:800;letter-spacing:0;text-transform:none;vertical-align:middle}.joinedValues{display:flex;align-items:center;flex-wrap:wrap;gap:5px 10px}.measurement{font-size:12px;color:#e5e7eb}.measurement b{color:#aeb6c1}.measurement.alert{color:#fde047}.measurement.critical{color:#fecaca}.statusStack{display:flex;gap:5px;flex-wrap:wrap}.reviewAndActions{justify-content:center}.rowActions.compact{display:flex!important;flex-wrap:nowrap}.rowActions.compact button,.reviewedMini{width:31px;height:31px;min-height:31px;padding:0;display:grid;place-items:center}.tablePager{display:flex;justify-content:space-between;align-items:center;padding:9px 2px 0;color:#aeb6c1;font-size:12px}.tablePager>div{display:flex;gap:6px}.tablePager button{width:32px;height:32px;display:grid;place-items:center;border:1px solid #404040;background:#121212;color:#fff;border-radius:7px}.tablePager button:disabled{opacity:.4}
-        .historyModal,.editModal,.limitsModal{width:min(900px,96vw);max-height:86vh;overflow:auto;border:1px solid #3d3d3d;background:#171717;border-radius:9px;box-shadow:0 28px 80px rgba(0,0,0,.55);padding:16px}.editModal{width:min(620px,96vw)}.limitsModal{width:min(1040px,96vw)}.modalHead p{margin:5px 0 0;color:#aeb6c1}.limitGroups{display:grid;gap:10px}.limitGroup{border:1px solid #343434;border-radius:8px;overflow:hidden}.limitGroupHead{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#222}.limitDetailHead,.limitDetail{display:grid;grid-template-columns:minmax(120px,.8fr) minmax(90px,.55fr) minmax(300px,2fr) minmax(150px,1fr);gap:12px;align-items:center;padding:9px 12px}.limitDetailHead{color:#8f99a6;font-size:10px;text-transform:uppercase;font-weight:800;letter-spacing:.05em}.limitDetail{border-top:1px solid #303030}.limitDetail>span{font-size:14px}.limitDetail>div:last-child{display:grid;gap:4px;justify-items:start}.limitDetail small{color:#aeb6c1}.limitBands{display:grid;gap:4px}.zone.ok i{background:#22c55e}.zone.warning i{background:#eab308}.zone.critical i{background:#ef232a}
+        .historyModal,.editModal,.limitsModal{width:min(900px,96vw);max-height:86vh;overflow:auto;border:1px solid #3d3d3d;background:#171717;border-radius:9px;box-shadow:0 28px 80px rgba(0,0,0,.55);padding:16px}.editModal{width:min(620px,96vw)}.limitsModal{width:min(1040px,96vw)}.modalHead p{margin:5px 0 0;color:#aeb6c1}.limitGroups{display:grid;gap:10px}.limitGroup{border:1px solid #343434;border-radius:8px;overflow:hidden}.limitGroupHead{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#222}.limitDetailHead,.limitDetail{display:grid;grid-template-columns:minmax(160px,1.1fr) minmax(80px,.45fr) minmax(250px,2fr) minmax(160px,1.1fr);gap:12px;align-items:center;padding:9px 12px}.limitDetailHead{color:#8f99a6;font-size:10px;text-transform:uppercase;font-weight:800;letter-spacing:.05em}.limitDetail{border-top:1px solid #303030}.limitDetail>*{min-width:0}.limitDetail>strong{line-height:1.3;overflow-wrap:anywhere}.limitDetail>span{font-size:14px;white-space:nowrap}.limitDetail>div:last-child{display:grid;gap:4px;justify-items:start}.limitDetail small{color:#aeb6c1}.limitBands{display:grid;gap:4px}.zone.ok i{background:#22c55e}.zone.warning i{background:#eab308}.zone.critical i{background:#ef232a}
         .sampleNav button{display:inline-flex;align-items:center;gap:6px}.sampleNav .sampleRulesButton{border-color:rgba(239,35,42,.5);color:#fecaca}.sampleRulesModal{width:min(1180px,97vw)}.sampleRuleTests{display:grid;gap:14px}.sampleRuleTest{border:1px solid #3b3b3b;border-radius:9px;padding:12px;background:#111}.sampleRuleTestHead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.sampleRuleTestHead strong{font-size:16px}.sampleRuleTestHead small{display:block;color:#aeb6c1;margin-top:3px}.ruleEmpty{min-height:70px}.rowActions.compact{flex-wrap:wrap}.rowActions.compact .rulesButton{width:auto!important;padding:0 9px!important;display:inline-flex!important}.resultsRow{grid-template-columns:minmax(130px,.8fr) minmax(0,3fr) minmax(150px,.9fr);min-width:0;width:100%}.resultGroupCompactHead{display:flex;align-items:center;justify-content:space-between;gap:12px}.resultGroupCompactHead strong{min-width:0}.fieldNames{color:#b9c2ce;font-size:11px}.resultGroupCompact .joinedValues{margin-top:3px}
         .unitInput select{min-height:40px;border:1px solid #454545;background:#080808;color:#fff;border-radius:8px 0 0 8px;padding:0 10px}.unitInput textarea{min-height:68px;border:1px solid #454545;background:#080808;color:#fff;border-radius:8px 0 0 8px;padding:8px 10px;resize:vertical}
-        @media(max-width:1250px){.tableResultGroups{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}.resultsTable{display:block;border:1px solid #333}.resultsRow.head{display:grid}.resultsRow{grid-template-columns:minmax(150px,.8fr) minmax(430px,2.1fr) minmax(230px,1fr);min-width:850px}.testIdentity,.evaluationCell,.reviewAndActions{grid-column:auto;grid-row:auto}.reviewAndActions{display:flex!important}.limitDetailHead,.limitDetail{grid-template-columns:minmax(105px,.7fr) minmax(80px,.5fr) minmax(240px,1.8fr) minmax(130px,.9fr)}}
+        @media(max-width:1250px){.tableResultGroups{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}.resultsTable{display:block;border:1px solid #333}.resultsRow.head{display:grid}.resultsRow{grid-template-columns:minmax(150px,.8fr) minmax(430px,2.1fr) minmax(230px,1fr);min-width:850px}.testIdentity,.evaluationCell,.reviewAndActions{grid-column:auto;grid-row:auto}.reviewAndActions{display:flex!important}.limitDetailHead,.limitDetail{grid-template-columns:minmax(145px,1fr) minmax(75px,.4fr) minmax(215px,1.65fr) minmax(145px,1fr)}}
         @media(max-width:980px){.sampleHeader{align-items:stretch;flex-direction:column;gap:12px}.sampleOverview{align-items:stretch}.sampleNav{justify-content:flex-end}}@media(max-width:760px){.tableResultGroups{grid-template-columns:1fr}.reviewContent{padding:12px}.sampleHeader{padding:12px}.sampleOverview{flex-direction:column;gap:12px}.samplePicker{flex:1 1 auto;width:100%}.selectedSampleLine{flex-wrap:wrap}.sampleNav{display:grid;grid-template-columns:1fr 1fr}.sampleNav .sampleRulesButton{grid-column:1/-1}.sampleNav button{justify-content:center}.resultsTable{overflow-y:auto;overflow-x:hidden}.resultsRow{grid-template-columns:1fr;min-width:0}.resultsRow.head{display:none}.evaluationCell,.reviewAndActions{border-left:0;border-top:1px solid #303030}.reviewAndActions{padding:10px 12px!important}.limitDetailHead{display:none}.limitDetail{grid-template-columns:1fr;gap:6px}.limitDetail>div{justify-items:start}.modalOverlay{padding:10px}.limitsModal{padding:12px}}
         /* La revisión nunca debe requerir desplazamiento horizontal: a ancho medio
            cada ensayo se convierte en una tarjeta de tres franjas. */

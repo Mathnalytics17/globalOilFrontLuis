@@ -138,6 +138,22 @@
   font-weight: 650;
 }
 
+.catalogHelp,
+.catalogEmpty {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.catalogHelp {
+  color: #9098a5;
+}
+
+.catalogEmpty {
+  color: #ff9ba0;
+}
+
 .input,
 .select,
 .textarea {

@@ -54,6 +54,7 @@ const normalizeImportedMuestra = (row) => {
     unidad_periodo_equipo: data.unidad_periodo_equipo || data.unidad_equipo || "horas",
     fabricante: data.fabricante || data.campos_adicionales?.fabricante || "",
     referencia_marca: data.referencia_marca || data.referencia || data.marca || "",
+    lubricante_catalogo: toSelectValue(data.lubricante_catalogo),
     observaciones: data.observaciones || data.observacion || "",
     grado_viscosidad: data.grado_viscosidad || data.grado_viscosidad_id || "",
     grado_viscosidad_desconocido: toBoolean(data.grado_viscosidad_desconocido),

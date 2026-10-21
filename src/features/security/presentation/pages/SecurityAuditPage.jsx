@@ -26,7 +26,7 @@ export default function SecurityAuditPage() {
     try {
       const [auditData, companyData] = await Promise.all([
         securityService.audit.list(filters),
-        global ? companiesService.list() : Promise.resolve([]),
+        global ? companiesService.list({ include_internal: true }) : Promise.resolve([]),
       ]);
       setLogs(getList(auditData));
       setCompanies(getList(companyData));

@@ -2,7 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useRouter } from 'next/router';
 import { toast } from 'react-toastify';
 
-import apiClient, { setSessionExpiredHandler } from '@infrastructure/api/apiClient';
+import apiClient, {
+  isSessionExpiredError,
+  resetSessionExpiryNotification,
+  setSessionExpiredHandler,
+} from '@infrastructure/api/apiClient';
 import { authService } from '@features/auth/infrastructure/authService';
 import { getApiErrorMessage } from '@shared/utils/errors';
 import { isGlobalUser } from '@features/auth/application/sessionAccess';
@@ -27,8 +31,12 @@ export function AuthProvider({ children }) {
 
   const loadUser = useCallback(async ({ silent = false } = {}) => {
     try {
-      const { data } = await apiClient.get('/users/me/', { _skipSessionExpired: true });
+      // Do not bypass the transport-level expiry handler here. A refresh with
+      // an expired server session must take the same deterministic path as a
+      // 401 raised by any protected page.
+      const { data } = await apiClient.get('/users/me/');
       setUser(data);
+      resetSessionExpiryNotification();
       return data;
     } catch (error) {
       if (error?.response?.status !== 401 && !silent) {
@@ -47,13 +55,33 @@ export function AuthProvider({ children }) {
     toast.dismiss();
     clearAuthState();
     if (!PUBLIC_ROUTES.includes(router.pathname)) {
-      router.replace('/users/login?session=expired');
+      // This must not depend on a Next.js client transition completing. When
+      // a session expires, page-level requests may reject in the same turn;
+      // replacing the document prevents their error handlers from leaving a
+      // stale "recurso no disponible" toast on the protected screen.
+      if (typeof window !== 'undefined') {
+        window.location.replace('/users/login?session=expired');
+        return;
+      }
+      void router.replace('/users/login?session=expired').catch(() => {});
     }
   }, [clearAuthState, router]);
 
   useEffect(() => {
     setSessionExpiredHandler(handleSessionExpired);
-    return () => setSessionExpiredHandler(null);
+    const suppressExpiredRequestOverlay = (event) => {
+      if (!isSessionExpiredError(event.reason)) return;
+      // Browser/Next development overlays listen to unhandledrejection. The
+      // user is already being sent to login, so exposing an Axios stack here
+      // adds no value and makes the app appear broken.
+      event.preventDefault();
+      handleSessionExpired();
+    };
+    window.addEventListener('unhandledrejection', suppressExpiredRequestOverlay);
+    return () => {
+      window.removeEventListener('unhandledrejection', suppressExpiredRequestOverlay);
+      setSessionExpiredHandler(null);
+    };
   }, [handleSessionExpired]);
 
   useEffect(() => {
@@ -72,7 +100,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!isLoading && !user && !PUBLIC_ROUTES.includes(router.pathname)) {
-      router.replace('/users/login');
+      void router.replace('/users/login').catch(() => {});
     }
   }, [isLoading, user, router]);
 
@@ -82,9 +110,10 @@ export function AuthProvider({ children }) {
     try {
       const { user: loggedInUser } = await authService.login({ email, password });
       setUser(loggedInUser);
-      router.replace(resolveHomeRoute(loggedInUser, (permission) => (
+      resetSessionExpiryNotification();
+      void router.replace(resolveHomeRoute(loggedInUser, (permission) => (
         loggedInUser.is_superuser || isGlobalUser(loggedInUser) || (loggedInUser.permissions || []).includes(permission)
-      )));
+      ))).catch(() => {});
       return { success: true, user: loggedInUser };
     } catch (error) {
       const message = getApiErrorMessage(error, 'Error al iniciar sesión.');
@@ -103,8 +132,9 @@ export function AuthProvider({ children }) {
     } finally {
       toast.dismiss();
       clearAuthState();
+      resetSessionExpiryNotification();
       if (showMessage) toast.info('Sesión cerrada.');
-      router.replace('/users/login');
+      void router.replace('/users/login').catch(() => {});
     }
   }, [clearAuthState, router]);
 

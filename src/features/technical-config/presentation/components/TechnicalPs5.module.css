@@ -109,6 +109,28 @@
   line-height: 1.55;
 }
 
+.relationshipGuide {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  margin: 24px 0 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  background: rgba(255,255,255,.025);
+}
+
+.guideStep {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.guideStep strong { color: #fff; font-size: 14px; }
+.guideStep span { color: #aeb6c4; font-size: 13px; line-height: 1.35; }
+.guideArrow { align-self: center; color: #ef4444; font-size: 22px; font-weight: 700; }
+
 .settingsList {
   width: min(1080px, 100%);
   margin: 28px auto 0;
@@ -194,6 +216,8 @@
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   padding-top: 0;
 }
 
@@ -286,6 +310,28 @@
   background: #1b1d20;
 }
 
+.buttonDanger {
+  border-color: rgba(239, 35, 42, .55);
+  color: #ffd9da;
+  background: rgba(239, 35, 42, .12);
+}
+
+.buttonDanger:hover:not(:disabled) {
+  border-color: #ef232a;
+  background: rgba(239, 35, 42, .2);
+}
+
+.buttonSuccess {
+  border-color: rgba(88, 200, 120, .55);
+  color: #d9ffe4;
+  background: rgba(88, 200, 120, .12);
+}
+
+.buttonSuccess:hover:not(:disabled) {
+  border-color: #58c878;
+  background: rgba(88, 200, 120, .2);
+}
+
 .buttonGhost {
   border: 0;
   color: #d8d8d8;
@@ -345,8 +391,21 @@
 .inlineActions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
+}
+
+.catalogStateLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 13px;
+}
+
+.stateDescription {
+  color: #aeb4bd;
+  font-size: 12px;
 }
 
 .statusPill {
@@ -358,6 +417,16 @@
   background: rgba(255,255,255,.08);
   color: #f5f5f5;
   font-size: 14px;
+}
+
+.activePill {
+  background: rgba(88, 200, 120, .12);
+  color: #bff2cc;
+}
+
+.inactivePill {
+  background: rgba(239, 35, 42, .12);
+  color: #ffd2d4;
 }
 
 .statusDot {
@@ -380,6 +449,27 @@
   border: 0;
   cursor: pointer;
   font-size: 13px;
+  padding: 4px 0;
+  white-space: nowrap;
+}
+
+.tableAction:hover:not(:disabled) {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tableAction:disabled {
+  cursor: not-allowed;
+  opacity: .48;
+}
+
+.dangerAction {
+  color: #ffafb2;
+}
+
+.successAction {
+  color: #91e5a9;
 }
 
 .sidePanel {
@@ -847,4 +937,6 @@
   .versionComparison header,
   .comparisonRow { grid-template-columns: minmax(0, 1fr); }
   .versionComparison header { display: grid; }
+  .relationshipGuide { display: grid; gap: 10px; }
+  .guideArrow { display: none; }
 }

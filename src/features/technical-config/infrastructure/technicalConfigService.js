@@ -21,6 +21,9 @@ export const restoreCatalog = (id) => dynamicTechnicalConfigService.catalogs.res
 export const pageCatalogVersions = (params = {}) => callPage(dynamicTechnicalConfigService.catalogVersions, params);
 export const createCatalogVersion = (payload) => dynamicTechnicalConfigService.catalogVersions.create(payload);
 export const updateCatalogVersion = (id, payload) => dynamicTechnicalConfigService.catalogVersions.update(id, payload);
+export const makeCatalogVersionCurrent = (id) => dynamicTechnicalConfigService.catalogVersions.makeCurrent(id);
+export const deactivateCatalogVersion = (id) => dynamicTechnicalConfigService.catalogVersions.deactivate(id);
+export const restoreCatalogVersion = (id) => dynamicTechnicalConfigService.catalogVersions.restore(id);
 export const importCatalogItems = (version, file) => dynamicTechnicalConfigService.importCatalogItems(version, file);
 export const downloadCatalogItemsTemplate = (version) => dynamicTechnicalConfigService.downloadCatalogItemsTemplate(version);
 
@@ -112,6 +115,12 @@ export const updateUnit = (id, payload) => dynamicTechnicalConfigService.units.u
 export const patchUnit = (id, payload) => dynamicTechnicalConfigService.units.patch(id, payload);
 export const deleteUnit = (id) => dynamicTechnicalConfigService.units.remove(id);
 export const restoreUnit = (id) => dynamicTechnicalConfigService.units.reactivate(id);
+
+export const listUnitCategories = (params = {}) => callList(dynamicTechnicalConfigService.unitCategories, params);
+export const createUnitCategory = (payload) => dynamicTechnicalConfigService.unitCategories.create(payload);
+export const updateUnitCategory = (id, payload) => dynamicTechnicalConfigService.unitCategories.update(id, payload);
+export const deleteUnitCategory = (id) => dynamicTechnicalConfigService.unitCategories.remove(id);
+export const restoreUnitCategory = (id) => dynamicTechnicalConfigService.unitCategories.reactivate(id);
 
 export const listConditions = (params = {}) => callList(dynamicTechnicalConfigService.conditions, params);
 export const createCondition = (payload) => dynamicTechnicalConfigService.conditions.create(payload);
@@ -225,6 +234,11 @@ export const technicalConfigService = {
   patchUnit,
   deleteUnit,
   restoreUnit,
+  listUnitCategories,
+  createUnitCategory,
+  updateUnitCategory,
+  deleteUnitCategory,
+  restoreUnitCategory,
   listConditions,
   createCondition,
   updateCondition,
