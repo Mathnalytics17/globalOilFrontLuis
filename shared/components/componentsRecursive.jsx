@@ -67,30 +67,27 @@ const TreeNode = ({ node, reload }) => {
   const canCreate = node.type === 'root' || node.type === 'folder';
 
   const createChild = async (machineData, name, type) => {
-    let machine;
     try {
       if (type === 'machine') {
-        machine = await machinesService.create({
+        await machinesService.create({
           nombre: machineData.nombre,
           descripcion: machineData.descripcion,
           empresa: node.company?.id,
+          parent_folder: node.id,
+        });
+      } else {
+        await foldersService.create({
+          nombre: name,
+          typeFolder: type,
+          id_parent_node: String(node.id),
+          compania: node.company?.id,
+          isMachine: false,
+          machine: null,
         });
       }
-
-      await foldersService.create({
-        nombre: name,
-        typeFolder: type,
-        id_parent_node: String(node.id),
-        compania: node.company?.id,
-        isMachine: type === 'machine',
-        machine: machine?.id || null,
-      });
       toast.success(type === 'machine' ? 'Maquina creada' : 'Carpeta creada');
       reload();
     } catch (error) {
-      if (machine?.id) {
-        await machinesService.remove(machine.id).catch(() => null);
-      }
       toast.error(error.response?.data?.detail || 'No se pudo crear el registro');
     }
   };
