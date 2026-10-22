@@ -104,14 +104,12 @@ function TreeNode({ node, reload }) {
         // The machines endpoint already creates exactly one tree node.  The
         // old extra POST to /folders created a duplicate (and, when it
         // failed, left a deactivated ghost behind in the tree).
-        const machine = await machinesService.create({ nombre: machineData.nombre, descripcion: machineData.descripcion, empresa: node.company?.id });
-        const folders = await foldersService.list();
-        const machineNode = folders.find((folder) => (
-          Number(folder.machine) === Number(machine.id)
-          || Number(folder.machine_info?.id) === Number(machine.id)
-        ));
-        if (!machineNode) throw new Error('La máquina fue creada, pero no se encontró su nodo en el árbol.');
-        await foldersService.patch(machineNode.id, { id_parent_node: String(node.id) });
+        await machinesService.create({
+          nombre: machineData.nombre,
+          descripcion: machineData.descripcion,
+          empresa: node.company?.id,
+          parent_folder: node.id,
+        });
       } else {
         await foldersService.create({
           nombre: name,
