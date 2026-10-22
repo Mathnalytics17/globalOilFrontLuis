@@ -480,14 +480,13 @@ function ResultEntryPage() {
         syncSavedResult(selectedTestId, response?.prueba_muestra, response?.resultado, 'completado');
         if (selectedTestIsInvalidated) {
           toast.success('Corrección confirmada. Continúe con la revisión del ensayo.');
-          // La corrección ya quedó confirmada. La navegación no forma parte de
-          // la transacción y no debe convertir ese éxito en el falso toast de
-          // "No se pudo guardar" si Next falla al desmontar la vista previa.
-          void router.replace(`/muestras/revision-resultados?lote=${selectedBatchId}${selectedSampleId ? `&muestra=${selectedSampleId}` : ''}`)
-            .catch((navigationError) => {
-              console.error(navigationError);
-              toast.info('La corrección fue guardada. Abra Revisión de resultados para validarla.');
-            });
+          // Navegación deliberadamente fuera del flujo de guardado: un error
+          // síncrono de Next no puede transformar una corrección ya persistida
+          // en el falso toast "No se pudo guardar".
+          const reviewUrl = `/muestras/revision-resultados?lote=${selectedBatchId}${selectedSampleId ? `&muestra=${selectedSampleId}` : ''}`;
+          window.setTimeout(() => {
+            window.location.assign(reviewUrl);
+          }, 0);
           return;
         }
         toast.success('Resultado completo guardado.');
