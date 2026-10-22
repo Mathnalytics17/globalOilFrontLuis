@@ -55,22 +55,49 @@ jobs:
                       # cleanup; do not touch unrelated containers.
                       docker rm -f frontend 2>/dev/null || true
 
-                      echo "=== Verificando puerto 3000 antes del arranque ==="
-                      port_holders="$(docker ps --filter publish=3000 --format '{{.ID}} {{.Names}} {{.Ports}}')"
-                      if [ -n "${port_holders}" ]; then
-                        echo "El puerto 3000 sigue ocupado por un contenedor no administrado:"
-                        echo "${port_holders}"
+                      echo "=== Esperando liberación del puerto 3000 ==="
+                      port_free=""
+                      for attempt in $(seq 1 15); do
+                        port_holders="$(docker ps --filter publish=3000 --format '{{.ID}} {{.Names}} {{.Ports}}')"
+                        if [ -n "${port_holders}" ]; then
+                          echo "El puerto 3000 sigue publicado por:"
+                          echo "${port_holders}"
+                        elif ! sudo ss -ltnp '( sport = :3000 )' | grep -q LISTEN; then
+                          port_free="yes"
+                          break
+                        fi
+                        sleep 2
+                      done
+
+                      if [ -z "${port_free}" ]; then
+                        echo "El puerto 3000 no se liberó después de detener el frontend. Diagnóstico:"
+                        docker ps -a --filter publish=3000 --format 'table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+                        sudo ss -ltnp '( sport = :3000 )' || true
                         exit 1
                       fi
 
-                      if sudo ss -ltnp '( sport = :3000 )' | grep -q LISTEN; then
-                        echo "El puerto 3000 está ocupado por un proceso del host, no por Docker:"
-                        sudo ss -ltnp '( sport = :3000 )'
-                        exit 1
-                      fi
-
+                      # Docker can still be releasing docker-proxy immediately
+                      # after a container deletion. Retry only this project's
+                      # frontend, never terminate unrelated host processes.
                       echo "=== Levantando nuevo frontend ==="
-                      docker compose -f docker-compose.prod.yml up -d --no-build --force-recreate --remove-orphans frontend
+                      started=""
+                      for attempt in $(seq 1 6); do
+                        echo "Intento ${attempt}/6 de arranque del frontend"
+                        if docker compose -f docker-compose.prod.yml up -d --no-build --force-recreate --remove-orphans frontend; then
+                          started="yes"
+                          break
+                        fi
+                        docker compose -f docker-compose.prod.yml rm -sf frontend || true
+                        docker rm -f frontend 2>/dev/null || true
+                        sleep $((attempt * 2))
+                      done
+
+                      if [ -z "${started}" ]; then
+                        echo "No se pudo iniciar el frontend después de reintentar. Diagnóstico:"
+                        docker ps -a --filter publish=3000 --format 'table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+                        sudo ss -ltnp '( sport = :3000 )' || true
+                        exit 1
+                      fi
 
                       echo "=== Estado del frontend ==="
                       docker compose -f docker-compose.prod.yml ps frontend
