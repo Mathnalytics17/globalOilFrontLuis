@@ -151,6 +151,7 @@ function ResultEntryPage() {
   const excelPreviewValuesRef = useRef({});
   const selectedTestRef = useRef('');
   const saveInFlightRef = useRef(false);
+  const correctionNavigatingRef = useRef(false);
 
   useEffect(() => {
     loadBatches();
@@ -479,15 +480,13 @@ function ResultEntryPage() {
         const response = await resultEntryService.confirm(selectedTestId, buildPayloadFromDraft(cached));
         syncSavedResult(selectedTestId, response?.prueba_muestra, response?.resultado, 'completado');
         if (selectedTestIsInvalidated) {
+          correctionNavigatingRef.current = true;
+          toast.dismiss();
           toast.success('Corrección confirmada. Continúe con la revisión del ensayo.');
-          // La corrección ya quedó confirmada. La navegación no forma parte de
-          // la transacción y no debe convertir ese éxito en el falso toast de
-          // "No se pudo guardar" si Next falla al desmontar la vista previa.
-          void router.replace(`/muestras/revision-resultados?lote=${selectedBatchId}${selectedSampleId ? `&muestra=${selectedSampleId}` : ''}`)
-            .catch((navigationError) => {
-              console.error(navigationError);
-              toast.info('La corrección fue guardada. Abra Revisión de resultados para validarla.');
-            });
+          const reviewUrl = `/muestras/revision-resultados?lote=${selectedBatchId}${selectedSampleId ? `&muestra=${selectedSampleId}` : ''}`;
+          // Navegación nativa e inmediata: la corrección ya se persistió y no
+          // debe continuar en el flujo de guardado de este formulario.
+          window.location.assign(reviewUrl);
           return;
         }
         toast.success('Resultado completo guardado.');
@@ -498,6 +497,7 @@ function ResultEntryPage() {
       }
     } catch (error) {
       console.error(error);
+      if (correctionNavigatingRef.current) return;
       const msg = error?.response?.data?.detail || 'No se pudo guardar el resultado.';
       toast.error(msg);
     } finally {
