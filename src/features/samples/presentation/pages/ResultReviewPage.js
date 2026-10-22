@@ -358,7 +358,9 @@ function ReviewResultsPage() {
       await loadBatch(selectedBatchId);
     } catch (error) {
       console.error(error);
-      toast.error('No se pudo completar la revisión del lote.');
+      const data = error?.response?.data || {};
+      const blockers = data.ensayos_bloqueantes ? ` Ensayos: ${data.ensayos_bloqueantes}.` : '';
+      toast.error(`${data.detail || 'No se pudo completar la revisión del lote.'}${blockers}`);
     } finally {
       setSaving(false);
     }
