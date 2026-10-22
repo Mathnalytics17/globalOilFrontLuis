@@ -99,24 +99,33 @@ function TreeNode({ node, reload }) {
   const canCreate = node.type === 'root' || node.type === 'folder';
 
   const createChild = async (machineData, name, type) => {
-    let machine;
     try {
       if (type === 'machine') {
-        machine = await machinesService.create({ nombre: machineData.nombre, descripcion: machineData.descripcion, empresa: node.company?.id });
+        // The machines endpoint already creates exactly one tree node.  The
+        // old extra POST to /folders created a duplicate (and, when it
+        // failed, left a deactivated ghost behind in the tree).
+        const machine = await machinesService.create({ nombre: machineData.nombre, descripcion: machineData.descripcion, empresa: node.company?.id });
+        const folders = await foldersService.list();
+        const machineNode = folders.find((folder) => (
+          Number(folder.machine) === Number(machine.id)
+          || Number(folder.machine_info?.id) === Number(machine.id)
+        ));
+        if (!machineNode) throw new Error('La máquina fue creada, pero no se encontró su nodo en el árbol.');
+        await foldersService.patch(machineNode.id, { id_parent_node: String(node.id) });
+      } else {
+        await foldersService.create({
+          nombre: name,
+          typeFolder: type,
+          id_parent_node: String(node.id),
+          compania: node.company?.id,
+          isMachine: false,
+          machine: null,
+        });
       }
-      await foldersService.create({
-        nombre: name,
-        typeFolder: type,
-        id_parent_node: String(node.id),
-        compania: node.company?.id,
-        isMachine: type === 'machine',
-        machine: machine?.id || null,
-      });
       toast.success(type === 'machine' ? 'Máquina creada' : 'Carpeta creada');
       reload();
     } catch (error) {
-      if (machine?.id) await machinesService.remove(machine.id).catch(() => null);
-      toast.error(error.response?.data?.detail || 'No se pudo crear el registro');
+      toast.error(error.response?.data?.detail || error.message || 'No se pudo crear el registro');
     }
   };
 
