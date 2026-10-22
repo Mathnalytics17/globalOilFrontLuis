@@ -182,31 +182,17 @@ const CreateMachine = () => {
         empresa: parseInt(formData.empresa),
         numero_serie: formData.numero_serie,
         codigo_equipo: formData.codigo_equipo, // ✅ Usar el código ingresado por el usuario
+        parent_folder: parentFolderId,
       };
 
-
-      // 2. Crear la máquina
-      const machineResult = await machinesService.create(machinePayload);
-
-      // 3. ✅ VERIFICAR que la carpeta padre existe
+      // La API crea la máquina y su nodo del árbol en una única transacción.
+      // Validamos el padre aquí para mostrar un error claro antes de enviar.
       const parentFolder = filteredFolders.find(f => f.id === parentFolderId);
       if (!parentFolder) {
         throw new Error(`No se encontró la carpeta padre con ID: ${parentFolderId}`);
       }
 
-      // 4. Preparar datos para la carpeta (usando el ID numérico)
-      const folderData = {
-        nombre: formData.nombre,
-        typeFolder: 'machine',
-        id_parent_node: parentFolderId.toString(),
-        compania: parseInt(formData.empresa),
-        isMachine: true,
-        machine: machineResult.id
-      };
-
-
-      // 5. Crear la carpeta
-      await foldersService.create(folderData);
+      const machineResult = await machinesService.create(machinePayload);
       
       toast.success('Máquina y carpeta creadas. Ahora agregue sus puntos de medida.');
       router.push(`/machines/edit-machine?id=${machineResult.id}#puntos-medida`);
