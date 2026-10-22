@@ -480,7 +480,14 @@ function ResultEntryPage() {
         syncSavedResult(selectedTestId, response?.prueba_muestra, response?.resultado, 'completado');
         if (selectedTestIsInvalidated) {
           toast.success('Corrección confirmada. Continúe con la revisión del ensayo.');
-          window.location.assign(`/muestras/revision-resultados?lote=${selectedBatchId}${selectedSampleId ? `&muestra=${selectedSampleId}` : ''}`);
+          // La corrección ya quedó confirmada. La navegación no forma parte de
+          // la transacción y no debe convertir ese éxito en el falso toast de
+          // "No se pudo guardar" si Next falla al desmontar la vista previa.
+          void router.replace(`/muestras/revision-resultados?lote=${selectedBatchId}${selectedSampleId ? `&muestra=${selectedSampleId}` : ''}`)
+            .catch((navigationError) => {
+              console.error(navigationError);
+              toast.info('La corrección fue guardada. Abra Revisión de resultados para validarla.');
+            });
           return;
         }
         toast.success('Resultado completo guardado.');
