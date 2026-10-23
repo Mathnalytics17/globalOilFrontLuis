@@ -34,7 +34,7 @@ export const getId = (value) => {
 export const normalizeUser = (user = {}) => {
   const profile = user.profile || user.company_profile || user.perfil || {};
   const company = user.empresa_info || user.company_info || user.empresa || profile.empresa_info || profile.company_info || {};
-  const role = profile.role_info || profile.role || user.security_role_info || user.security_role || {};
+  const role = profile.role_info || profile.role || profile.role_id || user.security_role_info || user.security_role || {};
   return {
     ...user,
     displayName: [user.first_name, user.last_name].filter(Boolean).join(' ') || user.name || user.username || user.email || `Usuario ${user.id}`,
@@ -97,7 +97,7 @@ export function Drawer({ title, children, footer, onClose }) {
           <Close />
         </button>
       </div>
-      {children}
+      <div className={s.drawerBody}>{children}</div>
       {footer ? <div className={s.drawerFooter}>{footer}</div> : null}
     </aside>
   );

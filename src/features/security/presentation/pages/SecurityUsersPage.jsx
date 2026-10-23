@@ -109,12 +109,28 @@ export default function SecurityUsersPage() {
     const requiredScope = selectedInviteCompany.is_internal ? 'INTERNAL' : 'COMPANY';
     return visibleRoles.filter((role) => String(role.scope || role.tipo || '').toUpperCase() === requiredScope);
   }, [global, visibleRoles, selectedInviteCompany]);
+  const editRoles = useMemo(() => {
+    const selectedCompany = companies.find((company) => String(company.id) === String(editForm.empresa));
+    const requiredScope = selectedCompany?.is_internal ? 'INTERNAL' : 'COMPANY';
+    const scoped = global && selectedCompany
+      ? visibleRoles.filter((role) => String(role.scope || role.tipo || '').toUpperCase() === requiredScope)
+      : visibleRoles;
+    const currentRoleId = getNumericId(selectedUser?.profile?.role, selectedUser?.profile?.role_id, selectedUser?.security_role);
+    if (currentRoleId && !scoped.some((role) => String(role.id) === currentRoleId)) {
+      return [{
+        id: currentRoleId,
+        name: selectedUser?.profile?.role_name || selectedUser?.roleName || 'Rol actual',
+        scope: selectedUser?.profile?.role_scope,
+      }, ...scoped];
+    }
+    return scoped;
+  }, [companies, editForm.empresa, global, selectedUser, visibleRoles]);
 
   const filteredUsers = useMemo(() => {
     const q = filters.search.trim().toLowerCase();
     return users.filter((item) => {
       if (q && !`${item.displayName} ${item.displayEmail} ${item.companyName} ${item.roleName}`.toLowerCase().includes(q)) return false;
-      if (filters.empresa && String(getId(item.empresa || item.company || item.profile?.empresa)) !== String(filters.empresa)) return false;
+      if (filters.empresa && String(getNumericId(item.empresa_id, item.empresa, item.company, item.profile?.empresa_id, item.profile?.empresa)) !== String(filters.empresa)) return false;
       if (filters.status && String(item.accessStatus).toUpperCase() !== String(filters.status).toUpperCase()) return false;
       if (filters.role && String(getId(item.profile?.role || item.security_role)) !== String(filters.role)) return false;
       return true;
@@ -175,8 +191,8 @@ export default function SecurityUsersPage() {
       if (action === 'reactivate') await securityService.users.reactivate(selectedUser.id);
       if (action === 'reinvite') {
         await securityService.users.reinvite(selectedUser.id, {
-          empresa: getNumericId(selectedUser.empresa, selectedUser.profile?.empresa),
-          role: getNumericId(selectedUser.profile?.role, selectedUser.security_role),
+          empresa: getNumericId(selectedUser.empresa_id, selectedUser.empresa, selectedUser.profile?.empresa_id, selectedUser.profile?.empresa),
+          role: getNumericId(selectedUser.profile?.role, selectedUser.profile?.role_id, selectedUser.security_role),
           is_company_admin: Boolean(selectedUser.profile?.is_company_admin),
         });
       }
@@ -208,8 +224,8 @@ export default function SecurityUsersPage() {
       first_name: item.first_name || '',
       last_name: item.last_name || '',
       phone: item.phone || '',
-      empresa: getNumericId(item.empresa, item.company, item.profile?.empresa),
-      role: getNumericId(item.profile?.role, item.security_role),
+      empresa: getNumericId(item.empresa_id, item.empresa, item.company, item.profile?.empresa_id, item.profile?.empresa),
+      role: getNumericId(item.profile?.role, item.profile?.role_id, item.security_role),
       home_path: item.home_path || '',
       data_scope_override: override,
     });
@@ -246,7 +262,7 @@ export default function SecurityUsersPage() {
           ...assignedCompanyIds.filter((companyId) => !currentByCompany.has(String(companyId))).map((empresa) => securityService.dataScopeCompanies.create({ user: selectedUser.id, empresa })),
         ]);
       }
-      const previousCompany = getNumericId(selectedUser.empresa, selectedUser.company, selectedUser.profile?.empresa);
+      const previousCompany = getNumericId(selectedUser.empresa_id, selectedUser.empresa, selectedUser.company, selectedUser.profile?.empresa_id, selectedUser.profile?.empresa);
       if (global && editForm.empresa && editForm.empresa !== previousCompany) {
         await securityService.users.reinvite(selectedUser.id, {
           empresa: editForm.empresa,
@@ -420,7 +436,7 @@ export default function SecurityUsersPage() {
             <div className={s.field}><label>Apellido</label><input className={s.input} value={editForm.last_name} onChange={(e) => setEditForm((p) => ({ ...p, last_name: e.target.value }))} /></div>
             <div className={s.field}><label>Teléfono</label><input className={s.input} value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} /></div>
             {global ? <div className={s.field}><label>Empresa</label><select className={s.select} value={editForm.empresa} onChange={(e) => setEditForm((p) => ({ ...p, empresa: e.target.value }))}>{companies.map((company) => <option key={company.id} value={company.id}>{getName(company)}</option>)}</select><span className={s.help}>Cambiar la empresa genera una invitación y solo se aplica cuando el usuario la acepta.</span></div> : null}
-            <div className={s.field}><label>Rol</label><select className={s.select} value={editForm.role} onChange={(e) => setEditForm((p) => ({ ...p, role: e.target.value }))}><option value="">Seleccione rol</option>{visibleRoles.map((role) => <option key={role.id} value={role.id}>{role.nombre || role.name || role.code}</option>)}</select></div>
+            <div className={s.field}><label>Rol</label><select className={s.select} value={editForm.role} onChange={(e) => setEditForm((p) => ({ ...p, role: e.target.value }))}><option value="">Seleccione rol</option>{editRoles.map((role) => <option key={role.id} value={role.id}>{role.nombre || role.name || role.code}</option>)}</select><span className={s.help}>Se muestran los roles compatibles con la empresa actual del usuario.</span></div>
             {global ? <div className={s.field}><label>Alcance de datos</label><select className={s.select} value={editForm.data_scope_override} onChange={(e) => setEditForm((p) => ({ ...p, data_scope_override: e.target.value }))}>{DATA_SCOPE_OPTIONS.map((option) => <option key={option.value || 'inherit'} value={option.value}>{option.value ? option.label : `Heredar del rol (${selectedUser?.effective_data_scope || selectedUser?.profile?.role_data_scope || 'OWN_COMPANY'})`}</option>)}</select><span className={s.help}>Una excepción por usuario tiene prioridad sobre el alcance definido en su rol.</span></div> : null}
             {global && (editForm.data_scope_override === 'ASSIGNED_COMPANIES' || (!editForm.data_scope_override && selectedUser?.profile?.role_data_scope === 'ASSIGNED_COMPANIES')) ? <div className={s.field}><label>Empresas autorizadas</label><div className={s.checkList}>{companies.map((company) => { const companyId = String(company.id); return <label key={companyId} className={s.checkRow}><input type="checkbox" checked={assignedCompanyIds.includes(companyId)} onChange={(e) => setAssignedCompanyIds((current) => e.target.checked ? [...new Set([...current, companyId])] : current.filter((id) => id !== companyId))} />{getName(company)}</label>; })}</div><span className={s.help}>Puede asignar una o varias empresas sin alterar la empresa contractual del usuario.</span></div> : null}
             <div className={s.field}><label>Página de inicio</label><select className={s.select} value={editForm.home_path} onChange={(e) => setEditForm((p) => ({ ...p, home_path: e.target.value }))}>{HOME_OPTIONS.filter((option) => !option.globalOnly || isGlobalUser(selectedUser)).map((option) => <option key={option.value || 'automatic'} value={option.value}>{option.label}</option>)}</select><span className={s.help}>Si la página deja de estar permitida para el usuario, se aplicará el inicio automático de su rol.</span></div>
