@@ -114,7 +114,7 @@ export default function SecurityUsersPage() {
     const q = filters.search.trim().toLowerCase();
     return users.filter((item) => {
       if (q && !`${item.displayName} ${item.displayEmail} ${item.companyName} ${item.roleName}`.toLowerCase().includes(q)) return false;
-      if (filters.empresa && String(getId(item.empresa || item.company || item.profile?.empresa)) !== String(filters.empresa)) return false;
+      if (filters.empresa && String(getNumericId(item.empresa_id, item.empresa, item.company, item.profile?.empresa_id, item.profile?.empresa)) !== String(filters.empresa)) return false;
       if (filters.status && String(item.accessStatus).toUpperCase() !== String(filters.status).toUpperCase()) return false;
       if (filters.role && String(getId(item.profile?.role || item.security_role)) !== String(filters.role)) return false;
       return true;
@@ -175,7 +175,7 @@ export default function SecurityUsersPage() {
       if (action === 'reactivate') await securityService.users.reactivate(selectedUser.id);
       if (action === 'reinvite') {
         await securityService.users.reinvite(selectedUser.id, {
-          empresa: getNumericId(selectedUser.empresa, selectedUser.profile?.empresa),
+          empresa: getNumericId(selectedUser.empresa_id, selectedUser.empresa, selectedUser.profile?.empresa_id, selectedUser.profile?.empresa),
           role: getNumericId(selectedUser.profile?.role, selectedUser.profile?.role_id, selectedUser.security_role),
           is_company_admin: Boolean(selectedUser.profile?.is_company_admin),
         });
@@ -208,7 +208,7 @@ export default function SecurityUsersPage() {
       first_name: item.first_name || '',
       last_name: item.last_name || '',
       phone: item.phone || '',
-      empresa: getNumericId(item.empresa, item.company, item.profile?.empresa),
+      empresa: getNumericId(item.empresa_id, item.empresa, item.company, item.profile?.empresa_id, item.profile?.empresa),
       role: getNumericId(item.profile?.role, item.profile?.role_id, item.security_role),
       home_path: item.home_path || '',
       data_scope_override: override,
@@ -246,7 +246,7 @@ export default function SecurityUsersPage() {
           ...assignedCompanyIds.filter((companyId) => !currentByCompany.has(String(companyId))).map((empresa) => securityService.dataScopeCompanies.create({ user: selectedUser.id, empresa })),
         ]);
       }
-      const previousCompany = getNumericId(selectedUser.empresa, selectedUser.company, selectedUser.profile?.empresa);
+      const previousCompany = getNumericId(selectedUser.empresa_id, selectedUser.empresa, selectedUser.company, selectedUser.profile?.empresa_id, selectedUser.profile?.empresa);
       if (global && editForm.empresa && editForm.empresa !== previousCompany) {
         await securityService.users.reinvite(selectedUser.id, {
           empresa: editForm.empresa,
