@@ -27,6 +27,9 @@ export default function SecurityInvitationsPage() {
   const [companies, setCompanies] = useState([]);
   const [filters, setFilters] = useState({ search: '', estado: '', empresa: '' });
   const [loading, setLoading] = useState(false);
+  const companyName = (item) => item.empresa_nombre || getName(item.empresa_info || item.company_info || item.empresa || item.company);
+  const roleName = (item) => item.role_name || getName(item.role_info || item.security_role_info || item.role || {}, '-');
+  const senderName = (item) => item.invited_by_email || getName(item.invited_by || item.enviado_por || item.created_by, 'Sistema');
 
   const load = async () => {
     setLoading(true);
@@ -51,7 +54,7 @@ export default function SecurityInvitationsPage() {
     return items.filter((item) => {
       const company = item.empresa_info || item.company_info || item.empresa || item.company;
       const role = item.role_info || item.security_role_info || item.role || {};
-      const text = `${item.email} ${getName(company)} ${getName(role)} ${item.status || item.estado}`.toLowerCase();
+      const text = `${item.email} ${companyName(item)} ${roleName(item)} ${senderName(item)} ${item.status || item.estado}`.toLowerCase();
       if (q && !text.includes(q)) return false;
       if (filters.estado && String(item.status || item.estado).toUpperCase() !== String(filters.estado).toUpperCase()) return false;
       if (filters.empresa && String(getId(company)) !== String(filters.empresa)) return false;
@@ -61,11 +64,11 @@ export default function SecurityInvitationsPage() {
 
   const invitationSortColumns = useMemo(() => ({
     email: (item) => item.email,
-    company: (item) => getName(item.empresa_info || item.company_info || item.empresa || item.company),
-    role: (item) => getName(item.role_info || item.security_role_info || item.role || {}, item.role_name || '-'),
+    company: companyName,
+    role: roleName,
     status: (item) => item.status || item.estado,
     expires: (item) => item.expires_at || item.fecha_expiracion,
-    sender: (item) => getName(item.invited_by || item.enviado_por || item.created_by, '-'),
+    sender: senderName,
   }), []);
   const { sortedRows, sort, requestSort } = useTableSort(filtered, invitationSortColumns, {
     key: 'expires',
@@ -141,11 +144,11 @@ export default function SecurityInvitationsPage() {
             emptyMessage={loading ? 'Cargando invitaciones…' : 'No hay invitaciones para mostrar.'}
             columns={[
               { id: 'email', label: 'Correo', mobileTitle: true, minWidth: 220, render: (item) => { const delivery = item.metadata?.email_delivery || {}; return <><strong>{item.email}</strong><span className={s.small}>{item.created_at ? new Date(item.created_at).toLocaleString() : ''}</span><span className={s.small}>Correo: {delivery.status === 'sent' ? 'enviado' : delivery.status === 'failed' ? 'fallido' : 'pendiente'}</span></>; } },
-              { id: 'company', label: 'Empresa', render: (item) => getName(item.empresa_info || item.company_info || item.empresa || item.company) },
-              { id: 'role', label: 'Rol', render: (item) => getName(item.role_info || item.security_role_info || item.role || {}, item.role_name || '-') },
+              { id: 'company', label: 'Empresa', render: companyName },
+              { id: 'role', label: 'Rol', render: roleName },
               { id: 'status', label: 'Estado', render: (item) => { const raw = String(item.status || item.estado || '').toUpperCase(); const effective = raw === 'PENDING' && item.expires_at && new Date(item.expires_at) < new Date() ? 'EXPIRED' : raw; return <StatusPill status={effective} />; } },
               { id: 'expires', label: 'Vence', minWidth: 170, render: (item) => item.expires_at || item.fecha_expiracion ? new Date(item.expires_at || item.fecha_expiracion).toLocaleString() : <span className={s.muted}>-</span> },
-              { id: 'sender', label: 'Enviado por', render: (item) => getName(item.invited_by || item.enviado_por || item.created_by, '-') },
+              { id: 'sender', label: 'Enviado por', render: senderName },
               {
                 id: 'acciones', label: 'Acciones', sortable: false, mobileActions: true, minWidth: 120,
                 render: (item) => {

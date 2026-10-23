@@ -176,7 +176,7 @@ export default function SecurityUsersPage() {
       if (action === 'reinvite') {
         await securityService.users.reinvite(selectedUser.id, {
           empresa: getNumericId(selectedUser.empresa, selectedUser.profile?.empresa),
-          role: getNumericId(selectedUser.profile?.role, selectedUser.security_role),
+          role: getNumericId(selectedUser.profile?.role, selectedUser.profile?.role_id, selectedUser.security_role),
           is_company_admin: Boolean(selectedUser.profile?.is_company_admin),
         });
       }
@@ -209,7 +209,7 @@ export default function SecurityUsersPage() {
       last_name: item.last_name || '',
       phone: item.phone || '',
       empresa: getNumericId(item.empresa, item.company, item.profile?.empresa),
-      role: getNumericId(item.profile?.role, item.security_role),
+      role: getNumericId(item.profile?.role, item.profile?.role_id, item.security_role),
       home_path: item.home_path || '',
       data_scope_override: override,
     });

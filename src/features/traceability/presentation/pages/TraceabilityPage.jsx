@@ -13,9 +13,11 @@ const FIELD_LABELS = {
   referencia_equipo_id: 'Equipo', punto_muestreo: 'Punto de medida',
   periodo_servicio_aceite: 'Servicio del lubricante', periodo_servicio_equipo: 'Servicio del equipo',
   atributos_tecnicos: 'Datos técnicos', estado_operativo: 'Estado operativo',
+  estado: 'Estado del resultado', estado_limite: 'Estado según límites',
+  payload: 'Resultado registrado',
 };
 const fieldLabel = (key) => FIELD_LABELS[key] || String(key || '').replaceAll('_', ' ');
-const SYSTEM_SNAPSHOT_FIELDS = new Set(['id', 'created_at', 'updated_at', 'deleted_at']);
+const SYSTEM_SNAPSHOT_FIELDS = new Set(['id', 'created_at', 'updated_at', 'deleted_at', 'saved_at', 'saved_by', 'idempotency_key', 'schema_version', 'mode']);
 const comparable = (value) => JSON.stringify(value ?? null);
 const valueText = (value) => {
   if (value === null || value === undefined || value === '') return 'Sin dato';
@@ -27,6 +29,14 @@ const valueText = (value) => {
   }
   if (typeof value === 'boolean') return value ? 'Sí' : 'No';
   return String(value);
+};
+
+const payloadSummary = (value) => {
+  if (!value || typeof value !== 'object') return valueText(value);
+  const fields = Array.isArray(value.fields) ? value.fields.length : 0;
+  const values = Array.isArray(value.values) ? value.values.length : 0;
+  if (fields || values) return `Se registraron ${fields} campo(s) y ${values} valor(es).`;
+  return 'Resultado operativo actualizado.';
 };
 
 function Snapshot({ title, value }) {
@@ -46,7 +56,7 @@ function ChangeSummary({ before, after }) {
   if (!technicalKeys.length && keys.length === 1 && keys[0] === 'version') {
     return <p className="traceNoChange">Se creó la versión {valueText(next.version)} desde la versión {valueText(previous.version)} sin cambiar criterios ni configuración técnica.</p>;
   }
-  return <section className="traceChanges"><h3>Cambios relevantes</h3><dl>{keys.map((key) => <div key={key}><dt>{fieldLabel(key)}</dt><dd><span>Antes: {valueText(previous[key])}</span><b>Después: {valueText(next[key])}</b></dd></div>)}</dl></section>;
+  return <section className="traceChanges"><h3>Cambios relevantes</h3><dl>{keys.map((key) => <div key={key}><dt>{fieldLabel(key)}</dt><dd><span>Antes: {key === 'payload' ? payloadSummary(previous[key]) : valueText(previous[key])}</span><b>Después: {key === 'payload' ? payloadSummary(next[key]) : valueText(next[key])}</b></dd></div>)}</dl></section>;
 }
 
 export default function TraceabilityPage() {

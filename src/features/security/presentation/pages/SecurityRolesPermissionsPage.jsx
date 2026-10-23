@@ -398,13 +398,13 @@ function SecurityRolesPermissionsContent() {
             </section>
           </div>
           {roleEditor ? (
-            <div style={{ position: 'fixed', inset: 0, zIndex: 1400, background: 'rgba(0,0,0,.72)', display: 'grid', placeItems: 'center', padding: 20 }}>
-              <section style={{ width: 'min(560px, 100%)', padding: 24, border: '1px solid rgba(255,255,255,.18)', borderRadius: 8, background: '#171717', boxShadow: '0 24px 80px rgba(0,0,0,.55)' }}>
+            <div className={s.roleModalBackdrop}>
+              <section className={s.roleModal} role="dialog" aria-modal="true" aria-label={roleEditor.id ? 'Editar rol' : 'Nuevo rol'}>
                 <div className={s.panelTitleRow}>
                   <h2>{roleEditor.id ? 'Editar rol' : 'Nuevo rol'}</h2>
                   <button className={s.buttonGhost} type="button" onClick={() => setRoleEditor(null)}>Cerrar</button>
                 </div>
-                <div style={{ display: 'grid', gap: 14, margin: '18px 0' }}>
+                <div className={s.roleModalBody}>
                   <label className={s.field}><b>Nombre</b><input className={s.input} value={roleEditor.name} onChange={(event) => setRoleEditor((current) => ({ ...current, name: event.target.value }))} /></label>
                   <label className={s.field}><b>Código</b><input className={s.input} value={roleEditor.code} onChange={(event) => setRoleEditor((current) => ({ ...current, code: event.target.value }))} /></label>
                   <label className={s.field}><b>Alcance</b><select className={s.select} value={roleEditor.scope} onChange={(event) => setRoleEditor((current) => ({ ...current, scope: event.target.value }))}><option value="COMPANY">Empresa</option><option value="INTERNAL">Interno</option><option value="GLOBAL">GlobalOil</option></select></label>
@@ -412,7 +412,7 @@ function SecurityRolesPermissionsContent() {
                   <label className={s.field}><b>Pantalla principal del rol</b><select className={s.select} value={roleEditor.default_home_path} onChange={(event) => setRoleEditor((current) => ({ ...current, default_home_path: event.target.value }))}>{HOME_OPTIONS.filter((option) => !option.globalOnly || roleEditor.scope === 'GLOBAL').map((option) => <option key={option.value || 'automatic'} value={option.value}>{option.label}</option>)}</select><span className={s.small}>Se usa al iniciar sesión, salvo que el usuario tenga una página propia asignada.</span></label>
                   <label className={s.field}><b>Descripción</b><textarea className={s.textarea} value={roleEditor.description} onChange={(event) => setRoleEditor((current) => ({ ...current, description: event.target.value }))} /></label>
                 </div>
-                <div className={s.actions}>
+                <div className={s.roleModalFooter}>
                   <button className={s.buttonSecondary} type="button" onClick={() => setRoleEditor(null)}>Cancelar</button>
                   <button className={s.buttonPrimary} type="button" onClick={saveRole} disabled={roleSaving}><Save /> {roleSaving ? 'Guardando...' : 'Guardar rol'}</button>
                 </div>
