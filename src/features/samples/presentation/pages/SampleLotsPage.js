@@ -126,7 +126,7 @@ const getBatchActions = (lote = {}, hasPermission = () => false) => {
   const completadas = Number(pruebas.completadas || 0);
   const revisadas = Number(pruebas.revisadas || 0);
   const enabledByKey = {
-    lab: !terminal && totalMuestras > 0 && ['borrador', 'registrado', 'recibido'].includes(estado),
+    lab: !terminal && totalMuestras > 0 && ['registrado', 'recibido'].includes(estado),
     assign: !terminal && completadas === 0 && ['en_laboratorio', 'en_analisis', 'parcial'].includes(estado),
     results: !terminal && asignadas > 0 && ['en_laboratorio', 'en_analisis', 'parcial'].includes(estado),
     review: !terminal && asignadas > 0 && completadas >= asignadas,
@@ -345,6 +345,17 @@ const LotesMuestrasPage = () => {
     router.push(action.path(lote.id));
   };
 
+  const handleRegisterDraft = async (lote) => {
+    if (!await appDialog.confirm(`¿Registrar el lote ${lote.id}? Después estará disponible para ingreso al laboratorio.`)) return;
+    try {
+      await sampleBatchesService.registerDraft(lote.id);
+      toast.success('Lote registrado correctamente.');
+      await fetchData();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'No se pudo registrar el borrador.');
+    }
+  };
+
   // The API filters by the actual samples, including their equipment and
   // measurement points. Do not re-filter the page in the browser: doing so
   // would hide batches whose matching sample is not part of a summary field.
@@ -525,6 +536,7 @@ const LotesMuestrasPage = () => {
                       const menuItems = [
                         { label: 'Ver detalle', icon: Eye, onClick: () => router.push(`/muestras/lotes/${row.id}`) },
                         { label: 'Editar lote', icon: Edit, disabled: locked, onClick: () => router.push(`/muestras/lotes/${row.id}/editar`) },
+                        ...(row.estado === 'borrador' && hasPermission('lotes.editar') ? [{ label: 'Registrar borrador', icon: CheckCircle, onClick: () => handleRegisterDraft(row) }] : []),
                         { separator: true },
                         ...rowActions.map((action) => ({ label: action.label, icon: action.icon, disabled: !action.enabled, onClick: () => handleBatchAction(row, action) })),
                         { separator: true },

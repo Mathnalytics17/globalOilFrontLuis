@@ -95,6 +95,7 @@ export default function EditSamplePage() {
   const [machines, setMachines] = useState([]);
   const [samplingPoints, setSamplingPoints] = useState([]);
   const [measurementPointId, setMeasurementPointId] = useState('');
+  const [manualPoint, setManualPoint] = useState('');
   const [history, setHistory] = useState([]);
   const [equipmentMode, setEquipmentMode] = useState('manual');
   const [loading, setLoading] = useState(true);
@@ -115,6 +116,7 @@ export default function EditSamplePage() {
       setMachines(options.machines || []);
       setSamplingPoints(options.samplingPoints || []);
       setMeasurementPointId(data.punto_muestreo?.id ? String(data.punto_muestreo.id) : '');
+      setManualPoint(data.campos_adicionales?.punto_muestreo_manual || (data.punto_muestreo?.manual ? data.punto_muestreo.nombre : '') || '');
       setHistory(historyData);
       setEquipmentMode(data.referencia_equipo ? 'catalog' : 'manual');
       setForm({
@@ -150,11 +152,6 @@ export default function EditSamplePage() {
 
   const changeEquipmentMode = (mode) => {
     setEquipmentMode(mode);
-    if (mode === 'catalog') update('equipo_placa', '');
-    else {
-      update('referencia_equipo', '');
-      setMeasurementPointId('');
-    }
   };
 
   const changeRegisteredMachine = (machineId) => {
@@ -179,6 +176,7 @@ export default function EditSamplePage() {
         ...form,
         referencia_equipo: equipmentMode === 'catalog' ? form.referencia_equipo || null : null,
         equipo_placa: equipmentMode === 'manual' ? form.equipo_placa.trim() || null : null,
+        campos_adicionales: { ...(sample.campos_adicionales || {}), punto_muestreo_manual: equipmentMode === 'manual' ? manualPoint.trim() : '' },
         periodo_servicio_aceite: form.periodo_servicio_aceite === '' ? null : Number(form.periodo_servicio_aceite),
         periodo_servicio_equipo: form.periodo_servicio_equipo === '' ? null : Number(form.periodo_servicio_equipo),
         contacto_cliente: form.contacto_cliente.trim() || null,
@@ -267,7 +265,7 @@ export default function EditSamplePage() {
               {form.referencia_equipo && !compatibleSamplingPoints.length && <p className="pointHint">Este equipo no tiene puntos de medida activos. Puede guardar la muestra sin punto o crearlo desde el árbol de activos.</p>}
             </>
           ) : (
-            <Field label="Placa / identificación manual"><input value={form.equipo_placa} onChange={(event) => update('equipo_placa', event.target.value)} /></Field>
+            <><Field label="Placa / identificación manual"><input value={form.equipo_placa} onChange={(event) => update('equipo_placa', event.target.value)} /></Field><Field label="Punto de medida manual"><input value={manualPoint} onChange={(event) => setManualPoint(event.target.value)} /></Field></>
           )}
           {sample.punto_muestreo && <div className="pointContext"><Gauge size={17} /><div><strong>{sample.punto_muestreo.nombre}</strong><span>Seleccione arriba un punto compatible para cambiarlo. La asignación anterior se conserva en el historial.</span></div></div>}
         </section>
