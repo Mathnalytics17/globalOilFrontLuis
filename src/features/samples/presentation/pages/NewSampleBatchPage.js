@@ -624,11 +624,6 @@ const NuevoLoteMuestrasPage = () => {
           updated.periodo_servicio_equipo = "";
         }
 
-        if (field === "equipo_modo") {
-          if (value === "catalogo") { updated.equipo_placa = ""; updated.punto_manual = ""; }
-          if (value === "manual") { updated.referencia_equipo = ""; updated.punto_muestreo = ""; }
-        }
-
         if (field === "punto_muestreo" && value) {
           const point = puntosMuestreo.find((item) => String(item.id) === String(value));
           updated.equipo_modo = "catalogo";
@@ -1524,7 +1519,7 @@ const MuestraRow = ({
                 </div>
               </Field>
               {muestra.equipo_modo !== "manual" ? <Field label="Máquina"><select value={muestra.referencia_equipo} onChange={(e) => updateMuestra(index, "referencia_equipo", e.target.value)} className="input-dark"><option value="">Seleccione máquina</option>{maquinasFiltradas.map((machine) => <option key={machine.id} value={machine.id}>{machine.codigo_equipo || machine.nombre}</option>)}</select></Field> : <Field label="Máquina / identificación manual"><input value={muestra.equipo_placa} onChange={(e) => updateMuestra(index, "equipo_placa", e.target.value)} className="input-dark" placeholder="Ej: PKI203" /></Field>}
-              {muestra.equipo_modo !== "manual" ? <Field label="Punto de medida" error={getError("punto_muestreo")}><select value={muestra.punto_muestreo} onChange={(e) => updateMuestra(index, "punto_muestreo", e.target.value)} className="input-dark" disabled={!muestra.referencia_equipo || loadingOptions}><option value="">Seleccione punto de medida</option>{puntosFiltrados.filter((point) => String(point.maquina) === String(muestra.referencia_equipo)).map((point) => <option key={point.id} value={point.id}>{point.nombre}{point.lubricante ? ` · ${point.lubricante}` : ''}</option>)}</select>{selectedPoint && <span className="mt-1 block text-xs text-gray-400">Predeterminado: {selectedPoint.lubricante || 'sin lubricante'} · cambio {selectedPoint.frecuencia_cambio ? `${selectedPoint.frecuencia_cambio} ${selectedPoint.unidad_frecuencia_cambio}` : 'sin definir'} · análisis {selectedPoint.frecuencia_analisis ? `${selectedPoint.frecuencia_analisis} ${selectedPoint.unidad_frecuencia_analisis}` : 'sin definir'}.</span>}</Field> : <Field label="Punto de medida manual"><input value={muestra.punto_manual} onChange={(e) => updateMuestra(index, "punto_manual", e.target.value)} className="input-dark" placeholder="Ej: Reductor lado motor" /><span className="mt-1 block text-xs text-gray-400">Al guardar se creará o reutilizará este punto para la máquina manual.</span></Field>}
+              {muestra.equipo_modo !== "manual" ? <Field label="Punto de medida" error={getError("punto_muestreo")}><select value={muestra.punto_muestreo} onChange={(e) => updateMuestra(index, "punto_muestreo", e.target.value)} className="input-dark" disabled={!muestra.referencia_equipo || loadingOptions}><option value="">Seleccione punto de medida</option>{puntosFiltrados.filter((point) => String(point.maquina) === String(muestra.referencia_equipo)).map((point) => <option key={point.id} value={point.id}>{point.nombre}{point.lubricante ? ` · ${point.lubricante}` : ''}</option>)}</select>{selectedPoint && <span className="mt-1 block text-xs text-gray-400">Predeterminado: {selectedPoint.lubricante || 'sin lubricante'} · cambio {selectedPoint.frecuencia_cambio ? `${selectedPoint.frecuencia_cambio} ${selectedPoint.unidad_frecuencia_cambio}` : 'sin definir'} · análisis {selectedPoint.frecuencia_analisis ? `${selectedPoint.frecuencia_analisis} ${selectedPoint.unidad_frecuencia_analisis}` : 'sin definir'}.</span>}</Field> : <Field label="Punto de medida manual"><input value={muestra.punto_manual} onChange={(e) => updateMuestra(index, "punto_manual", e.target.value)} className="input-dark" placeholder="Ej: Reductor lado motor" /><span className="mt-1 block text-xs text-gray-400">{form.tipo_cliente === 'ocasional' ? 'Se conservará como identificación manual en la muestra.' : 'Al guardar se creará o reutilizará este punto para la máquina manual.'}</span></Field>}
             </div>
           </div>
         )}

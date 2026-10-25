@@ -2,7 +2,7 @@ import { appDialog } from '@shared/ui/AppDialogProvider';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { toast } from 'react-toastify';
-import { Save, Cpu, Trash2, MapPin, Gauge, Pencil, X } from 'lucide-react';
+import { Save, Cpu, Trash2, MapPin, Gauge, Pencil, X, RotateCcw } from 'lucide-react';
 import { companiesService } from '@features/companies/infrastructure/companiesService';
 import { foldersService } from '@features/asset-tree/infrastructure/foldersService';
 import { machinesService } from '@features/machines/infrastructure/machinesService';
@@ -38,6 +38,8 @@ const EditMachine = () => {
   const [currentMachineFolder, setCurrentMachineFolder] = useState(null);
   const [currentParentFolder, setCurrentParentFolder] = useState(null);
   const [samplingPoints, setSamplingPoints] = useState([]);
+  const [showInactivePoints, setShowInactivePoints] = useState(false);
+  const [pointStatusSaving, setPointStatusSaving] = useState(null);
   const [lubricants, setLubricants] = useState([]);
   const [pointForm, setPointForm] = useState(EMPTY_SAMPLING_POINT);
   const [editingPointId, setEditingPointId] = useState(null);
@@ -109,7 +111,7 @@ const EditMachine = () => {
     if (!id) return;
     try {
       const [points, catalog] = await Promise.all([
-        assetTreeService.listSamplingPoints({ machine: id, page_size: 1000 }),
+        assetTreeService.listSamplingPoints({ machine: id, page_size: 1000, include_inactive: 'true' }),
         assetTreeService.listLubricants({ page_size: 1000 }),
       ]);
       setSamplingPoints(points);
@@ -352,7 +354,21 @@ const EditMachine = () => {
       if (editingPointId === point.id) resetPointForm();
       await loadSamplingPoints();
     } catch (removeError) {
-      toast.error('No se pudo desactivar el punto de medida.');
+      toast.error(removeError.response?.data?.detail || 'No se pudo desactivar el punto de medida.');
+    }
+  };
+
+  const handleReactivateSamplingPoint = async (point) => {
+    if (!await appDialog.confirm(`¿Reactivar el punto de medida “${point.nombre}”? Volverá a estar disponible para nuevas muestras.`)) return;
+    setPointStatusSaving(point.id);
+    try {
+      await assetTreeService.reactivateSamplingPoint(point.id);
+      toast.success('Punto de medida reactivado.');
+      await loadSamplingPoints();
+    } catch (reactivateError) {
+      toast.error(reactivateError.response?.data?.detail || 'No se pudo reactivar el punto de medida.');
+    } finally {
+      setPointStatusSaving(null);
     }
   };
 
@@ -630,13 +646,17 @@ const EditMachine = () => {
                 </p>
               </div>
               <span className="self-start rounded-full border border-white/[0.07] bg-[#17191c] px-3 py-1 text-sm text-[#cfd3d8]">
-                {samplingPoints.length} activo(s)
+                {samplingPoints.filter((point) => point.activo !== false).length} activo(s)
               </span>
             </div>
 
             <div className="mb-6">
+              <label className="mb-4 inline-flex items-center gap-2 text-sm text-[#cfd3d8]">
+                <input type="checkbox" checked={showInactivePoints} onChange={(event) => setShowInactivePoints(event.target.checked)} />
+                Mostrar puntos inactivos
+              </label>
               <DataTable
-                data={samplingPoints}
+                data={samplingPoints.filter((point) => showInactivePoints || point.activo !== false)}
                 rowKey="id"
                 pagination
                 minWidth={720}
@@ -647,7 +667,8 @@ const EditMachine = () => {
                   { id: 'lubricante', label: 'Lubricante', render: (point) => point.lubricante || '—' },
                   { id: 'frecuencia_cambio', label: 'Cambio', render: (point) => point.frecuencia_cambio ? `${point.frecuencia_cambio} ${point.unidad_frecuencia_cambio || ''}` : '—' },
                   { id: 'frecuencia_analisis', label: 'Análisis', render: (point) => point.frecuencia_analisis ? `${point.frecuencia_analisis} ${point.unidad_frecuencia_analisis || ''}` : '—' },
-                  { id: 'acciones', label: 'Acciones', sortable: false, mobileActions: true, render: (point) => <div className="flex justify-end gap-1.5"><button type="button" onClick={(event) => { event.stopPropagation(); handleEditSamplingPoint(point); }} className="go-mini icon-only" title="Editar punto"><Pencil size={15} /></button><button type="button" onClick={(event) => { event.stopPropagation(); handleDeactivateSamplingPoint(point); }} className="go-mini icon-only text-red-300" title="Desactivar punto"><Trash2 size={15} /></button></div> },
+                  { id: 'estado', label: 'Estado', render: (point) => point.activo === false ? 'Inactivo' : 'Activo' },
+                  { id: 'acciones', label: 'Acciones', sortable: false, mobileActions: true, render: (point) => <div className="flex justify-end gap-1.5">{point.activo === false ? <button type="button" onClick={(event) => { event.stopPropagation(); handleReactivateSamplingPoint(point); }} disabled={pointStatusSaving === point.id} className="go-mini icon-only" title="Reactivar punto" aria-label={`Reactivar ${point.nombre}`}><RotateCcw size={15} /></button> : <><button type="button" onClick={(event) => { event.stopPropagation(); handleEditSamplingPoint(point); }} className="go-mini icon-only" title="Editar punto"><Pencil size={15} /></button><button type="button" onClick={(event) => { event.stopPropagation(); handleDeactivateSamplingPoint(point); }} className="go-mini icon-only text-red-300" title="Desactivar punto"><Trash2 size={15} /></button></>}</div> },
                 ]}
               />
             </div>

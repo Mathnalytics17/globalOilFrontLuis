@@ -39,6 +39,11 @@ export const sampleBatchesService = {
     return data;
   },
 
+  async registerDraft(id) {
+    const { data } = await apiClient.post(`${BASE_URL}${id}/register/`);
+    return data;
+  },
+
   async update(id, payload) {
     const { data } = await apiClient.patch(`${BASE_URL}${id}/`, payload);
     return data;
