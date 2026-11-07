@@ -11,11 +11,13 @@ function SidebarBody({ navigation, currentPath, onNavigate, mobile = false, coll
     <>
       <div className={`flex h-[var(--go-topbar-height)] shrink-0 items-center border-b border-white/[0.06] ${collapsed ? 'justify-center px-2' : 'px-5'}`}>
         {collapsed ? (
-          <div className="h-9 w-9 overflow-hidden" title="Global Oil">
-            <img src="/logo-global-oil.png" alt="Global Oil" className="h-8 w-auto max-w-none object-contain" />
+          <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-md bg-white p-0.5" title="DATAIA Engineering">
+            <img src="/logo-dataia.png" alt="DATAIA Engineering" className="h-full w-full object-contain" />
           </div>
         ) : (
-          <img src="/logo-global-oil.png" alt="Global Oil" className="h-8 w-auto max-w-[150px] object-contain" />
+          <div className="rounded-md bg-white px-1.5 py-1">
+            <img src="/logo-dataia.png" alt="DATAIA Engineering" className="h-8 w-auto max-w-[150px] object-contain" />
+          </div>
         )}
         {mobile ? <span className="sr-only">Navegación móvil</span> : null}
       </div>
@@ -34,10 +36,10 @@ function SidebarBody({ navigation, currentPath, onNavigate, mobile = false, coll
       </nav>
       <div className={`shrink-0 border-t border-white/[0.06] text-xs text-[#666c75] ${collapsed ? 'px-2 py-4 text-center' : 'px-5 py-4'}`}>
         {collapsed ? (
-          <span className="text-[10px] font-medium text-[#6f757e]" title="Global Oil v1.0.0">v1</span>
+          <span className="text-[10px] font-medium text-[#8da8c9]" title="DATAIA Engineering v1.0.0">v1</span>
         ) : (
           <>
-            <p className="font-medium text-[#8c929b]">Global Oil</p>
+            <p className="font-medium text-[#bfd0e8]">DATAIA Engineering</p>
             <p className="mt-1">v1.0.0</p>
           </>
         )}

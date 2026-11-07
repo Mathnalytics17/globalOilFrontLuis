@@ -652,7 +652,7 @@ export default function TechnicalCatalogsPage() {
           <PaginationBar count={filteredCatalogs.length} page={catalogPage} pageSize={catalogPageSize} onPageChange={setCatalogPage} onPageSizeChange={(size) => { setCatalogPage(1); setCatalogPageSize(size); }} />
 
           <footer className={ps.footerNote}>
-            <span>© 2025 Global Oil. Todos los derechos reservados.</span>
+            <span>© 2026 DATAIA Engineering. Todos los derechos reservados.</span>
             <span>Versión 1.0.0</span>
           </footer>
         </section>

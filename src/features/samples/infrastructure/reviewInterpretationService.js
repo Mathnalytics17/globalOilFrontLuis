@@ -38,7 +38,9 @@ export const reviewInterpretationService = {
   },
 
   async getInterpretationBatch(loteId) {
-    const { data } = await apiClient.get(`/lubrication/interpretation/batches/${loteId}/`);
+    const { data } = await apiClient.get(`/lubrication/interpretation/batches/${loteId}/`, {
+      timeout: 60000,
+    });
     return data;
   },
 

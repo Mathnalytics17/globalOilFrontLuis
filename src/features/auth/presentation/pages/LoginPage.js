@@ -56,8 +56,10 @@ export default function Login() {
   if (authLoading) return (
     <div className="grid min-h-screen place-items-center bg-[#111214] text-[#d6d9dd]">
       <div className="flex flex-col items-center gap-4" role="status" aria-live="polite">
-        <img src="/logo-global-oil.png" alt="Global Oil" className="h-auto w-32 opacity-90" />
-        <span className="h-8 w-8 animate-spin rounded-full border-2 border-[#565c65] border-t-[#ef2b2d]" />
+        <div className="rounded-lg bg-white p-2">
+          <img src="/logo-dataia.png" alt="DATAIA Engineering" className="h-auto w-32" />
+        </div>
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-[#4d6280] border-t-[#2875c7]" />
         <p className="text-sm text-[#aeb7c7]">Preparando tu espacio de trabajo...</p>
       </div>
     </div>
@@ -66,7 +68,7 @@ export default function Login() {
   return (
     <AuthShell
       title="Ingreso de usuarios"
-      subtitle="Acceda al sistema con sus credenciales de Global Oil."
+      subtitle="Acceda al sistema con sus credenciales de DATAIA Engineering."
       footer={<Link href="/users/forgotPassword" className="text-[#d6d9dd] hover:text-white">¿Olvidó su contraseña?</Link>}
     >
       <form onSubmit={handleSubmit} className="go-stack">

@@ -194,6 +194,7 @@ function InterpretationPage() {
   const { user } = useAuth();
   const [batchId, setBatchId] = useState('');
   const [batch, setBatch] = useState(null);
+  const [batchError, setBatchError] = useState(null);
   const [selectedSampleId, setSelectedSampleId] = useState('');
   const [sampleData, setSampleData] = useState(null);
   const [trends, setTrends] = useState([]);
@@ -319,6 +320,7 @@ function InterpretationPage() {
     setLoading(true);
     const request = (async () => {
       try {
+      setBatchError(null);
       const data = await reviewInterpretationService.getInterpretationBatch(loteId);
       setBatch(data);
       const querySample = router.query?.muestra ? String(router.query.muestra) : '';
@@ -326,7 +328,10 @@ function InterpretationPage() {
       setSelectedSampleId(first?.id || '');
       } catch (error) {
         console.error(error);
-        toast.error('No se pudo cargar el lote para interpretación.');
+        setBatch(null);
+        setSelectedSampleId('');
+        setBatchError(error);
+        toast.error(error?.response?.data?.detail || 'No se pudo cargar el lote para interpretación.');
       } finally {
         setLoading(false);
         endRequest();
@@ -819,6 +824,14 @@ function InterpretationPage() {
           />
         </div>
       </header>
+
+      {batchError ? (
+        <section className="interpLoadError" role="alert">
+          <strong>No se pudo abrir el lote para interpretación.</strong>
+          <span>{batchError?.response?.data?.detail || 'Verifique la conexión e intente nuevamente.'}</span>
+          <button type="button" className="btn secondary" onClick={() => loadBatch(batchId)}>Reintentar</button>
+        </section>
+      ) : null}
 
       <section className="summaryLine">
         <label>

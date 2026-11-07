@@ -1403,6 +1403,7 @@ const NuevoLoteMuestrasPage = () => {
                   puntosFiltrados={puntosFiltrados}
                   lubricantes={lubricantes}
                   selectedCompanyId={selectedCompanyId}
+                  isOccasionalClient={form.tipo_cliente === "ocasional"}
                   dynamicTechnicalCatalogs={dynamicTechnicalCatalogs}
                   errors={errors}
                   loadingOptions={loadingOptions || loadingTechnicalCatalogs}
@@ -1456,6 +1457,7 @@ const MuestraRow = ({
   puntosFiltrados,
   lubricantes,
   selectedCompanyId,
+  isOccasionalClient,
   dynamicTechnicalCatalogs,
   errors,
   loadingOptions,
@@ -1513,13 +1515,13 @@ const MuestraRow = ({
             <p className="mb-4 text-xs text-gray-500">Seleccione primero el equipo y el punto. Sus valores son predeterminados; puede cambiarlos solo para esta muestra.</p>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Field label="Identificación del equipo">
-                <div className="inline-flex overflow-hidden rounded-md border border-gray-600 bg-[#111]">
+                <div className="inline-flex w-fit overflow-hidden rounded-md border border-gray-600 bg-[#111]">
                   <button type="button" onClick={() => updateMuestra(index, "equipo_modo", "catalogo")} className={`px-3 py-2 text-sm font-semibold ${muestra.equipo_modo !== "manual" ? "bg-red-600 text-white" : "text-gray-300"}`}>Equipo registrado</button>
                   <button type="button" onClick={() => updateMuestra(index, "equipo_modo", "manual")} className={`px-3 py-2 text-sm font-semibold ${muestra.equipo_modo === "manual" ? "bg-red-600 text-white" : "text-gray-300"}`}>Identificación manual</button>
                 </div>
               </Field>
               {muestra.equipo_modo !== "manual" ? <Field label="Máquina"><select value={muestra.referencia_equipo} onChange={(e) => updateMuestra(index, "referencia_equipo", e.target.value)} className="input-dark"><option value="">Seleccione máquina</option>{maquinasFiltradas.map((machine) => <option key={machine.id} value={machine.id}>{machine.codigo_equipo || machine.nombre}</option>)}</select></Field> : <Field label="Máquina / identificación manual"><input value={muestra.equipo_placa} onChange={(e) => updateMuestra(index, "equipo_placa", e.target.value)} className="input-dark" placeholder="Ej: PKI203" /></Field>}
-              {muestra.equipo_modo !== "manual" ? <Field label="Punto de medida" error={getError("punto_muestreo")}><select value={muestra.punto_muestreo} onChange={(e) => updateMuestra(index, "punto_muestreo", e.target.value)} className="input-dark" disabled={!muestra.referencia_equipo || loadingOptions}><option value="">Seleccione punto de medida</option>{puntosFiltrados.filter((point) => String(point.maquina) === String(muestra.referencia_equipo)).map((point) => <option key={point.id} value={point.id}>{point.nombre}{point.lubricante ? ` · ${point.lubricante}` : ''}</option>)}</select>{selectedPoint && <span className="mt-1 block text-xs text-gray-400">Predeterminado: {selectedPoint.lubricante || 'sin lubricante'} · cambio {selectedPoint.frecuencia_cambio ? `${selectedPoint.frecuencia_cambio} ${selectedPoint.unidad_frecuencia_cambio}` : 'sin definir'} · análisis {selectedPoint.frecuencia_analisis ? `${selectedPoint.frecuencia_analisis} ${selectedPoint.unidad_frecuencia_analisis}` : 'sin definir'}.</span>}</Field> : <Field label="Punto de medida manual"><input value={muestra.punto_manual} onChange={(e) => updateMuestra(index, "punto_manual", e.target.value)} className="input-dark" placeholder="Ej: Reductor lado motor" /><span className="mt-1 block text-xs text-gray-400">{form.tipo_cliente === 'ocasional' ? 'Se conservará como identificación manual en la muestra.' : 'Al guardar se creará o reutilizará este punto para la máquina manual.'}</span></Field>}
+              {muestra.equipo_modo !== "manual" ? <Field label="Punto de medida" error={getError("punto_muestreo")}><select value={muestra.punto_muestreo} onChange={(e) => updateMuestra(index, "punto_muestreo", e.target.value)} className="input-dark" disabled={!muestra.referencia_equipo || loadingOptions}><option value="">Seleccione punto de medida</option>{puntosFiltrados.filter((point) => String(point.maquina) === String(muestra.referencia_equipo)).map((point) => <option key={point.id} value={point.id}>{point.nombre}{point.lubricante ? ` · ${point.lubricante}` : ''}</option>)}</select>{selectedPoint && <span className="mt-1 block text-xs text-gray-400">Predeterminado: {selectedPoint.lubricante || 'sin lubricante'} · cambio {selectedPoint.frecuencia_cambio ? `${selectedPoint.frecuencia_cambio} ${selectedPoint.unidad_frecuencia_cambio}` : 'sin definir'} · análisis {selectedPoint.frecuencia_analisis ? `${selectedPoint.frecuencia_analisis} ${selectedPoint.unidad_frecuencia_analisis}` : 'sin definir'}.</span>}</Field> : <Field label="Punto de medida manual"><input value={muestra.punto_manual} onChange={(e) => updateMuestra(index, "punto_manual", e.target.value)} className="input-dark" placeholder="Ej: Reductor lado motor" /><span className="mt-1 block text-xs text-gray-400">{isOccasionalClient ? 'Se conservará como identificación manual en la muestra.' : 'Al guardar se creará o reutilizará este punto para la máquina manual.'}</span></Field>}
             </div>
           </div>
         )}

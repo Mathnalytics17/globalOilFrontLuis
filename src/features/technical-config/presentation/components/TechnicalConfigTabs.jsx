@@ -36,7 +36,7 @@ export default function TechnicalConfigTabs() {
     <div className="mb-7 flex items-end gap-5 overflow-x-auto border-b border-white/[0.07] pr-1 text-sm">
       <Link
         href="/configuracion-tecnica"
-        className={`shrink-0 border-b-2 px-0 pb-3 no-underline ${router.pathname === '/configuracion-tecnica' ? 'border-go-red font-semibold text-white' : 'border-transparent text-[#858b94] hover:text-[#d5d8dc]'}`}
+        className={`shrink-0 border-b-2 px-0 pb-3 no-underline ${router.pathname === '/configuracion-tecnica' ? 'border-[#2875c7] font-semibold text-white' : 'border-transparent text-[#858b94] hover:text-[#d5d8dc]'}`}
       >
         Inicio
       </Link>
@@ -44,7 +44,7 @@ export default function TechnicalConfigTabs() {
         <Link
           key={href}
           href={href}
-          className={`shrink-0 border-b-2 px-0 pb-3 no-underline ${activeFor(router.pathname, href) ? 'border-go-red font-semibold text-white' : 'border-transparent text-[#858b94] hover:text-[#d5d8dc]'}`}
+          className={`shrink-0 border-b-2 px-0 pb-3 no-underline ${activeFor(router.pathname, href) ? 'border-[#2875c7] font-semibold text-white' : 'border-transparent text-[#858b94] hover:text-[#d5d8dc]'}`}
         >
           {label}
         </Link>

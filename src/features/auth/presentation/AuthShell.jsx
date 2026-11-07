@@ -2,7 +2,9 @@ export default function AuthShell({ title, subtitle, children, footer, wide = fa
   return (
     <main className="min-h-screen bg-[#111214] text-white">
       <header className="flex h-16 items-center border-b border-white/[0.06] px-5 sm:px-8">
-        <img src="/logo-global-oil.png" alt="Global Oil" className="h-8 w-auto" />
+        <div className="rounded-md bg-white px-1.5 py-1">
+          <img src="/logo-dataia.png" alt="DATAIA Engineering" className="h-8 w-auto" />
+        </div>
       </header>
       <div className="grid min-h-[calc(100vh-4rem)] place-items-center px-4 py-10">
         <section className={`w-full ${wide ? 'max-w-5xl' : 'max-w-md'} rounded-xl border border-white/[0.08] bg-[#191b1e] p-6 sm:p-7`}>

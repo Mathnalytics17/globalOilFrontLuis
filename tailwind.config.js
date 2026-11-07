@@ -16,8 +16,8 @@ module.exports = {
           border: '#30343a',
           muted: '#969ca6',
           text: '#f3f4f6',
-          red: '#ef2b32',
-          'red-hover': '#d9232a',
+          red: '#2875c7',
+          'red-hover': '#1f5fa8',
         },
       },
       boxShadow: {

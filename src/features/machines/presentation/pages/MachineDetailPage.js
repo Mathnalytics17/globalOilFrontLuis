@@ -12,6 +12,7 @@ const DetailMachine = () => {
   const [error, setError] = useState(null);
   const [machine, setMachine] = useState(null);
   const [muestras, setMuestras] = useState([]);
+  const [samplesError, setSamplesError] = useState(null);
   const [activity, setActivity] = useState([]);
 
   // Cargar datos de la máquina
@@ -33,12 +34,14 @@ const DetailMachine = () => {
 
         // Fetch de muestras asociadas a esta máquina
         try {
+          setSamplesError(null);
           const muestrasData = await samplesService.list({
             referencia_equipo: id
           });
-          setMuestras(muestrasData);
+          setMuestras(Array.isArray(muestrasData) ? muestrasData : (muestrasData?.results || []));
         } catch (error) {
           setMuestras([]);
+          setSamplesError(error);
         }
 
       } catch (error) {
@@ -56,7 +59,7 @@ const DetailMachine = () => {
   };
 
   const handleViewMuestra = (muestraId) => {
-    router.push(`/muestras/muestra-details?muestra=${muestraId}`);
+    router.push(`/muestras/detalle?muestra=${encodeURIComponent(muestraId)}`);
   };
 
   const formatDate = (dateString) => {
@@ -80,6 +83,14 @@ const DetailMachine = () => {
     'punto_muestreo.reactivado': 'Punto de medición reactivado',
     'muestra.punto_muestreo_asignado': 'Muestra asociada a un punto',
   }[event.accion] || event.detalle || event.accion);
+
+  const sampleStatus = (sample) => {
+    if (sample.estado_operativo === 'invalidada') return { label: 'Invalidada', className: 'go-status-off' };
+    if (sample.is_revisado) return { label: 'Revisada', className: 'go-status-on' };
+    if (sample.is_resultado_ingresado) return { label: 'Resultado cargado', className: 'go-badge go-badge-warning' };
+    if (sample.is_ingresado) return { label: 'En laboratorio', className: 'go-badge go-badge-warning' };
+    return { label: 'Registrada', className: 'go-badge go-badge-neutral' };
+  };
 
   if (loading) {
     return (
@@ -278,7 +289,12 @@ const DetailMachine = () => {
             Muestras Asociadas ({muestras.length})
           </h3>
           
-          {muestras.length > 0 ? (
+          {samplesError ? (
+            <div className="text-center py-8 text-[#969ca6]">
+              <p>No se pudieron cargar las muestras asociadas.</p>
+              <button onClick={() => router.replace(router.asPath)} className="mt-4 go-primary">Reintentar</button>
+            </div>
+          ) : muestras.length > 0 ? (
             <div className="space-y-3">
               {muestras.map((muestra) => (
                 <div 
@@ -295,15 +311,7 @@ const DetailMachine = () => {
                     </div>
                     <div className="text-right">
                       <span className="text-[#969ca6] text-sm">Estado:</span>
-                      <span className={`ml-2 px-2 py-1 rounded text-xs ${
-                        muestra.estado === 'completado' 
-                          ? 'go-status-on' 
-                          : muestra.estado === 'pendiente'
-                          ? 'go-badge go-badge-warning'
-                          : 'go-badge go-badge-neutral'
-                      }`}>
-                        {muestra.estado || 'En proceso'}
-                      </span>
+                      <span className={`ml-2 px-2 py-1 rounded text-xs ${sampleStatus(muestra).className}`}>{sampleStatus(muestra).label}</span>
                     </div>
                   </div>
                   {muestra.observaciones && (
@@ -336,14 +344,14 @@ const DetailMachine = () => {
           
           <div className="rounded-lg border border-white/[0.07] bg-[#17191c] p-4 text-center">
             <div className="text-2xl font-bold text-[#6bb68a] mb-2">
-              {muestras.filter(m => m.estado === 'completado').length}
+              {muestras.filter((m) => m.is_revisado).length}
             </div>
             <div className="text-[#969ca6] text-sm">Muestras Completadas</div>
           </div>
           
           <div className="rounded-lg border border-white/[0.07] bg-[#17191c] p-4 text-center">
             <div className="text-2xl font-bold text-[#d4a454] mb-2">
-              {muestras.filter(m => m.estado === 'pendiente').length}
+              {muestras.filter((m) => !m.is_revisado && m.estado_operativo !== 'invalidada').length}
             </div>
             <div className="text-[#969ca6] text-sm">Muestras Pendientes</div>
           </div>

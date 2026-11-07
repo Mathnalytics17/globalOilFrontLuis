@@ -39,7 +39,7 @@ export const normalizeUser = (user = {}) => {
     ...user,
     displayName: [user.first_name, user.last_name].filter(Boolean).join(' ') || user.name || user.username || user.email || `Usuario ${user.id}`,
     displayEmail: user.email || user.username || '-',
-    companyName: getName(company, user.empresa_nombre || user.company_name || 'Global Oil'),
+    companyName: getName(company, user.empresa_nombre || user.company_name || 'DATAIA Engineering'),
     roleName: getName(role, profile.role_name || user.role_name || user.role || '-'),
     accessStatus: user.access_status || profile.status || (user.is_active === false ? 'DISABLED' : 'ACTIVE'),
     profile,
