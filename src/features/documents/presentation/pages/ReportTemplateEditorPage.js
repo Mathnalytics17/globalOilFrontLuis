@@ -143,7 +143,7 @@ const AnalysisReport = () => {
   const [editedComments, setEditedComments] = useState({});
   const [reportComments, setReportComments] = useState('');
   const [reportConclusions, setReportConclusions] = useState('');
-  const [companyName, setCompanyName] = useState('Global Oil');
+  const [companyName, setCompanyName] = useState('DATAIA Engineering');
   const [responsibleName, setResponsibleName] = useState('Ing. Santiago Quintero');
   
   const [generatingPDF, setGeneratingPDF] = useState(false);
@@ -463,7 +463,7 @@ const AnalysisReport = () => {
           <button
             onClick={() => saveReportMetadata()}
             disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 bg-[#ef2b32] text-white rounded-lg hover:bg-[#d9232a] disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-[#2875c7] text-white rounded-lg hover:bg-[#1f5fa8] disabled:opacity-50 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -496,7 +496,7 @@ const AnalysisReport = () => {
               <button
                 onClick={handleSaveAll}
                 disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-[#ef2b32] text-white rounded-lg hover:bg-[#d9232a] disabled:opacity-50 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-[#2875c7] text-white rounded-lg hover:bg-[#1f5fa8] disabled:opacity-50 transition-colors"
               >
                 {saving ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -527,7 +527,7 @@ const AnalysisReport = () => {
         {/* Columna izquierda (logo y texto) */}
         <div className="border-r border-black grid grid-rows-2 h-full">
           <div className="flex items-center justify-center border-b border-black">
-            <img src="/logo-globaloil.jpg" alt="Logo Global Oil" className="h-[45px] object-contain" />
+            <img src="/logo-dataia.png" alt="Logo DATAIA Engineering" className="h-[45px] object-contain" />
           </div>
           <div className="flex flex-col justify-center text-center leading-[0.9] px-1 space-y-0">
             <p className="text-[9px]">NIT: 830135980-4</p>

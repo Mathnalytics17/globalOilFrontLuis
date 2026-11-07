@@ -2,7 +2,7 @@ import { isCompanyAdmin, isGlobalUser } from './sessionAccess';
 
 export const HOME_OPTIONS = [
   { value: '', label: 'Automático según el rol' },
-  { value: '/dashboard', label: 'Dashboard operativo (solo Global Oil)', globalOnly: true },
+  { value: '/dashboard', label: 'Dashboard operativo (solo DATAIA)', globalOnly: true },
   { value: '/muestras/lotes', label: 'Lotes de muestras' },
   { value: '/muestras/nuevo-lote', label: 'Registrar lote de muestras' },
   { value: '/muestras/laboratorio', label: 'Ingreso al laboratorio' },

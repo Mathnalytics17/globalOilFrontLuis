@@ -75,8 +75,8 @@ export default function DocumentsList() {
       ]} />
 
       <div className="mb-5 flex gap-6 border-b border-white/[0.06]">
-        <button type="button" className={`relative pb-3 text-sm ${activeTab === 'pending' ? 'font-semibold text-white' : 'text-[#858b94] hover:text-white'}`} onClick={() => setActiveTab('pending')}>Por generar{activeTab === 'pending' ? <span className="absolute inset-x-0 bottom-0 h-[2px] bg-go-red" /> : null}</button>
-        <button type="button" className={`relative pb-3 text-sm ${activeTab === 'generated' ? 'font-semibold text-white' : 'text-[#858b94] hover:text-white'}`} onClick={() => setActiveTab('generated')}>Generados{activeTab === 'generated' ? <span className="absolute inset-x-0 bottom-0 h-[2px] bg-go-red" /> : null}</button>
+        <button type="button" className={`relative pb-3 text-sm ${activeTab === 'pending' ? 'font-semibold text-white' : 'text-[#858b94] hover:text-white'}`} onClick={() => setActiveTab('pending')}>Por generar{activeTab === 'pending' ? <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#2875c7]" /> : null}</button>
+        <button type="button" className={`relative pb-3 text-sm ${activeTab === 'generated' ? 'font-semibold text-white' : 'text-[#858b94] hover:text-white'}`} onClick={() => setActiveTab('generated')}>Generados{activeTab === 'generated' ? <span className="absolute inset-x-0 bottom-0 h-[2px] bg-[#2875c7]" /> : null}</button>
       </div>
 
       <section className="go-card !p-0 overflow-hidden">

@@ -468,10 +468,16 @@ export default function MachineHistoryPage() {
       </section>
 
       <MetricStrip items={[
-        { label: 'Máquinas disponibles', value: companyFilter ? machineOptions.length : 0, icon: Wrench },
-        { label: 'Muestras visibles', value: new Set(filteredRows.map((row) => row.sampleId)).size, icon: Database },
-        { label: 'Resultados visibles', value: filteredRows.length, icon: TestTube2 },
-        { label: 'Series visibles', value: trendSeries.length, icon: Activity },
+        {
+          label: selectedMachine ? 'Equipo consultado' : 'Equipos disponibles',
+          value: selectedMachine
+            ? (selectedMachine.codigo_equipo || selectedMachine.nombre || `Equipo ${selectedMachine.id}`)
+            : (companyFilter ? machineOptions.length : 0),
+          icon: Wrench,
+        },
+        { label: selectedMachine ? 'Muestras del equipo' : 'Muestras visibles', value: new Set(filteredRows.map((row) => row.sampleId)).size, icon: Database },
+        { label: 'Registros mostrados', value: filteredRows.length, icon: TestTube2 },
+        { label: 'Series comparadas', value: trendSeries.length, icon: Activity },
       ]} />
 
       {!canShowHistory ? (

@@ -36,7 +36,7 @@ const DATA_SCOPE_OPTIONS = [
   { value: 'OWN_COMPANY', label: 'Solo su empresa' },
   { value: 'ALL_COMPANIES', label: 'Todas las empresas' },
   { value: 'ASSIGNED_COMPANIES', label: 'Empresas asignadas' },
-  { value: 'GLOBAL_OIL_ONLY', label: 'Solo Global Oil' },
+  { value: 'GLOBAL_OIL_ONLY', label: 'Solo DATAIA' },
 ];
 
 const getNumericId = (...values) => {
@@ -393,7 +393,7 @@ export default function SecurityUsersPage() {
                     <option value="">Seleccione empresa</option>
                     {companies.map((company) => <option key={company.id} value={company.id}>{getName(company)}{company.is_internal ? ' · interna' : ''}</option>)}
                   </select>
-                  <span className={s.help}>{selectedInviteCompany?.is_internal ? 'Global Oil: aquí se asignan roles internos, como Laboratorista o Revisor.' : 'Empresa cliente: aquí se asignan únicamente roles de empresa.'}</span>
+                  <span className={s.help}>{selectedInviteCompany?.is_internal ? 'DATAIA: aquí se asignan roles internos, como Laboratorista o Revisor.' : 'Empresa cliente: aquí se asignan únicamente roles de empresa.'}</span>
                 </div>
                 <label className={s.field}>
                   <span><input type="checkbox" checked={inviteForm.transfer_existing} onChange={(e) => setInviteForm((p) => ({ ...p, transfer_existing: e.target.checked }))} /> Reinvitar y transferir si ya existe</span>

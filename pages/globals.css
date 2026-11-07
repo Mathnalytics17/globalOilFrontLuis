@@ -14,8 +14,8 @@
   --go-text: #f3f4f6;
   --go-text-secondary: #b0b5bd;
   --go-muted: #858b94;
-  --go-red: #ef2b32;
-  --go-red-hover: #d9232a;
+  --go-red: #2875c7;
+  --go-red-hover: #1f5fa8;
   --go-success: #4fb57a;
   --go-warning: #d8a44c;
   --go-danger: #e45d65;
@@ -1143,14 +1143,13 @@ body { font-size: 13px; }
 .go-error-state p { max-width: 460px; margin: 0; color: #aab1ba; font-size: 13px; }
 .go-error-state-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 20px; }
 
-/* Global Oil loader: the source logo is intentionally cropped to its mark. */
+/* DATAIA loader keeps the full wordmark legible at small sizes. */
 .go-loader { display: flex; min-width: 190px; flex-direction: column; align-items: center; color: var(--go-muted); text-align: center; }
-.go-loader-mark { position: relative; display: block; width: 48px; height: 48px; overflow: hidden; border-radius: 50%; box-shadow: 0 0 0 1px rgba(255,255,255,.12), 0 10px 28px rgba(0,0,0,.35); animation: go-loader-mark 1.75s ease-in-out infinite; }
-.go-loader-mark img { display: block; width: auto; height: 48px; max-width: none; }
+.go-loader-mark { display: block; width: 34px; height: 34px; border: 3px solid rgba(79, 143, 212, .25); border-top-color: #5b9ee6; border-radius: 50%; animation: go-loader-mark .8s linear infinite; }
 .go-loader-pulse { width: 46px; height: 3px; margin-top: 14px; overflow: hidden; border-radius: 99px; background: #343941; }
-.go-loader-pulse::after { display: block; width: 45%; height: 100%; border-radius: inherit; background: var(--go-red); content: ''; animation: go-loader-pulse 1.2s ease-in-out infinite; }
+.go-loader-pulse::after { display: block; width: 45%; height: 100%; border-radius: inherit; background: var(--go-accent); content: ''; animation: go-loader-pulse 1.2s ease-in-out infinite; }
 .go-loader p { margin: 11px 0 0; font-size: 12px; font-weight: 600; }
-@keyframes go-loader-mark { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+@keyframes go-loader-mark { to { transform: rotate(360deg); } }
 @keyframes go-loader-pulse { from { transform: translateX(-120%); } to { transform: translateX(240%); } }
 @media (prefers-reduced-motion: reduce) { .go-loader-mark, .go-loader-pulse::after { animation: none; } }
 

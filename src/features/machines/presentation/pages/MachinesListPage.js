@@ -6,6 +6,7 @@ import {
   Code2,
   Pencil as Edit3,
   Eye,
+  Filter,
   MapPin,
   Plus,
   RefreshCcw,
@@ -25,8 +26,15 @@ export default function MachinesPage() {
   const router = useRouter();
   const [machines, setMachines] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [companyFilter, setCompanyFilter] = useState('');
+  const [filters, setFilters] = useState({
+    search: '',
+    company: '',
+    location: '',
+    code: '',
+    serial: '',
+    samplingPoints: '',
+  });
+  const [appliedFilters, setAppliedFilters] = useState(filters);
 
   const loadMachines = async () => {
     setLoading(true);
@@ -55,8 +63,26 @@ export default function MachinesPage() {
     return Array.from(unique.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [machines]);
 
+  const locations = useMemo(() => (
+    Array.from(new Set(
+      machines
+        .map((machine) => machine.ubicacion_activo)
+        .filter(Boolean)
+    )).sort((a, b) => a.localeCompare(b))
+  ), [machines]);
+
+  const updateFilter = (field, value) => {
+    setFilters((current) => ({ ...current, [field]: value }));
+  };
+
+  const clearFilters = () => {
+    const emptyFilters = { search: '', company: '', location: '', code: '', serial: '', samplingPoints: '' };
+    setFilters(emptyFilters);
+    setAppliedFilters(emptyFilters);
+  };
+
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = appliedFilters.search.trim().toLowerCase();
     return machines.filter((machine) => {
       const matchesSearch = !term || [
         machine.id,
@@ -69,10 +95,17 @@ export default function MachinesPage() {
       ].filter(Boolean).join(' ').toLowerCase().includes(term);
 
       const companyId = String(machine.empresa || machine.empresa_info?.id || '');
-      const matchesCompany = !companyFilter || companyId === companyFilter;
-      return matchesSearch && matchesCompany;
+      const matchesCompany = !appliedFilters.company || companyId === appliedFilters.company;
+      const matchesLocation = !appliedFilters.location || machine.ubicacion_activo === appliedFilters.location;
+      const matchesCode = !appliedFilters.code || String(machine.codigo_equipo || '').toLowerCase().includes(appliedFilters.code.toLowerCase());
+      const matchesSerial = !appliedFilters.serial || String(machine.numero_serie || '').toLowerCase().includes(appliedFilters.serial.toLowerCase());
+      const pointCount = Number(machine.puntos_muestreo_activos || 0);
+      const matchesSamplingPoints = !appliedFilters.samplingPoints
+        || (appliedFilters.samplingPoints === 'with' && pointCount > 0)
+        || (appliedFilters.samplingPoints === 'without' && pointCount === 0);
+      return matchesSearch && matchesCompany && matchesLocation && matchesCode && matchesSerial && matchesSamplingPoints;
     });
-  }, [machines, search, companyFilter]);
+  }, [machines, appliedFilters]);
 
   const companyCount = new Set(
     machines.map((item) => item.empresa || item.empresa_info?.id).filter(Boolean)
@@ -107,36 +140,58 @@ export default function MachinesPage() {
           ]}
         />
 
-        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center">
-          <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg border border-[#34383f] bg-[#16181b] px-3 text-[#777d86] focus-within:border-[#4a4f57]">
+        <section className="go-filterbar machines-filterbar" aria-label="Filtros de máquinas">
+          <label className="go-search">
             <Search className="h-4 w-4 shrink-0" />
             <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              value={filters.search}
+              onChange={(event) => updateFilter('search', event.target.value)}
               placeholder="Buscar por nombre, código, serie, ubicación o empresa..."
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-[#e7e9ec] outline-none placeholder:text-[#5f656e]"
             />
           </label>
-
-          <select
-            value={companyFilter}
-            onChange={(event) => setCompanyFilter(event.target.value)}
-            className="h-10 min-w-[190px] rounded-lg border border-[#34383f] bg-[#16181b] px-3 text-sm text-[#c9cdd2] outline-none"
-          >
-            <option value="">Todas las empresas</option>
-            {companies.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-          </select>
-
-          {(search || companyFilter) && (
+          <label className="go-field-inline">
+            <span>Empresa</span>
+            <select value={filters.company} onChange={(event) => updateFilter('company', event.target.value)}>
+              <option value="">Todas</option>
+              {companies.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+          </label>
+          <label className="go-field-inline">
+            <span>Ubicación / draga</span>
+            <select value={filters.location} onChange={(event) => updateFilter('location', event.target.value)}>
+              <option value="">Todas</option>
+              {locations.map((location) => <option key={location} value={location}>{location}</option>)}
+            </select>
+          </label>
+          <label className="go-field-inline">
+            <span>Código</span>
+            <input value={filters.code} onChange={(event) => updateFilter('code', event.target.value)} placeholder="Ej. EQ-001" />
+          </label>
+          <label className="go-field-inline">
+            <span>Serie</span>
+            <input value={filters.serial} onChange={(event) => updateFilter('serial', event.target.value)} placeholder="Número de serie" />
+          </label>
+          <label className="go-field-inline">
+            <span>Puntos de medida</span>
+            <select value={filters.samplingPoints} onChange={(event) => updateFilter('samplingPoints', event.target.value)}>
+              <option value="">Todos</option>
+              <option value="with">Con puntos activos</option>
+              <option value="without">Sin puntos activos</option>
+            </select>
+          </label>
+          <button type="button" className="go-primary" onClick={() => setAppliedFilters(filters)}>
+            <Filter size={16} /> Filtrar
+          </button>
+          {Object.values(appliedFilters).some(Boolean) && (
             <button
               type="button"
               className="go-ghost"
-              onClick={() => { setSearch(''); setCompanyFilter(''); }}
+              onClick={clearFilters}
             >
               Limpiar filtros
             </button>
           )}
-        </div>
+        </section>
 
         {loading ? (
           <div className="go-empty-state">Cargando máquinas...</div>

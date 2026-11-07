@@ -40,7 +40,7 @@ export default function SidebarItem({ item, currentPath, depth = 0, onNavigate, 
           title={`Ir a ${compactLabel}`}
         >
           {Icon ? <Icon className="h-[19px] w-[19px]" strokeWidth={1.8} /> : null}
-          {active ? <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full bg-go-red" /> : null}
+          {active ? <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full bg-[#2875c7]" /> : null}
           <span className="pointer-events-none absolute left-[calc(100%+10px)] z-[70] hidden whitespace-nowrap rounded-md border border-white/[0.08] bg-[#1b1d20] px-2.5 py-1.5 text-xs font-medium text-[#e6e8eb] shadow-xl group-hover:block">
             {compactLabel}
           </span>
@@ -67,7 +67,7 @@ export default function SidebarItem({ item, currentPath, depth = 0, onNavigate, 
       {hasChildren && (
         <ChevronDown className={`h-4 w-4 shrink-0 text-[#737985] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       )}
-      {active && depth === 0 && <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full bg-go-red" />}
+      {active && depth === 0 && <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full bg-[#2875c7]" />}
     </>
   );
 

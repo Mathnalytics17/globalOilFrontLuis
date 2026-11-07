@@ -26,17 +26,19 @@ export default function UserMenu({ user }) {
     .join('')
     .toUpperCase();
 
-  const displayName = user?.name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Mi cuenta';
+  const rawDisplayName = user?.name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Mi cuenta';
+  const displayName = /^administrador global$/i.test(rawDisplayName) ? 'Administrador DATAIA' : rawDisplayName;
   // `/users/me/` exposes empresa as a display string and the company profile
   // separately.  Support both shapes so the header never falls back to the
-  // unrelated Global Oil label for a company user.
-  const companyName = user?.company?.name
+  // unrelated company label for a company user.
+  const rawCompanyName = user?.company?.name
     || user?.company_name
     || user?.empresa?.name
     || user?.empresa_nombre
     || user?.profile?.empresa_nombre
     || (typeof user?.empresa === 'string' ? user.empresa : '')
-    || 'Global Oil';
+    || 'DATAIA Oil Lab';
+  const companyName = /^global\s*oil$/i.test(rawCompanyName) ? 'DATAIA Oil Lab' : rawCompanyName;
 
   return (
     <div className="relative" ref={dropdownRef}>
