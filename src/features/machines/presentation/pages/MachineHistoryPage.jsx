@@ -35,6 +35,23 @@ function normalizeLabel(value) {
   return String(value).trim();
 }
 
+function sourceOrder(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
+}
+
+function compareHistoryRows(left, right) {
+  const byDate = new Date(left.date || 0) - new Date(right.date || 0);
+  if (byDate) return byDate;
+  const bySource = sourceOrder(left.sourceOrder) - sourceOrder(right.sourceOrder);
+  if (bySource) return bySource;
+  return String(left.sampleId || '').localeCompare(String(right.sampleId || ''));
+}
+
+function historyKey(row) {
+  return `${row.date || ''}|${sourceOrder(row.sourceOrder)}|${row.sampleId || ''}`;
+}
+
 function buildSeries(rows) {
   const groups = new Map();
   rows.forEach((row) => {
@@ -54,7 +71,7 @@ function buildSeries(rows) {
   });
 
   return Array.from(groups.values()).map((group) => {
-    const orderedRows = [...group.rows].sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+    const orderedRows = [...group.rows].sort(compareHistoryRows);
     const isExplicitCategory = ['booleano', 'boolean', 'escala', 'escala_ordinal', 'opcion', 'comentario', 'texto']
       .includes(String(group.dataType || '').toLowerCase());
     const type = !isExplicitCategory && orderedRows.some((row) => row.numeric !== null) ? 'numeric' : 'category';
@@ -74,12 +91,11 @@ function buildSeries(rows) {
       linesByPoint.get(pointId).rows.push(row);
     });
     const lines = Array.from(linesByPoint.values());
-    const chartRows = Array.from(new Set(orderedRows.map((row) => row.date || row.sampleId)))
-      .sort((left, right) => new Date(left || 0) - new Date(right || 0))
-      .map((date) => {
-        const chartRow = { name: formatDate(date) };
+    const chartRows = Array.from(new Map(orderedRows.map((row) => [historyKey(row), row])).values())
+      .map((historyRow) => {
+        const chartRow = { name: formatDate(historyRow.date), sourceOrder: sourceOrder(historyRow.sourceOrder) };
         lines.forEach((line) => {
-          const item = line.rows.find((row) => (row.date || row.sampleId) === date);
+          const item = line.rows.find((row) => historyKey(row) === historyKey(historyRow));
           if (item) chartRow[line.id] = item.numeric;
         });
         return chartRow;
@@ -149,6 +165,8 @@ function buildRows(machines) {
       ...item,
       machineId: String(item.machineId || ''),
       pointId: String(item.pointId || ''),
+      pointCode: item.pointCode || '',
+      sourceOrder: item.sourceOrder,
       numeric: numericValue(item.value),
     }));
   }
@@ -179,6 +197,7 @@ function buildRows(machines) {
           status: assigned.estado_limite || assigned.evaluacion_limite?.estado || '-',
           pointId: sample.punto_muestreo?.id ? String(sample.punto_muestreo.id) : '',
           pointName: sample.punto_muestreo?.nombre || 'Sin punto de medición',
+          pointCode: sample.punto_muestreo?.codigo || '',
         };
 
         const payloadValues = assigned.resultado_payload?.values || [];
@@ -271,6 +290,20 @@ export default function MachineHistoryPage() {
     }
   };
 
+  const clearFilters = () => {
+    setCompanyFilter('');
+    setMachineFilter('');
+    setPointFilter('');
+    setTestFilter('');
+    setSearch('');
+    setIncludeInvalid(false);
+    setHistoryPage(1);
+    // A URL opened from a machine or report carries machine/point/test.
+    // Remove those query parameters too, otherwise the hydration effect puts
+    // the supposedly cleared values back into the form.
+    router.replace({ pathname: router.pathname, query: {} }, undefined, { shallow: true });
+  };
+
   useEffect(() => {
     load();
   }, []);
@@ -348,11 +381,21 @@ export default function MachineHistoryPage() {
 
   const pointOptions = useMemo(() => {
     const points = new Map();
-    machineRows.forEach((row) => {
-      if (row.pointId) points.set(row.pointId, row.pointName);
+    const selectedMachine = machines.find((machine) => String(machine.id) === String(machineFilter));
+    (selectedMachine?.puntos_muestreo || []).forEach((point) => {
+      points.set(String(point.id), { name: point.nombre, code: point.codigo });
     });
-    return Array.from(points.entries()).map(([id, label]) => ({ id, label }));
-  }, [machineRows]);
+    machineRows.forEach((row) => {
+      if (row.pointId) points.set(row.pointId, {
+        name: row.pointName,
+        code: row.pointCode,
+      });
+    });
+    return Array.from(points.entries()).map(([id, point]) => ({
+      id,
+      label: point.code ? `${point.name} · ${point.code}` : point.name,
+    }));
+  }, [machines, machineFilter, machineRows]);
 
   const testOptions = useMemo(() => {
     const map = new Map();
@@ -365,12 +408,12 @@ export default function MachineHistoryPage() {
     if (!companyFilter || !machineFilter) return [];
     return machineRows.filter((row) => {
       if (!term) return true;
-      return [row.machineName, row.sampleId, row.testName, row.value, row.status]
+      return [row.machineName, row.pointName, row.pointCode, row.sampleId, row.testName, row.value, row.status]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(term);
-    }).sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+    }).sort(compareHistoryRows);
   }, [companyFilter, machineFilter, machineRows, pointFilter, testFilter, search]);
 
   const selectedMachine = machines.find((machine) => String(machine.id) === String(machineFilter));
@@ -403,7 +446,7 @@ export default function MachineHistoryPage() {
             <span>Explorar histórico</span>
             <p>Seleccione el equipo y refine las series que desea comparar.</p>
           </div>
-          {machineFilter ? <button type="button" className="clearFilters" onClick={() => { setPointFilter(''); setTestFilter(''); setSearch(''); setIncludeInvalid(false); }}>Limpiar filtros</button> : null}
+          {machineFilter ? <button type="button" className="clearFilters" onClick={clearFilters}>Limpiar filtros</button> : null}
         </div>
         <div className="filters">
         <label>
@@ -458,7 +501,7 @@ export default function MachineHistoryPage() {
         </label>
         <label className="searchBox">
           Buscar
-          <span><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Muestra, prueba, estado..." disabled={!machineFilter} /></span>
+          <span><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Muestra, punto, prueba, estado..." disabled={!machineFilter} /></span>
         </label>
         <label className="invalidToggle">
           <input type="checkbox" checked={includeInvalid} onChange={(event) => setIncludeInvalid(event.target.checked)} disabled={!machineFilter} />
@@ -554,7 +597,7 @@ export default function MachineHistoryPage() {
         .filtersHeading p { margin: 4px 0 0; color: #8f97a3; font-size: 12.5px; font-weight: 400; }
         .clearFilters { appearance: none; border: 0; background: transparent; color: #b9c0ca; font-size: 12px; font-weight: 650; cursor: pointer; padding: 7px 9px; border-radius: 7px; }
         .clearFilters:hover { background: #23262b; color: #fff; }
-        .filters { padding: 14px 16px 16px; display: grid; grid-template-columns: minmax(0,.8fr) minmax(0,1.55fr) minmax(0,1.25fr) minmax(0,.72fr) minmax(0,1.15fr); gap: 12px; align-items: end; }
+        .filters { padding: 14px 16px 16px; display: grid; grid-template-columns: minmax(0,.8fr) minmax(0,1.35fr) minmax(0,1fr) minmax(0,1.25fr) minmax(0,.72fr) minmax(0,1.15fr); gap: 12px; align-items: end; }
         .filters > label { min-width: 0; max-width: 100%; }
         .historyPage label { color: #aeb4c0; display: grid; gap: 6px; font-size: 11.5px; font-weight: 650; }
         .historyPage select, .historyPage input { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; height: 39px; border: 1px solid #353941; background: #121417; color: #f7f8fa; border-radius: 8px; padding: 0 34px 0 11px; outline: 0; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; transition: border-color .16s ease, box-shadow .16s ease; }

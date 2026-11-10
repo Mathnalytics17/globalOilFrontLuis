@@ -4,7 +4,10 @@ import { normalizePaginated } from '@shared/utils/pagination';
 export const machinesService = {
   async list(params = {}) {
     const { data } = await apiClient.get('/machines/', {
-      params: { page_size: 1000, ...params },
+      // This makes cache keys explicit when the list gains point identities.
+      // It prevents an older cached response (without puntos_muestreo) from
+      // disabling code-based navigation in the Machines and History screens.
+      params: { page_size: 1000, point_identity_version: 2, ...params },
     });
     return normalizePaginated(data).results;
   },
@@ -49,5 +52,11 @@ export const machinesService = {
   async history(id, params = {}) {
     const { data } = await apiClient.get(`/machines/${id}/history/`, { params });
     return normalizePaginated(data);
+  },
+  async resolvePointCode(code) {
+    const { data } = await apiClient.get('/machines/resolve-point-code/', {
+      params: { code },
+    });
+    return Array.isArray(data?.results) ? data.results : [];
   },
 };

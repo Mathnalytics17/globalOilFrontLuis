@@ -467,6 +467,23 @@ textarea:focus-visible {
   box-shadow: none !important;
 }
 
+.machines-filterbar {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.65fr) minmax(180px, .85fr) minmax(260px, 1.25fr) auto;
+  align-items: end;
+}
+.machines-filterbar .go-machine-search { min-width: 0; }
+.machines-filterbar .go-machine-search .go-search { min-width: 0; width: 100%; flex: 0 1 auto; }
+.machines-filterbar .go-machine-search .go-search input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
 .go-badge {
   display: inline-flex;
   align-items: center;

@@ -29,12 +29,11 @@ export default function MachinesPage() {
   const [filters, setFilters] = useState({
     search: '',
     company: '',
-    location: '',
-    code: '',
-    serial: '',
-    samplingPoints: '',
+    point: '',
   });
   const [appliedFilters, setAppliedFilters] = useState(filters);
+  const [resolvedPointMachineIds, setResolvedPointMachineIds] = useState([]);
+  const [resolvedSearchMachineIds, setResolvedSearchMachineIds] = useState([]);
 
   const loadMachines = async () => {
     setLoading(true);
@@ -63,27 +62,41 @@ export default function MachinesPage() {
     return Array.from(unique.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [machines]);
 
-  const locations = useMemo(() => (
-    Array.from(new Set(
-      machines
-        .map((machine) => machine.ubicacion_activo)
-        .filter(Boolean)
-    )).sort((a, b) => a.localeCompare(b))
-  ), [machines]);
-
   const updateFilter = (field, value) => {
     setFilters((current) => ({ ...current, [field]: value }));
   };
 
   const clearFilters = () => {
-    const emptyFilters = { search: '', company: '', location: '', code: '', serial: '', samplingPoints: '' };
+    const emptyFilters = { search: '', company: '', point: '' };
     setFilters(emptyFilters);
     setAppliedFilters(emptyFilters);
+    setResolvedPointMachineIds([]);
+    setResolvedSearchMachineIds([]);
+  };
+
+  const applyFilters = async () => {
+    const pointQuery = filters.point.trim();
+    const searchTerm = filters.search.trim();
+    try {
+      const [pointMatches, searchMatches] = await Promise.all([
+        pointQuery ? machinesService.resolvePointCode(pointQuery) : Promise.resolve([]),
+        searchTerm ? machinesService.resolvePointCode(searchTerm) : Promise.resolve([]),
+      ]);
+      setResolvedPointMachineIds([...new Set(pointMatches.map((point) => String(point.maquina?.id || '')).filter(Boolean))]);
+      setResolvedSearchMachineIds([...new Set(searchMatches.map((point) => String(point.maquina?.id || '')).filter(Boolean))]);
+    } catch (error) {
+      // Local matching remains available if the optional resolver is offline.
+      console.error(error);
+      setResolvedPointMachineIds([]);
+      setResolvedSearchMachineIds([]);
+    }
+    setAppliedFilters(filters);
   };
 
   const filtered = useMemo(() => {
     const term = appliedFilters.search.trim().toLowerCase();
     return machines.filter((machine) => {
+      const pointIdentities = Array.isArray(machine.puntos_muestreo) ? machine.puntos_muestreo : [];
       const matchesSearch = !term || [
         machine.id,
         machine.nombre,
@@ -92,20 +105,19 @@ export default function MachinesPage() {
         machine.puntos_muestreo_activos,
         machine.ubicacion_activo,
         machine.empresa_info?.nombre,
-      ].filter(Boolean).join(' ').toLowerCase().includes(term);
+        ...pointIdentities.flatMap((point) => [point.nombre, point.codigo]),
+      ].filter(Boolean).join(' ').toLowerCase().includes(term)
+        || resolvedSearchMachineIds.includes(String(machine.id));
 
       const companyId = String(machine.empresa || machine.empresa_info?.id || '');
       const matchesCompany = !appliedFilters.company || companyId === appliedFilters.company;
-      const matchesLocation = !appliedFilters.location || machine.ubicacion_activo === appliedFilters.location;
-      const matchesCode = !appliedFilters.code || String(machine.codigo_equipo || '').toLowerCase().includes(appliedFilters.code.toLowerCase());
-      const matchesSerial = !appliedFilters.serial || String(machine.numero_serie || '').toLowerCase().includes(appliedFilters.serial.toLowerCase());
-      const pointCount = Number(machine.puntos_muestreo_activos || 0);
-      const matchesSamplingPoints = !appliedFilters.samplingPoints
-        || (appliedFilters.samplingPoints === 'with' && pointCount > 0)
-        || (appliedFilters.samplingPoints === 'without' && pointCount === 0);
-      return matchesSearch && matchesCompany && matchesLocation && matchesCode && matchesSerial && matchesSamplingPoints;
+      const pointTerm = appliedFilters.point.trim().toLowerCase();
+      const matchesPoint = !pointTerm || pointIdentities.some((point) => (
+        `${point.nombre || ''} ${point.codigo || ''}`.toLowerCase().includes(pointTerm)
+      )) || resolvedPointMachineIds.includes(String(machine.id));
+      return matchesSearch && matchesCompany && matchesPoint;
     });
-  }, [machines, appliedFilters]);
+  }, [machines, appliedFilters, resolvedPointMachineIds, resolvedSearchMachineIds]);
 
   const companyCount = new Set(
     machines.map((item) => item.empresa || item.empresa_info?.id).filter(Boolean)
@@ -141,13 +153,16 @@ export default function MachinesPage() {
         />
 
         <section className="go-filterbar machines-filterbar" aria-label="Filtros de máquinas">
-          <label className="go-search">
-            <Search className="h-4 w-4 shrink-0" />
-            <input
-              value={filters.search}
-              onChange={(event) => updateFilter('search', event.target.value)}
-              placeholder="Buscar por nombre, código, serie, ubicación o empresa..."
-            />
+          <label className="go-field-inline go-machine-search">
+            <span>Máquina o código</span>
+            <span className="go-search">
+              <Search className="h-4 w-4 shrink-0" />
+              <input
+                value={filters.search}
+                onChange={(event) => updateFilter('search', event.target.value)}
+                placeholder="Nombre de máquina o código de máquina"
+              />
+            </span>
           </label>
           <label className="go-field-inline">
             <span>Empresa</span>
@@ -157,29 +172,10 @@ export default function MachinesPage() {
             </select>
           </label>
           <label className="go-field-inline">
-            <span>Ubicación / draga</span>
-            <select value={filters.location} onChange={(event) => updateFilter('location', event.target.value)}>
-              <option value="">Todas</option>
-              {locations.map((location) => <option key={location} value={location}>{location}</option>)}
-            </select>
+            <span>Punto de medida</span>
+            <input value={filters.point} onChange={(event) => updateFilter('point', event.target.value)} placeholder="Nombre o código del punto" />
           </label>
-          <label className="go-field-inline">
-            <span>Código</span>
-            <input value={filters.code} onChange={(event) => updateFilter('code', event.target.value)} placeholder="Ej. EQ-001" />
-          </label>
-          <label className="go-field-inline">
-            <span>Serie</span>
-            <input value={filters.serial} onChange={(event) => updateFilter('serial', event.target.value)} placeholder="Número de serie" />
-          </label>
-          <label className="go-field-inline">
-            <span>Puntos de medida</span>
-            <select value={filters.samplingPoints} onChange={(event) => updateFilter('samplingPoints', event.target.value)}>
-              <option value="">Todos</option>
-              <option value="with">Con puntos activos</option>
-              <option value="without">Sin puntos activos</option>
-            </select>
-          </label>
-          <button type="button" className="go-primary" onClick={() => setAppliedFilters(filters)}>
+          <button type="button" className="go-primary" onClick={applyFilters}>
             <Filter size={16} /> Filtrar
           </button>
           {Object.values(appliedFilters).some(Boolean) && (
