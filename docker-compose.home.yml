@@ -1,0 +1,19 @@
+
+services:
+  frontend:
+    image: globaloil-home-frontend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://globaloil.luismolinatest.com/api
+        NEXT_PUBLIC_FRONTEND_URL: https://globaloil.luismolinatest.com/
+    container_name: globaloil-frontend
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: https://globaloil.luismolinatest.com/api
+      NEXT_PUBLIC_FRONTEND_URL: https://globaloil.luismolinatest.com/
+    ports:
+      - "127.0.0.1:13000:3000"
+    restart: unless-stopped
+    mem_limit: 1400m

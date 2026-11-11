@@ -16,106 +16,35 @@ concurrency:
 jobs:
     deploy:
         name: deploy-production
-
-        if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
+        if: >-
+            github.event.workflow_run.conclusion == 'success' &&
+            github.event.workflow_run.event == 'push'
         runs-on: ubuntu-latest
         environment: production
 
         steps:
-            - name: Deploy frontend
+            - name: Deploy frontend on this laptop
               uses: appleboy/ssh-action@v1.2.5
               with:
                   host: ${{ secrets.SSH_HOST }}
                   username: ${{ secrets.SSH_USER }}
                   key: ${{ secrets.SSH_PRIVATE_KEY }}
                   port: ${{ secrets.SSH_PORT }}
-
                   script: |
-                      set -e
+                      set -eu
 
-                      cd /root/globalOil/frontend
+                      cd /home/luismolina/servidor/apps/globaloil/frontend
 
+                      echo "=== Actualizando frontend desde master ==="
                       git fetch origin master
                       git switch master
-                      git reset --hard origin/master
+                      git pull --ff-only origin master
 
-                      echo "=== Construyendo imagen frontend ==="
-                      docker compose -f docker-compose.prod.yml build frontend
-
-                      echo "=== Deteniendo frontend anterior ==="
-                      docker compose -f docker-compose.prod.yml stop frontend || true
-
-                      echo "=== Eliminando contenedor frontend anterior ==="
-                      docker compose -f docker-compose.prod.yml rm -f frontend || true
-
-                      # The original container may have been created by an
-                      # older Compose project name. Remove only the explicitly
-                      # reserved frontend container as a safe compatibility
-                      # cleanup; do not touch unrelated containers.
-                      docker rm -f frontend 2>/dev/null || true
-
-                      echo "=== Esperando liberación del puerto 3000 ==="
-                      port_free=""
-                      for attempt in $(seq 1 15); do
-                        port_holders="$(docker ps --filter publish=3000 --format '{{.ID}} {{.Names}} {{.Ports}}')"
-                        if [ -n "${port_holders}" ]; then
-                          echo "El puerto 3000 sigue publicado por:"
-                          echo "${port_holders}"
-                        elif ! sudo ss -ltnp '( sport = :3000 )' | grep -q LISTEN; then
-                          port_free="yes"
-                          break
-                        fi
-                        sleep 2
-                      done
-
-                      if [ -z "${port_free}" ]; then
-                        echo "El puerto 3000 no se liberó después de detener el frontend. Diagnóstico:"
-                        docker ps -a --filter publish=3000 --format 'table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}' || true
-                        sudo ss -ltnp '( sport = :3000 )' || true
-                        exit 1
-                      fi
-
-                      # Docker can still be releasing docker-proxy immediately
-                      # after a container deletion. Retry only this project's
-                      # frontend, never terminate unrelated host processes.
-                      echo "=== Levantando nuevo frontend ==="
-                      started=""
-                      for attempt in $(seq 1 6); do
-                        echo "Intento ${attempt}/6 de arranque del frontend"
-                        if docker compose -f docker-compose.prod.yml up -d --no-build --force-recreate --remove-orphans frontend; then
-                          started="yes"
-                          break
-                        fi
-                        docker compose -f docker-compose.prod.yml rm -sf frontend || true
-                        docker rm -f frontend 2>/dev/null || true
-                        sleep $((attempt * 2))
-                      done
-
-                      if [ -z "${started}" ]; then
-                        echo "No se pudo iniciar el frontend después de reintentar. Diagnóstico:"
-                        docker ps -a --filter publish=3000 --format 'table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}' || true
-                        sudo ss -ltnp '( sport = :3000 )' || true
-                        exit 1
-                      fi
+                      echo "=== Construyendo y levantando el frontend ==="
+                      docker compose -f docker-compose.home.yml up -d --build --force-recreate frontend
 
                       echo "=== Estado del frontend ==="
-                      docker compose -f docker-compose.prod.yml ps frontend
+                      docker compose -f docker-compose.home.yml ps frontend
 
                       echo "=== Últimos logs del frontend ==="
-                      docker compose -f docker-compose.prod.yml logs --tail=50 frontend || true
-
-                      # Do not prune volumes: they may hold data from other
-                      # services. This only removes stopped containers, unused
-                      # images and stale build cache older than seven days.
-                      retention="${DOCKER_PRUNE_UNTIL:-168h}"
-
-                      echo "=== Docker usage before cleanup ==="
-                      docker system df || true
-
-                      docker container prune --force --filter "until=${retention}" || true
-                      docker image prune --all --force --filter "until=${retention}" || true
-                      docker builder prune --all --force --filter "until=${retention}" || true
-
-                      echo "=== Docker usage after cleanup ==="
-                      docker system df || true
+                      docker compose -f docker-compose.home.yml logs --tail=50 frontend || true
