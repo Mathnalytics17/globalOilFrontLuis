@@ -1,53 +1,54 @@
 name: Frontend Deploy
 
 on:
-    workflow_run:
-        workflows:
-            - Frontend CI
-        types:
-            - completed
-        branches:
-            - master
+  workflow_run:
+    workflows:
+      - Frontend CI
+    types:
+      - completed
+    branches:
+      - master
 
 concurrency:
-    group: frontend-production
-    cancel-in-progress: false
+  group: frontend-production
+  cancel-in-progress: false
 
 jobs:
-    deploy:
-        name: deploy-production
-        if: >-
-            github.event.workflow_run.conclusion == 'success' &&
-            github.event.workflow_run.event == 'push'
-        runs-on: ubuntu-latest
-        environment: production
+  deploy:
+    name: deploy-production
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    environment: production
 
-        steps:
-          - name: Connect to Tailscale
-            uses: tailscale/github-action@v4
-            with:
-                oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-                oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-                tags: tag:ci
+    steps:
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          ping: 100.120.11.53
 
-          - name: Verify SSH connectivity
-            run: |
-                  timeout 15 bash -c 'echo > /dev/tcp/100.120.11.53/22'
-                  echo "SSH de Fedora accesible"
+      - name: Verify SSH connectivity
+        run: |
+          timeout 30 bash -c 'echo > /dev/tcp/100.120.11.53/22'
+          echo "SSH de Fedora accesible"
 
-          - name: Deploy frontend to this server
-              uses: appleboy/ssh-action@v1.2.5
-              with:
-                  host: ${{ secrets.SSH_HOST }}
-                  username: ${{ secrets.SSH_USER }}
-                  key: ${{ secrets.SSH_PRIVATE_KEY }}
-                  port: ${{ secrets.SSH_PORT }}
-                  script: |
-                      set -eu
-                      cd /home/luismolina/servidor/apps/globaloil/frontend
-                      git fetch origin master
-                      git switch master
-                      git pull --ff-only origin master
-                      docker compose -f docker-compose.home.yml up -d --build --force-recreate frontend
-                      docker compose -f docker-compose.home.yml ps frontend
-                      docker compose -f docker-compose.home.yml logs --tail=50 frontend || true
+      - name: Deploy frontend to this server
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            set -eu
+            cd /home/luismolina/servidor/apps/globaloil/frontend
+            git fetch origin master
+            git switch master
+            git pull --ff-only origin master
+            docker compose -f docker-compose.home.yml up -d --build --force-recreate frontend
+            docker compose -f docker-compose.home.yml ps frontend
+            docker compose -f docker-compose.home.yml logs --tail=50 frontend || true
