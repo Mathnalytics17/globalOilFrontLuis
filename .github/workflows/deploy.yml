@@ -23,7 +23,19 @@ jobs:
         environment: production
 
         steps:
-            - name: Deploy frontend on this laptop
+          - name: Connect to Tailscale
+            uses: tailscale/github-action@v4
+            with:
+                oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+                oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+                tags: tag:ci
+
+          - name: Verify SSH connectivity
+            run: |
+                  timeout 15 bash -c 'echo > /dev/tcp/100.120.11.53/22'
+                  echo "SSH de Fedora accesible"
+
+          - name: Deploy frontend to this server
               uses: appleboy/ssh-action@v1.2.5
               with:
                   host: ${{ secrets.SSH_HOST }}
@@ -32,19 +44,10 @@ jobs:
                   port: ${{ secrets.SSH_PORT }}
                   script: |
                       set -eu
-
                       cd /home/luismolina/servidor/apps/globaloil/frontend
-
-                      echo "=== Actualizando frontend desde master ==="
                       git fetch origin master
                       git switch master
                       git pull --ff-only origin master
-
-                      echo "=== Construyendo y levantando el frontend ==="
                       docker compose -f docker-compose.home.yml up -d --build --force-recreate frontend
-
-                      echo "=== Estado del frontend ==="
                       docker compose -f docker-compose.home.yml ps frontend
-
-                      echo "=== Últimos logs del frontend ==="
                       docker compose -f docker-compose.home.yml logs --tail=50 frontend || true
