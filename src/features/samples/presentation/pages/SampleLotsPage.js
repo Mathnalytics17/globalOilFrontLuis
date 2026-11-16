@@ -425,7 +425,13 @@ const LotesMuestrasPage = () => {
             <input
               value={filters.search}
               onChange={(e) => updateFilter('search', e.target.value)}
-              placeholder="Lote, cliente, equipo, placa o punto de medida..."
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  fetchData();
+                }
+              }}
+              placeholder="Lote, muestra (ej. M20260230), cliente, equipo, placa o punto..."
             />
           </label>
 
