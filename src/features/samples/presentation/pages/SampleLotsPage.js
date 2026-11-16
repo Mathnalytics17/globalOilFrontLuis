@@ -184,8 +184,8 @@ const LotesMuestrasPage = () => {
     client_id: '',
     machine_id: '',
     sampling_point_id: '',
-    fecha_desde: '',
-    fecha_hasta: '',
+    fecha_toma_desde: '',
+    fecha_toma_hasta: '',
   });
 
   useEffect(() => {
@@ -243,9 +243,15 @@ const LotesMuestrasPage = () => {
       const list = normalizeArrayResponse(listData.results || []);
       setLotes(list);
       setTotalLotes(Number(listData.count ?? list.length));
-      setExpandedLotIds([]);
       setLotSamples({});
       setResumen(summaryData);
+      const hasSampleScope = Boolean(params.machine_id || params.sampling_point_id || params.search || params.fecha_toma_desde || params.fecha_toma_hasta);
+      if (hasSampleScope) {
+        setExpandedLotIds(list.map((lote) => lote.id));
+        list.forEach((lote) => fetchLotSamples(lote.id));
+      } else {
+        setExpandedLotIds([]);
+      }
     } catch (error) {
       if (requestId !== listRequestRef.current) return;
       console.error(error);
@@ -266,6 +272,9 @@ const LotesMuestrasPage = () => {
         page_size: 10,
         machine_id: filters.machine_id || undefined,
         sampling_point_id: filters.sampling_point_id || undefined,
+        search: filters.search || undefined,
+        fecha_toma_desde: filters.fecha_toma_desde || undefined,
+        fecha_toma_hasta: filters.fecha_toma_hasta || undefined,
       });
       setLotSamples((current) => ({
         ...current,
@@ -422,7 +431,7 @@ const LotesMuestrasPage = () => {
 
           <label className="go-field-inline"><span>Cliente</span><select value={filters.client_id} onChange={(e) => updateFilter('client_id', e.target.value)}><option value="">Todos</option>{companies.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
           <label className="go-field-inline"><span>Equipo</span><select value={filters.machine_id} onChange={(e) => { updateFilter('machine_id', e.target.value); updateFilter('sampling_point_id', ''); }}><option value="">Todos</option>{machines.map((item) => <option key={item.id} value={item.id}>{item.codigo_equipo ? `${item.codigo_equipo} · ` : ''}{item.nombre}</option>)}</select></label>
-          <label className="go-field-inline"><span>Punto de medida</span><select value={filters.sampling_point_id} onChange={(e) => updateFilter('sampling_point_id', e.target.value)}><option value="">Todos</option>{samplingPoints.filter((item) => !filters.machine_id || String(item.maquina || item.maquina_id) === String(filters.machine_id)).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
+          <label className="go-field-inline"><span>Punto de medida</span><select value={filters.sampling_point_id} onChange={(e) => updateFilter('sampling_point_id', e.target.value)}><option value="">Todos</option>{samplingPoints.filter((item) => !filters.machine_id || String(item.maquina || item.maquina_id) === String(filters.machine_id)).map((item) => <option key={item.id} value={item.id}>{item.codigo ? `${item.codigo} · ` : ''}{item.nombre}</option>)}</select></label>
 
           <label className="go-field-inline">
             <span>Estado</span>
@@ -441,13 +450,13 @@ const LotesMuestrasPage = () => {
           </label>
 
           <label className="go-field-inline date-filter">
-            <span>Desde</span>
-            <input type="date" value={filters.fecha_desde} onChange={(e) => updateFilter('fecha_desde', e.target.value)} />
+            <span>Fecha de toma desde</span>
+            <input type="date" value={filters.fecha_toma_desde} onChange={(e) => updateFilter('fecha_toma_desde', e.target.value)} />
           </label>
 
           <label className="go-field-inline date-filter">
-            <span>Hasta</span>
-            <input type="date" value={filters.fecha_hasta} onChange={(e) => updateFilter('fecha_hasta', e.target.value)} />
+            <span>Fecha de toma hasta</span>
+            <input type="date" value={filters.fecha_toma_hasta} onChange={(e) => updateFilter('fecha_toma_hasta', e.target.value)} />
           </label>
 
           <button type="button" onClick={fetchData} disabled={loading} className="go-primary">
@@ -620,7 +629,7 @@ const LotSamplesPanel = ({ lote, data, showDeadline = false, onPageChange, onOpe
                     <span>{sample.equipo?.label || 'Sin equipo'}</span>
                     {sample.equipo?.manual && <small className="mt-1 block text-gray-500">Identificación manual</small>}
                   </td>
-                  <td className="px-3 py-3 align-top">{sample.punto_muestreo?.nombre || 'Sin punto de medida'}</td>
+                  <td className="px-3 py-3 align-top">{sample.punto_muestreo ? <><strong>{sample.punto_muestreo.nombre}</strong>{sample.punto_muestreo.codigo ? <small className="mt-1 block text-gray-500">Código: {sample.punto_muestreo.codigo}</small> : null}</> : 'Sin punto de medida'}</td>
                   <td className="px-3 py-3 align-top">{formatDate(sample.fecha_toma, true)}</td>
                   <td className="px-3 py-3 align-top"><span className={`go-badge ${sampleStateClass(sample.estado_flujo?.code)}`}>{sample.estado_flujo?.label || '—'}</span></td>
                   {showDeadline ? <td className="px-3 py-3 align-top min-w-[220px]">

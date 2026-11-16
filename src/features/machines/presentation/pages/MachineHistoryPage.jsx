@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Activity, Database, FileBarChart2, Search, TestTube2, Wrench } from 'lucide-react';
+import { Activity, BarChart3, Database, FileBarChart2, FileText, Search, TestTube2, Wrench } from 'lucide-react';
 import {
   CartesianGrid,
   Line,
   LineChart,
   ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -93,10 +92,20 @@ function buildSeries(rows) {
     const lines = Array.from(linesByPoint.values());
     const chartRows = Array.from(new Map(orderedRows.map((row) => [historyKey(row), row])).values())
       .map((historyRow) => {
-        const chartRow = { name: formatDate(historyRow.date), sourceOrder: sourceOrder(historyRow.sourceOrder) };
+        const chartRow = {
+          name: formatDate(historyRow.date),
+          sourceOrder: sourceOrder(historyRow.sourceOrder),
+          // Recharts gives a tooltip the whole plotted row. Keep the source
+          // sample next to each line so hovering a point preserves the exact
+          // sample identity instead of only showing a date and value.
+          __samples: {},
+        };
         lines.forEach((line) => {
           const item = line.rows.find((row) => historyKey(row) === historyKey(historyRow));
-          if (item) chartRow[line.id] = item.numeric;
+          if (item) {
+            chartRow[line.id] = item.numeric;
+            chartRow.__samples[line.id] = item;
+          }
         });
         return chartRow;
       });
@@ -111,7 +120,29 @@ function buildSeries(rows) {
   }).filter((group) => group.points.length);
 }
 
-function TrendCard({ series }) {
+function HistoryPointPopover({ point, onClose, onOpenSample }) {
+  if (!point?.row) return null;
+  const { row, color, x, y } = point;
+  return (
+    <div className="historyPointTooltip historyPointTooltip--pinned" style={{ left: x, top: y }}>
+      <button type="button" className="historyTooltipClose" onClick={onClose} aria-label="Cerrar detalle">×</button>
+      <strong>Fecha: {formatDate(row.date)}</strong>
+      <section>
+        <b style={{ color }}>{row.pointName}{row.pointCode ? ` · ${row.pointCode}` : ''}</b>
+        <span>Muestra: <strong>{row.sampleId}</strong></span>
+        <span>Resultado: {row.value ?? '-'}{row.unit ? ` ${row.unit}` : ''}</span>
+        <span>Estado: {row.status || 'Sin evaluar'}</span>
+        <div>
+          <button type="button" onClick={() => onOpenSample(row)}>Interpretación</button>
+          <button type="button" onClick={() => onOpenSample(row, 'report')}>Reporte</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function TrendCard({ series, onOpenSample }) {
+  const [selectedPoint, setSelectedPoint] = useState(null);
   const subtitle = series.type === 'numeric'
     ? `Numérico${series.unit ? ` · ${series.unit}` : ''}`
     : 'Historial categórico';
@@ -132,14 +163,17 @@ function TrendCard({ series }) {
             <CartesianGrid stroke="#30333b" />
             <XAxis dataKey="name" stroke="#aeb4c0" />
             <YAxis stroke="#aeb4c0" width={70} />
-            <Tooltip
-              formatter={(value, name) => [`${value}${series.unit ? ` ${series.unit}` : ''}`, name]}
-              labelFormatter={(label) => `Fecha: ${label}`}
-              contentStyle={{ background: '#202126', border: '1px solid #3a3d45', color: '#fff' }}
-            />
-            {series.lines.map((line, index) => <Line key={line.id} type="monotone" dataKey={line.id} name={line.label} stroke={['#ff3045', '#5ea8ff', '#d9a441', '#50bf87', '#ad7dff'][index % 5]} strokeWidth={2} dot={{ r: 3 }} connectNulls />)}
+            {series.lines.map((line, index) => {
+              const color = ['#ff3045', '#5ea8ff', '#d9a441', '#50bf87', '#ad7dff'][index % 5];
+              return <Line key={line.id} type="monotone" dataKey={line.id} name={line.label} stroke={color} strokeWidth={2} connectNulls dot={(props) => {
+                const row = props.payload?.__samples?.[line.id];
+                if (!row) return null;
+                return <circle cx={props.cx} cy={props.cy} r={4} fill="#202126" stroke={color} strokeWidth={2.5} style={{ cursor: 'pointer' }} onClick={() => setSelectedPoint((current) => current?.row?.id === row.id ? null : { row, color, x: props.cx, y: props.cy })} />;
+              }} />;
+            })}
           </LineChart>
         </ResponsiveContainer>
+        <HistoryPointPopover point={selectedPoint} onClose={() => setSelectedPoint(null)} onOpenSample={onOpenSample} />
         {series.lines.length > 1 ? <div className="trendLegend">{series.lines.map((line, index) => <span key={line.id}><i style={{ background: ['#ff3045', '#5ea8ff', '#d9a441', '#50bf87', '#ad7dff'][index % 5] }} />{line.label}</span>)}</div> : null}
       </div> : (
         <div className="categoryHistory">
@@ -191,6 +225,7 @@ function buildRows(machines) {
           machineId: String(machine.id),
           machineName: machine.nombre || machine.codigo_equipo || `Maquina ${machine.id}`,
           sampleId: sample.id,
+          lotId: sample.lote_id || sample.loteId || '',
           date: sample.fecha_toma || sample.fecha_registro || sample.created_at,
           testId,
           testName,
@@ -419,6 +454,14 @@ export default function MachineHistoryPage() {
   const selectedMachine = machines.find((machine) => String(machine.id) === String(machineFilter));
   const canShowHistory = Boolean(companyFilter && machineFilter);
   const trendSeries = useMemo(() => buildSeries(filteredRows), [filteredRows]);
+  const openSample = (row, destination = 'interpretation') => {
+    if (!row?.sampleId) return;
+    if (destination === 'report') {
+      router.push({ pathname: '/reportes', query: { muestra: row.sampleId } });
+      return;
+    }
+    router.push({ pathname: '/muestras/interpretacion', query: { lote: row.lotId, muestra: row.sampleId } });
+  };
 
   return (
     <main className="go-page go-shell historyPage">
@@ -545,7 +588,7 @@ export default function MachineHistoryPage() {
         </div>
         <div className="trendGrid">
           {trendSeries.length ? (
-            trendSeries.map((series) => <TrendCard key={series.id} series={series} />)
+            trendSeries.map((series) => <TrendCard key={series.id} series={series} onOpenSample={openSample} />)
           ) : <p className="empty">No hay resultados históricos para los filtros seleccionados.</p>}
         </div>
       </section> : null}
@@ -570,10 +613,11 @@ export default function MachineHistoryPage() {
             { id: 'date', label: 'Fecha', render: (row) => formatDate(row.date) },
             { id: 'machineName', label: 'Máquina', mobileTitle: true },
             { id: 'pointName', label: 'Punto de medición', minWidth: 160 },
-            { id: 'sampleId', label: 'Muestra' },
+            { id: 'sampleId', label: 'Muestra', render: (row) => <button type="button" className="historySampleLink" onClick={() => openSample(row)}>{row.sampleId}</button> },
             { id: 'testName', label: 'Prueba', minWidth: 180 },
             { id: 'value', label: 'Resultado', sortable: false, render: (row) => `${row.value ?? '-'}${row.unit ? ` ${row.unit}` : ''}` },
             { id: 'status', label: 'Estado', render: (row) => <span className="status">{row.status}</span> },
+            { id: 'actions', label: 'Ver', sortable: false, render: (row) => <span className="historyActions"><button type="button" onClick={() => openSample(row)} title="Ver interpretación y todas las pruebas"><BarChart3 size={15} /> Interpretación</button><button type="button" onClick={() => openSample(row, 'report')} title="Ver reporte de esta muestra"><FileText size={15} /> Reporte</button></span> },
           ]}
         />
         <PaginationBar
@@ -632,10 +676,25 @@ export default function MachineHistoryPage() {
         .trendHead p { margin: 0 0 4px; color: #cdd2d9; font-size: 12.5px; line-height: 1.35; }
         .trendHead span { color: #8f97a3; font-size: 12px; }
         .trendHead strong { flex: 0 0 auto; min-width: 34px; text-align: center; border: 1px solid #353a42; background: #24272d; border-radius: 999px; padding: 5px 8px; color: #d8dce3; font-size: 12px; }
-        .miniChart { height: 275px; min-width: 0; padding-top: 4px; }
+        .miniChart { position: relative; height: 275px; min-width: 0; padding-top: 4px; }
         .trendLegend { display: flex; gap: 10px; flex-wrap: wrap; margin: 7px 0 0 4px; font-size: 10.5px; color: #aeb4be; }
         .trendLegend span { display: inline-flex; align-items: center; gap: 5px; }
         .trendLegend i { width: 7px; height: 7px; border-radius: 50%; }
+        .historyPointTooltip { min-width: 245px; max-width: 340px; border: 1px solid #3a3d45; background: #202126; color: #f5f6f8; padding: 11px; box-shadow: 0 8px 24px rgba(0,0,0,.28); }
+        .historyPointTooltip--pinned { position: absolute; z-index: 8; transform: translate(-18px, 12px); }
+        .historyTooltipClose { position:absolute; top:5px; right:7px; border:0 !important; background:transparent !important; color:#aeb4be !important; font-size:18px !important; line-height:18px; padding:0 !important; }
+        .historyTooltipClose:hover { color:#fff !important; }
+        .historyPointTooltip > strong { display:block; margin-bottom:8px; }
+        .historyPointTooltip section { display:grid; gap:3px; padding:8px 0; border-top:1px solid #353841; font-size:12px; }
+        .historyPointTooltip section:first-of-type { border-top:0; padding-top:0; }
+        .historyPointTooltip section > b { font-size:12px; }
+        .historyPointTooltip section > span { color:#c2c8d1; }.historyPointTooltip section > span strong { color:#fff; }
+        .historyPointTooltip section > div { display:flex; gap:6px; margin-top:4px; }.historyPointTooltip button { border:1px solid #4a4f58; background:#2a2e34; color:#fff; border-radius:5px; padding:4px 6px; cursor:pointer; font-size:11px; }.historyPointTooltip button:hover { background:#3a4048; }
+        .historySampleLink { padding: 0; border: 0; background: transparent; color: #e8ebef; font-weight: 700; cursor: pointer; }
+        .historySampleLink:hover { color: #fff; text-decoration: underline; }
+        .historyActions { display: flex; gap: 6px; white-space: nowrap; }
+        .historyActions button { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #3a3e46; border-radius: 6px; background: #191b1e; color: #d9dde2; padding: 5px 7px; cursor: pointer; font-size: 11px; }
+        .historyActions button:hover { background: #272b31; color: #fff; }
         .categoryHistory { display: grid; max-height: 270px; overflow: auto; border-top: 1px solid #2e3238; scrollbar-width: thin; }
         .categoryHistory > div { display: grid; grid-template-columns: 100px minmax(100px, 1fr); gap: 4px 12px; padding: 11px 2px; border-bottom: 1px solid #292d33; }
         .categoryHistory span, .categoryHistory small { color: #929aa6; font-size: 11.5px; }

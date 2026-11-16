@@ -452,7 +452,11 @@ function InterpretationPage() {
   };
 
   const filteredSamples = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const normalizeSearch = (value) => String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    const term = normalizeSearch(search.trim());
     const samples = batch?.muestras || [];
     if (!term) return samples;
     return samples.filter((sample) => [
@@ -460,7 +464,9 @@ function InterpretationPage() {
       sample.equipo,
       sample.ubicacion,
       sample.estado_revision,
-    ].join(' ').toLowerCase().includes(term));
+      sample.punto_muestreo?.nombre,
+      sample.punto_muestreo?.codigo,
+    ].some((value) => normalizeSearch(value).includes(term)));
   }, [batch, search]);
 
   const selectedSample = useMemo(() => (batch?.muestras || []).find((sample) => sample.id === selectedSampleId), [batch, selectedSampleId]);
@@ -847,12 +853,21 @@ function InterpretationPage() {
         <label>
           <span>Muestra</span>
           <select value={selectedSampleId} onChange={(e) => setSelectedSampleId(e.target.value)}>
-            {(batch?.muestras || []).map((sample) => <option key={sample.id} value={sample.id}>{sample.id}</option>)}
+            {(batch?.muestras || []).map((sample) => (
+              <option key={sample.id} value={sample.id}>
+                {sample.id}{sample.punto_muestreo?.codigo ? ` · ${sample.punto_muestreo.codigo}` : ''}
+              </option>
+            ))}
           </select>
         </label>
         <Info label="Cliente" value={batch?.cliente_nombre || sampleData?.muestra?.cliente_nombre || '-'} />
         <Info label="Máquina / Equipo" value={sampleData?.muestra?.equipo || selectedSample?.equipo || '-'} />
-        <Info label="Punto de medición" value={sampleData?.muestra?.punto_muestreo?.nombre || 'Sin clasificar'} />
+        <Info
+          label="Punto de medición"
+          value={sampleData?.muestra?.punto_muestreo?.codigo
+            ? `${sampleData.muestra.punto_muestreo.codigo} · ${sampleData.muestra.punto_muestreo.nombre}`
+            : sampleData?.muestra?.punto_muestreo?.nombre || 'Sin clasificar'}
+        />
         <Info label="Muestras del lote" value={batch?.muestras?.length || 0} />
       </section>
 
@@ -867,7 +882,7 @@ function InterpretationPage() {
           <h2>Muestras del lote ({batch?.muestras?.length || 0})</h2>
           <div className="searchBox">
             <Search size={15} />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar muestra" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar muestra, punto o código" />
             <Settings2 size={15} />
           </div>
           <div className="sampleList">
@@ -880,6 +895,12 @@ function InterpretationPage() {
                 <span>
                   <strong>{sample.id}</strong>
                   <small>{fmtDate(sample.fecha_toma)}</small>
+                  {sample.punto_muestreo ? (
+                    <small className="samplePoint">
+                      {sample.punto_muestreo.codigo ? `${sample.punto_muestreo.codigo} · ` : ''}
+                      {sample.punto_muestreo.nombre}
+                    </small>
+                  ) : null}
                   {sample.is_revisado ? (
                     <small className={sample.has_interpretation ? 'savedContent' : 'missingContent'}>
                       {sample.has_interpretation ? 'Interpretación guardada' : 'Falta guardar interpretación'}
@@ -1205,7 +1226,7 @@ function InterpretationPage() {
         .exportMenu{position:relative}.exportMenuPanel{position:absolute;right:0;top:calc(100% + 6px);z-index:60;width:240px;border:1px solid #3b3d43;background:#17181b;padding:6px;box-shadow:0 14px 32px rgba(0,0,0,.45)}.exportMenuPanel strong{display:block;padding:8px 10px 5px;color:#fca5a5;font-size:12px}.exportMenuPanel button{width:100%;border:0;background:transparent;color:#f3f3f3;padding:9px 10px;text-align:left;cursor:pointer}.exportMenuPanel button:hover{background:#292b30}
         .summaryLine{display:grid;grid-template-columns:1.2fr 1.2fr repeat(3,1fr);gap:0;border:1px solid #383838;background:#17191c;border-radius:10px;overflow:hidden;margin-bottom:10px}.summaryLine>label,.summaryLine>.info{padding:12px 14px;border-left:1px solid #303030}.summaryLine>:first-child{border-left:0}.summaryLine span,.info label{display:block;color:#aeb6c1;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}.summaryLine select{height:36px;width:100%;border:1px solid #444;background:#111;color:#fff;border-radius:7px;padding:0 9px}.lockedLot{min-height:36px;border-radius:7px;border:1px solid #444;background:#111;color:#fff;padding:0 9px;display:inline-flex;align-items:center;font-weight:900}.lockedLot.action{cursor:pointer;color:#fecaca;border-color:rgba(239,35,42,.45)}.info .value{font-weight:900}
         .mainGrid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:10px}.samplePane,.contentPane section{border:1px solid #383838;background:#191b1e;border-radius:10px}.samplePane{padding:12px}.samplePane h2{font-size:16px;margin:0 0 10px}.searchBox{height:36px;border:1px solid #404040;background:#080808;border-radius:7px;display:grid;grid-template-columns:18px 1fr 18px;align-items:center;gap:8px;padding:0 9px;margin-bottom:10px}.searchBox input{border:0;background:transparent;color:#fff;outline:0}.sampleList{max-height:670px;overflow:auto}.sampleItem{width:100%;min-height:52px;border:0;border-bottom:1px solid #2d2d2d;background:transparent;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;padding:8px;cursor:pointer}.sampleItem.active{background:#2a2d31;border-left:3px solid #ef232a}.sampleItem strong,.sampleItem small{display:block}.sampleItem small{color:#aaa}
-        .sampleItem .savedContent{color:#86efac;margin-top:2px}.sampleItem .missingContent{color:#fcd34d;margin-top:2px}
+        .sampleItem .samplePoint{color:#b9d6ff;margin-top:2px}.sampleItem .savedContent{color:#86efac;margin-top:2px}.sampleItem .missingContent{color:#fcd34d;margin-top:2px}
         .pill{display:inline-flex;align-items:center;border-radius:999px;border:1px solid #444;background:#222;color:#e5e7eb;padding:4px 9px;font-size:12px;font-weight:800}.pill.ok{color:#86efac;border-color:rgba(34,197,94,.45);background:rgba(22,101,52,.35)}.pill.critical{color:#fecaca;border-color:rgba(239,35,42,.6);background:rgba(127,29,29,.32)}.pill.alert{color:#fde047;border-color:rgba(234,179,8,.5);background:rgba(113,63,18,.28)}.pill.warning{color:#facc15;border-color:rgba(250,204,21,.5);background:rgba(113,63,18,.25)}.pill.pending,.pill.neutral{color:#d1d5db}
         .contentPane{display:grid;grid-template-columns:minmax(720px,2fr) 300px;gap:10px;min-width:0}.contentPane section{padding:12px}.resultsLimits{grid-column:1;overflow:hidden}.diagnostic{grid-column:2;grid-row:1}.commentsBox,.trendBox{grid-column:1/3}.blockTitle{font-size:18px;font-weight:900;margin-bottom:10px}
         .testEvaluations{border:1px solid #333;border-radius:8px;overflow:hidden}.testEvaluation{border-top:1px solid #343434;background:#111}.testEvaluation:first-child{border-top:0}.testEvaluationHead{display:grid;grid-template-columns:minmax(130px,.75fr) minmax(210px,1.15fr) minmax(180px,1.2fr) auto;gap:12px;align-items:center;padding:12px 14px;background:#202124}.detailsToggle{min-height:32px;border:1px solid #454545;background:#111;color:#fff;border-radius:7px;padding:0 9px;font-weight:800;cursor:pointer;white-space:nowrap}.testEvaluationHead>div:first-child strong{font-size:16px}.testEvaluationHead>div:first-child span{display:block;color:#aeb6c1;font-size:12px;margin-top:2px}.criterionSummary{border-left:1px solid #383838;padding-left:12px}.criterionSummary small{display:block;color:#8f98a5;font-size:9px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}.criterionSummary strong{font-size:12px;line-height:1.35}.criterionBands{display:grid;gap:4px}.testDecision{display:flex;align-items:flex-start;gap:8px}.testDecision small{color:#b8c0cc;font-size:11px;line-height:1.3}

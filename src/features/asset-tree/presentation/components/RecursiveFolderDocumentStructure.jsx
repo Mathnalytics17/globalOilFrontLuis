@@ -71,6 +71,14 @@ const TreeNode = ({ node, reload }) => {
 
   const hasChildren = node.children.length > 0;
   const canCreate = node.type === 'root' || node.type === 'folder';
+  const pointCode = String(node.point?.codigo || '').trim();
+  const pointLubricant = [
+    node.point?.lubricante_catalogo_info?.fabricante,
+    node.point?.lubricante_catalogo_info?.referencia,
+  ].filter(Boolean).join(' ') || node.point?.lubricante || '';
+  const pointAnalysisFrequency = node.point?.frecuencia_analisis
+    ? `Análisis: ${node.point.frecuencia_analisis} ${node.point.unidad_frecuencia_analisis || 'horas'}`
+    : '';
 
   const createChild = async (machineData, name, type) => {
     try {
@@ -166,7 +174,19 @@ const TreeNode = ({ node, reload }) => {
           <ChevronRight className={`h-4 w-4 transition-transform ${open ? 'rotate-90' : ''}`} />
         </button>
         {node.type === 'machine' ? <Wrench className="h-[17px] w-[17px] text-[#7bca9b]" /> : node.type === 'sampling-point' ? <MapPin className="h-[17px] w-[17px] text-[#d9b36e]" /> : <Folder className="h-[17px] w-[17px] text-[#6f9fd8]" />}
-        <span className="min-w-0 flex-1 truncate text-sm text-[#e5e7ea]">{node.name}</span>
+        <div className="min-w-0 flex flex-1 items-center gap-2 overflow-hidden">
+          <span className="min-w-0 truncate text-sm text-[#e5e7ea]">{node.name}</span>
+          {node.type === 'sampling-point' && pointCode ? (
+            <code className="shrink-0 rounded border border-amber-300/30 bg-amber-300/10 px-1.5 py-0.5 text-xs font-medium text-amber-200" title="Código interno del punto de medida">
+              {pointCode}
+            </code>
+          ) : null}
+          {node.type === 'sampling-point' && (pointLubricant || pointAnalysisFrequency) ? (
+            <span className="min-w-0 truncate text-xs text-[#8f98a5]" title={[pointLubricant, pointAnalysisFrequency].filter(Boolean).join(' · ')}>
+              {[pointLubricant, pointAnalysisFrequency].filter(Boolean).join(' · ')}
+            </span>
+          ) : null}
+        </div>
         <OverflowMenu items={[
           canCreate ? { label: 'Crear carpeta o máquina', icon: FolderPlus, onClick: () => setCreateOpen(true) } : null,
           node.type === 'root' ? { label: 'Cambiar nombre de empresa', icon: Pencil, onClick: renameCompany } : null,
@@ -176,7 +196,7 @@ const TreeNode = ({ node, reload }) => {
           node.type === 'machine' ? { label: 'Ver máquina', icon: Eye, onClick: () => setDetailOpen(true) } : null,
           node.type === 'machine' ? { label: 'Editar máquina', icon: Pencil, onClick: editMachine } : null,
           node.type === 'sampling-point' ? { label: 'Ver lotes de este punto', icon: ListFilter, onClick: openFilteredLots } : null,
-          node.type === 'sampling-point' ? { label: 'Asignar muestras existentes a este punto', icon: Link2, onClick: () => setOrganizeOpen(true) } : null,
+          node.type === 'sampling-point' ? { label: 'Corregir punto de muestras ya creadas…', icon: Link2, onClick: () => setOrganizeOpen(true) } : null,
           node.type === 'sampling-point' ? { label: 'Editar punto', icon: Pencil, onClick: () => setPointOpen(true) } : null,
           node.type !== 'root' ? { separator: true } : null,
           node.type !== 'root' ? { label: ['sampling-point', 'machine'].includes(node.type) ? 'Desactivar' : 'Eliminar carpeta', icon: Trash2, danger: true, onClick: removeNode } : null,
@@ -383,9 +403,9 @@ const OrganizePointModal = ({ show, point, machine, onHide, onSaved }) => {
 
   return (
     <Modal show={Boolean(show && point)} onHide={onHide} size="lg" centered>
-      <Modal.Header closeButton className="bg-[#17191c] text-white"><Modal.Title>Asignar muestras al punto · {point?.nombre}</Modal.Title></Modal.Header>
+      <Modal.Header closeButton className="bg-[#17191c] text-white"><Modal.Title>Corregir asociación de muestras · {point?.codigo ? `${point.codigo} · ` : ''}{point?.nombre}</Modal.Title></Modal.Header>
       <Modal.Body className="bg-[#141518] text-white">
-        <p className="text-sm text-gray-400">Use esta acción solo para corregir la asociación de muestras que ya existen. Se moverán a <strong>{point?.nombre}</strong> y conservarán su lote, resultados e historial. Solo se muestran muestras de <strong>{machine?.nombre}</strong>.</p>
+        <p className="text-sm text-gray-400">Úselo únicamente para reparar datos históricos: elija muestras ya creadas de <strong>{machine?.nombre}</strong> y cámbieles su punto de medida a <strong>{point?.codigo ? `${point.codigo} · ` : ''}{point?.nombre}</strong>. No crea muestras, no modifica resultados y conserva el lote e historial.</p>
         <select className="w-full rounded-md border border-[#353940] bg-[#141518] px-3 py-2 text-sm text-white" value={batchId} onChange={(e) => selectBatch(e.target.value)} disabled={loading}>
           <option value="">Seleccione un lote de esta maquina</option>
           {batches.map((batch) => <option key={batch.id} value={batch.id}>{batch.id} · {batch.cliente_nombre || 'Sin cliente'} ({batch.muestras_coincidentes ?? batch.total_muestras} coinciden)</option>)}
@@ -394,12 +414,12 @@ const OrganizePointModal = ({ show, point, machine, onHide, onSaved }) => {
         {!loading && batchId && <div className="mt-3 max-h-64 overflow-auto rounded-lg border border-white/[0.06] bg-[#151719] p-2">
           {samples.map((sample) => <label key={sample.id} className="flex items-center gap-3 border-b border-white/[0.07] p-2 last:border-0">
             <input type="checkbox" checked={selected.includes(sample.id)} onChange={(e) => setSelected((items) => e.target.checked ? [...items, sample.id] : items.filter((id) => id !== sample.id))} />
-            <span><strong>{sample.id}</strong><small className="block text-gray-400">{sample.punto_muestreo ? `Punto actual: ${sample.punto_muestreo.nombre}` : 'Sin punto asignado'}</small></span>
+            <span><strong>{sample.id}</strong><small className="block text-gray-400">{sample.punto_muestreo ? `Punto actual: ${sample.punto_muestreo.codigo ? `${sample.punto_muestreo.codigo} · ` : ''}${sample.punto_muestreo.nombre}` : 'Sin punto asignado'}</small></span>
           </label>)}
           {!samples.length && <p className="p-3 text-gray-400">Este lote no tiene muestras compatibles.</p>}
         </div>}
       </Modal.Body>
-      <Modal.Footer className="bg-[#141518]"><Button variant="secondary" onClick={onHide}>Cancelar</Button><Button variant="outline-warning" disabled={!batchId || saving} onClick={() => assign(true)}>Mover todas las compatibles</Button><Button variant="danger" disabled={!selected.length || saving} onClick={() => assign(false)}>{saving ? 'Guardando...' : `Mover ${selected.length} seleccionada(s) al punto`}</Button></Modal.Footer>
+      <Modal.Footer className="bg-[#141518]"><Button variant="secondary" onClick={onHide}>Cancelar</Button><Button variant="outline-warning" disabled={!batchId || saving} onClick={() => assign(true)}>Reasignar todas las compatibles</Button><Button variant="danger" disabled={!selected.length || saving} onClick={() => assign(false)}>{saving ? 'Guardando...' : `Reasignar ${selected.length} muestra(s)`}</Button></Modal.Footer>
     </Modal>
   );
 };

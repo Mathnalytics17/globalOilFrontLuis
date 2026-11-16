@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import {
   CheckCircle2,
@@ -62,9 +62,11 @@ export default function ReportsPage() {
   const [reportPendingAnnulment, setReportPendingAnnulment] = useState(null);
   const [annulmentReason, setAnnulmentReason] = useState('');
   const [expandedLots, setExpandedLots] = useState(() => new Set());
+  const reportRequestRef = useRef(0);
   const [filters, setFilters] = useState({
     lote: '',
     search: '',
+    muestra: '',
     client_id: '',
     machine_id: '',
     sampling_point_id: '',
@@ -85,9 +87,13 @@ export default function ReportsPage() {
   }, [filters]);
 
   const loadReports = async () => {
+    const requestId = ++reportRequestRef.current;
     setLoading(true);
     try {
       const payload = await reportsService.dashboard(cleanFilters);
+      // A navigation from history first starts the default request and then
+      // applies ?muestra=. Ignore the older response if it reaches us last.
+      if (requestId !== reportRequestRef.current) return;
       setData(payload);
       // Las opciones proceden del mismo conjunto de reportes autorizado. No
       // exigimos permisos de administración de activos para consultar o
@@ -97,10 +103,11 @@ export default function ReportsPage() {
       setMachines(options.machines || []);
       setSamplingPoints(options.sampling_points || []);
     } catch (error) {
+      if (requestId !== reportRequestRef.current) return;
       console.error(error);
       toast.error('No se pudieron cargar los reportes.');
     } finally {
-      setLoading(false);
+      if (requestId === reportRequestRef.current) setLoading(false);
     }
   };
 
@@ -117,6 +124,18 @@ export default function ReportsPage() {
   }, [router.query?.lote]);
 
   useEffect(() => {
+    if (router.query?.muestra) {
+      setFilters((previous) => ({ ...previous, muestra: String(router.query.muestra) }));
+    }
+  }, [router.query?.muestra]);
+
+  useEffect(() => {
+    if (!filters.muestra) return;
+    setPage(1);
+    loadReports();
+  }, [filters.muestra]);
+
+  useEffect(() => {
     if (filters.lote) {
       setExpandedLots((current) => new Set(current).add(filters.lote));
       loadReports();
@@ -125,7 +144,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [filters.estado, filters.visible_cliente, filters.search, filters.client_id, filters.machine_id, filters.sampling_point_id, filters.fecha_generacion_desde, filters.fecha_generacion_hasta]);
+  }, [filters.muestra, filters.estado, filters.visible_cliente, filters.search, filters.client_id, filters.machine_id, filters.sampling_point_id, filters.fecha_generacion_desde, filters.fecha_generacion_hasta]);
 
   const updateFilter = (field, value) => setFilters((prev) => ({ ...prev, [field]: value }));
   const pageSize = 10;
@@ -341,7 +360,7 @@ export default function ReportsPage() {
         <section className="go-filterbar reports-filterbar">
           <label className="go-search">
             <Search size={16} />
-            <input value={filters.search} onChange={(e) => updateFilter('search', e.target.value)} placeholder="Empresa, lote, muestra, equipo o consecutivo..." />
+            <input value={filters.search} onChange={(e) => updateFilter('search', e.target.value)} placeholder="Empresa, lote, muestra, equipo, punto o código..." />
           </label>
           <label className="go-field-inline">
             <span>Cliente</span>
@@ -361,7 +380,7 @@ export default function ReportsPage() {
             <span>Punto de medida</span>
             <select value={filters.sampling_point_id} onChange={(e) => updateFilter('sampling_point_id', e.target.value)}>
               <option value="">Todos</option>
-              {samplingPoints.filter((point) => !filters.machine_id || Number(point.maquina || point.maquina_id) === Number(filters.machine_id)).map((point) => <option key={point.id} value={point.id}>{point.nombre}</option>)}
+              {samplingPoints.filter((point) => !filters.machine_id || Number(point.maquina || point.maquina_id) === Number(filters.machine_id)).map((point) => <option key={point.id} value={point.id}>{point.codigo ? `${point.codigo} · ` : ''}{point.nombre}</option>)}
             </select>
           </label>
           <label className="go-field-inline">
@@ -422,7 +441,7 @@ export default function ReportsPage() {
             pagination
             initialRowsPerPage={12}
             pageSizeOptions={[12, 25, 50, 100]}
-            resetPageKey={`${filters.search}|${filters.lote}|${filters.client_id}|${filters.machine_id}|${filters.sampling_point_id}|${filters.estado}|${filters.visible_cliente}|${filters.fecha_generacion_desde}|${filters.fecha_generacion_hasta}`}
+            resetPageKey={`${filters.search}|${filters.muestra}|${filters.lote}|${filters.client_id}|${filters.machine_id}|${filters.sampling_point_id}|${filters.estado}|${filters.visible_cliente}|${filters.fecha_generacion_desde}|${filters.fecha_generacion_hasta}`}
             minWidth={920}
             defaultSort={{ field: 'fecha_generacion', order: 'desc' }}
             emptyMessage="No hay reportes con los filtros actuales."
@@ -430,7 +449,7 @@ export default function ReportsPage() {
               { id: 'consecutivo', label: 'Consecutivo', mobileTitle: true, minWidth: 145, render: (report) => <div><strong>{report.consecutivo}</strong><small>v{report.version}</small></div> },
               { id: 'empresa_nombre', label: 'Empresa', minWidth: 150, render: (report) => report.empresa_nombre || '-' },
               { id: 'lote_id', label: 'Lote', minWidth: 120, render: (report) => report.lote_id || '-' },
-              { id: 'muestra_id', label: 'Muestra', minWidth: 105, render: (report) => report.muestra_id || '-' },
+              { id: 'muestra_id', label: 'Muestra', minWidth: 165, render: (report) => <div><strong>{report.muestra_id || '-'}</strong><small>{report.punto_muestreo ? `${report.punto_muestreo.codigo ? `${report.punto_muestreo.codigo} · ` : ''}${report.punto_muestreo.nombre}` : 'Sin punto de medida'}</small></div> },
               { id: 'estatus', label: 'Estado', width: 110, render: (report) => <span className={`go-badge ${statusClass(report.estatus) === 'ok' ? 'go-badge-success' : statusClass(report.estatus) === 'warn' ? 'go-badge-warning' : statusClass(report.estatus) === 'bad' ? 'go-badge-danger' : 'go-badge-neutral'}`}>{statusLabel(report.estatus)}</span> },
               { id: 'fecha_generacion', label: 'Fecha', minWidth: 155, render: (report) => fmt(report.fecha_generacion || report.fecha_emision) },
               { id: 'visible_cliente', label: 'Visibilidad', width: 115, render: (report) => report.visible_cliente ? <span className="go-badge go-badge-success">Visible</span> : <span className="go-badge go-badge-neutral">Oculto</span> },
